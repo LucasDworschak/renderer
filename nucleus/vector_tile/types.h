@@ -52,7 +52,45 @@ struct PoiTile {
     vector_tile::PointOfInterestCollectionPtr data;
 };
 static_assert(tile::NamedTile<PoiTile>);
-
 // using PointOfInterestTileCollection = std::unordered_map<tile::Id, PointOfInterestCollectionPtr, tile::Id::Hasher>;
+
+struct Triangle {
+    unsigned int top_index;
+    unsigned int middle_index;
+    unsigned int bottom_index;
+
+    unsigned int style_index;
+
+    bool operator==(const Triangle& other) const = default;
+};
+
+// helper for catch2
+inline std::ostream& operator<<(std::ostream& os, const Triangle& t)
+{
+    return os << "{ top: " << std::to_string(t.top_index) << ", middle: " << std::to_string(t.middle_index) << ", bottom: " << std::to_string(t.bottom_index)
+              << ", style: " << std::to_string(t.style_index) << " }";
+}
+
+struct VectorLayer {
+    Q_GADGET
+public:
+    std::vector<glm::vec2> vertices;
+    std::vector<Triangle> triangles;
+    std::vector<glm::vec2> vertex_normals;
+
+    std::vector<std::unordered_set<uint8_t>> cell_to_triangle;
+};
+
+using VectorLayerCollection = std::unordered_map<tile::Id, VectorLayer, tile::Id::Hasher>;
+using VectorLayerPtr = std::shared_ptr<const VectorLayer>;
+
+struct VectorLayerTile {
+    tile::Id id;
+    vector_tile::VectorLayerPtr data;
+};
+
+static_assert(tile::NamedTile<VectorLayerTile>);
+
+using VectorLayerTileCollection = std::unordered_map<tile::Id, std::shared_ptr<VectorLayerTile>, tile::Id::Hasher>;
 
 } // namespace nucleus::vector_tile
