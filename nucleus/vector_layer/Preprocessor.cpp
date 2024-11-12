@@ -39,7 +39,7 @@ Preprocessor::Preprocessor()
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-void Preprocessor::preprocess_triangles(const nucleus::tile::Id tile_id, const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices)
+VectorLayer Preprocessor::preprocess_triangles(const nucleus::tile::Id tile_id, const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices)
 {
     m_processed_tile = VectorLayer();
     m_processed_tile.cell_to_triangle = std::vector<std::unordered_set<uint8_t>>(m_grid_size.x * m_grid_size.y, std::unordered_set<uint8_t>());
@@ -60,9 +60,11 @@ void Preprocessor::preprocess_triangles(const nucleus::tile::Id tile_id, const s
     for (size_t i = 0; i < m_processed_tile.triangles.size(); ++i) {
         dda_triangle(i, thickness);
     }
+
+    return m_processed_tile;
 }
 
-void Preprocessor::preprocess_lines(const nucleus::tile::Id tile_id, const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices)
+VectorLayer Preprocessor::preprocess_lines(const nucleus::tile::Id tile_id, const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices)
 {
     m_processed_tile = VectorLayer();
     m_processed_tile.cell_to_triangle = std::vector<std::unordered_set<uint8_t>>(m_grid_size.x * m_grid_size.y, std::unordered_set<uint8_t>());
@@ -92,6 +94,8 @@ void Preprocessor::preprocess_lines(const nucleus::tile::Id tile_id, const std::
         add_end_cap(vertex_start, m_processed_tile.lines[i].style_index, thickness / 2.0);
         add_end_cap(vertex_end, m_processed_tile.lines[i].style_index, thickness / 2.0);
     }
+
+    return m_processed_tile;
 }
 
 void Preprocessor::create_triangles(const std::vector<glm::vec2> polygon_points, unsigned int style_index)
@@ -207,43 +211,44 @@ void Preprocessor::dda_line(const glm::vec2 origin, const glm::vec2 line, const 
     thickness_steps = std::max(thickness_steps, 1);
     steps = std::max(steps, 1);
 
-    glm::vec2 currentStartPoint = origin;
+    glm::vec2 current_start_position = origin;
 
     if (!is_triangle) // visualizing a line means that we want to increase the thickness on both sides of the line (not just outside of a triangle)
-        currentStartPoint -= thickness_normal / 2.0f;
+        current_start_position -= thickness_normal / 2.0f;
 
     for (int i = 0; i < thickness_steps; i++) {
 
-        glm::vec2 currentPoint = currentStartPoint;
+        glm::vec2 current_position = current_start_position;
 
         for (int j = 0; j < steps; j++) {
-            write_to_cell(currentPoint, data_index);
+            write_to_cell(current_position, data_index);
 
             // add a write step to x/y -> this prevents holes from thickness steps to appear by making the lines thicker
             if (step_size.x < 1)
-                write_to_cell(currentPoint + glm::vec2(1, 0) * glm::sign(step_size.x), data_index);
+                write_to_cell(current_position + glm::vec2(1, 0) * glm::sign(step_size.x), data_index);
             if (step_size.y < 1)
-                write_to_cell(currentPoint + glm::vec2(0, 1) * glm::sign(step_size.y), data_index);
+                write_to_cell(current_position + glm::vec2(0, 1) * glm::sign(step_size.y), data_index);
 
             if (i == 0 && is_triangle) // only apply for the inner most layer of a triangle
             {
-                if (int(currentPoint.y + step_size.y) > currentPoint.y) { // next step would go to next y value
+                if (int(current_position.y + step_size.y) > current_position.y) { // next step would go to next y value
                     if (fill_direction == 0) {
                         // we have to save the x location for a specific y row
-                        m_x_values_per_y_step[int(currentPoint.y)] = int(currentPoint.x);
+                        if (m_tile_bounds.contains(current_position))
+                            m_x_values_per_y_step[int(current_position.y)] = int(current_position.x);
                     } else {
                         // we have to fill all values
                         // if()
-                        for (int j = currentPoint.x; j != m_x_values_per_y_step[int(currentPoint.y)]; j += fill_direction) {
-                            write_to_cell(glm::vec2(j, currentPoint.y), data_index);
+                        for (int j = current_position.x; j != m_x_values_per_y_step[int(current_position.y)]; j += fill_direction) {
+                            write_to_cell(glm::vec2(j, current_position.y), data_index);
                         }
                     }
                 }
             }
-            currentPoint += step_size;
+            current_position += step_size;
         }
 
-        currentStartPoint += thickness_step_size;
+        current_start_position += thickness_step_size;
     }
 }
 
@@ -274,7 +279,6 @@ void Preprocessor::write_to_cell_sdf(glm::vec2 current_position, std::array<glm:
         m_processed_tile.cell_to_triangle[int(current_position.x) + m_grid_size.x * int(current_position.y)].insert(data_index);
 }
 
-// also we would probably need a dda for the thickness -> but we can probably only calculated this once at the start? and use those few points as offsets in every step
 void Preprocessor::dda_triangle(unsigned int triangle_index, float thickness)
 {
     auto vertices = m_processed_tile.vertices;
@@ -288,7 +292,6 @@ void Preprocessor::dda_triangle(unsigned int triangle_index, float thickness)
     auto edge_top_middle = middle_vertice - top_vertice;
     auto edge_middle_bottom = bottom_vertice - middle_vertice;
 
-    // TODO normals are not correct -> some might point inwards --> we need to calculate them in create_ordered_triangle
     auto normal_top_bottom = glm::normalize(glm::vec2(-edge_top_bottom.y, edge_top_bottom.x));
     auto normal_top_middle = glm::normalize(glm::vec2(-edge_top_middle.y, edge_top_middle.x));
     auto normal_middle_bottom = glm::normalize(glm::vec2(-edge_middle_bottom.y, edge_middle_bottom.x));
@@ -361,7 +364,7 @@ void Preprocessor::add_end_cap(const glm::vec2 position, unsigned int data_index
     }
 }
 
-void Preprocessor::visualize_grid()
+nucleus::Raster<uint8_t> Preprocessor::visualize_grid()
 {
     auto raster = nucleus::Raster<uint8_t>(m_grid_size, 0);
 
@@ -369,15 +372,14 @@ void Preprocessor::visualize_grid()
         if (m_processed_tile.cell_to_triangle[i].size() > 0) {
             // raster.pixel({ i % m_grid_size.x, i / m_grid_size.x }) = (m_processed_tile.cell_to_triangle[i].size() / 4.0) * 255;
 
-            if (m_processed_tile.cell_to_triangle[i].contains(100))
-                raster.pixel({ i % m_grid_size.x, i / m_grid_size.x }) = 100;
-            else
-                raster.pixel({ i % m_grid_size.x, i / m_grid_size.x }) = 255;
+            // if (m_processed_tile.cell_to_triangle[i].contains(100))
+            //     raster.pixel({ i % m_grid_size.x, i / m_grid_size.x }) = 100;
+            // else
+            raster.pixel({ i % m_grid_size.x, i / m_grid_size.x }) = 255;
         }
     }
 
-    const auto debug_out = QImage(raster.bytes(), m_grid_size.x, m_grid_size.y, QImage::Format_Grayscale8);
-    debug_out.save(QString("grid_test.png"));
+    return raster;
 }
 
 } // namespace nucleus::vector_layer

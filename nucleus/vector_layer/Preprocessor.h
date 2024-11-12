@@ -44,9 +44,9 @@ class Preprocessor {
 
 public:
     Preprocessor();
-    void preprocess_triangles(const nucleus::tile::Id tile_id, const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices);
-    void preprocess_lines(const nucleus::tile::Id tile_id, const std::vector<std::vector<glm::vec2>> lines, const std::vector<unsigned int> style_indices);
-    void visualize_grid();
+    VectorLayer preprocess_triangles(const nucleus::tile::Id tile_id, const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices);
+    VectorLayer preprocess_lines(const nucleus::tile::Id tile_id, const std::vector<std::vector<glm::vec2>> lines, const std::vector<unsigned int> style_indices);
+    nucleus::Raster<uint8_t> visualize_grid();
 
 private:
     VectorLayer m_processed_tile;
