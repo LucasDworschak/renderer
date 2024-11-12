@@ -64,6 +64,15 @@ struct Triangle {
     bool operator==(const Triangle& other) const = default;
 };
 
+struct Line {
+    unsigned int line_start_index;
+    unsigned int line_end_index;
+
+    unsigned int style_index;
+
+    bool operator==(const Line& other) const = default;
+};
+
 // helper for catch2
 inline std::ostream& operator<<(std::ostream& os, const Triangle& t)
 {
@@ -76,9 +85,10 @@ struct VectorLayer {
 public:
     std::vector<glm::vec2> vertices;
     std::vector<Triangle> triangles;
-    std::vector<glm::vec2> vertex_normals;
+    std::vector<Line> lines;
 
     std::vector<std::unordered_set<uint8_t>> cell_to_triangle;
+    std::vector<std::unordered_set<uint8_t>> cell_to_lines;
 };
 
 using VectorLayerCollection = std::unordered_map<tile::Id, VectorLayer, tile::Id::Hasher>;

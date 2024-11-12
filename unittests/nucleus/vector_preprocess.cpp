@@ -139,12 +139,17 @@ TEST_CASE("nucleus/vector_preprocess")
         // const std::vector<glm::vec2> triangle_test = { glm::vec2(25, 25), glm::vec2(30, 25), glm::vec2(28, 30) };
 
         const std::vector<std::vector<glm::vec2>> triangle_points = { triangle_left_hypo, triangle_right_hypo };
+        const std::vector<std::vector<glm::vec2>> line_points
+            = { { glm::vec2(10.5, 40.5), glm::vec2(30.5, 20.5) }, { glm::vec2(10.5, 5.5), glm::vec2(30.5, 5.5) }, { glm::vec2(10.5, 50), glm::vec2(30.5, 50) }
+
+              };
         const std::vector<unsigned int> style_indices = { 1, 2, 3 };
 
         const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
 
         Preprocessor p;
-        p.preprocess(id, triangle_points, style_indices);
+        p.preprocess_triangles(id, triangle_points, style_indices);
+        // p.preprocess_lines(id, line_points, style_indices);
         p.visualize_grid();
     }
 }
