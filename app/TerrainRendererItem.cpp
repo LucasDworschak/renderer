@@ -48,6 +48,7 @@
 #include <nucleus/tile/TextureScheduler.h>
 #include <nucleus/utils/UrlModifier.h>
 #include <nucleus/utils/sun_calculations.h>
+#include <nucleus/vector_layer/Scheduler.h>
 
 #ifdef ALP_ENABLE_DEV_TOOLS
 #include "TimerFrontendManager.h"
@@ -144,6 +145,7 @@ QQuickFramebufferObject::Renderer* TerrainRendererItem::createRenderer() const
     connect(this, &TerrainRendererItem::tile_cache_size_changed, ctx->geometry_scheduler(), &nucleus::tile::Scheduler::set_ram_quad_limit);
     connect(this, &TerrainRendererItem::tile_cache_size_changed, ctx->ortho_scheduler(), &nucleus::tile::Scheduler::set_ram_quad_limit);
     connect(this, &TerrainRendererItem::tile_cache_size_changed, ctx->map_label_scheduler(), &nucleus::tile::Scheduler::set_ram_quad_limit);
+    connect(this, &TerrainRendererItem::tile_cache_size_changed, ctx->vector_layer_scheduler(), &nucleus::tile::Scheduler::set_ram_quad_limit);
 
     // connect glWindow to forward key events.
     connect(this, &TerrainRendererItem::shared_config_changed, r->glWindow(), &gl_engine::Window::shared_config_changed);

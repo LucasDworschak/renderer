@@ -118,6 +118,8 @@ qt_add_library(nucleus STATIC
     utils/error.h
     utils/lang.h
     vector_layer/Preprocessor.h vector_layer/Preprocessor.cpp
+    vector_layer/setup.h
+    vector_layer/Scheduler.h vector_layer/Scheduler.cpp
 )
 
 if (ALP_ENABLE_AVLANCHE_WARNING_LAYER)

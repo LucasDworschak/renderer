@@ -37,6 +37,9 @@ class Scheduler;
 namespace nucleus::picker {
 class PickerManager;
 }
+namespace nucleus::vector_layer {
+class Scheduler;
+}
 namespace nucleus::tile {
 class GeometryScheduler;
 class TextureScheduler;
@@ -75,6 +78,7 @@ public:
     [[nodiscard]] std::shared_ptr<nucleus::picker::PickerManager> picker_manager() const;
     [[nodiscard]] std::shared_ptr<nucleus::map_label::Filter> label_filter() const;
     [[nodiscard]] nucleus::map_label::Scheduler* map_label_scheduler() const;
+    [[nodiscard]] nucleus::vector_layer::Scheduler* vector_layer_scheduler() const;
     [[nodiscard]] nucleus::tile::TextureScheduler* ortho_scheduler() const;
 
 signals:

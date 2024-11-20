@@ -59,6 +59,7 @@ public:
     void upload(const nucleus::utils::MipmappedColourTexture& mipped_texture, unsigned array_index);
     void upload(const nucleus::Raster<glm::u8vec2>& texture, unsigned int array_index);
     void upload(const nucleus::Raster<uint16_t>& texture, unsigned int array_index);
+    void upload(const nucleus::Raster<uint32_t>& texture, unsigned int array_index);
     template <typename T> void upload(const nucleus::Raster<T>& texture);
 
     static GLenum compressed_texture_format();

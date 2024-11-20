@@ -107,4 +107,22 @@ inline glm::u8vec4 uint162alpineRGBA(uint16_t v)
 {
     return { v >> 8, v & 255, 0, 255 };
 }
+
+inline QImage u8raster_to_qimage(const nucleus::Raster<uint8_t>& raster)
+{
+    size_t width = raster.width();
+    size_t height = raster.height();
+
+    QImage image(width, height, QImage::Format_Grayscale8);
+
+    for (size_t y = 0; y < height; ++y) {
+        uchar* line = image.scanLine(y);
+        for (size_t x = 0; x < width; ++x) {
+            line[x] = raster.pixel({ x, y });
+        }
+    }
+
+    return image;
+}
+
 } // namespace nucleus::tile::conversion

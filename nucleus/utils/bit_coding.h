@@ -44,4 +44,48 @@ inline uint32_t f8_4_to_u32(const glm::vec4& v)
     return (int(round(v[0] * 255.0f)) << 24) | (int(round(v[1] * 255.0f)) << 16) | (int(round(v[2] * 255.0f)) << 8) | int(round(v[3] * 255.0f));
 }
 
+inline glm::vec<2, uint32_t> u16_u24_u24_to_u32_2(const uint16_t u16Bit, const uint32_t u24Bit1, const uint32_t u24Bit2)
+{
+    uint32_t a = u16Bit << 16;
+
+    a = a | (u24Bit1 >> 8);
+    uint32_t b = u24Bit1 << 24;
+
+    b = b | (u24Bit2 & ((1u << 24) - 1));
+
+    return { a, b };
+}
+inline glm::vec<3, uint32_t> u32_2_to_u16_u24_u24(glm::vec<2, uint32_t> packed)
+{
+    glm::vec<3, uint32_t> out;
+
+    out.x = packed.x >> 16;
+
+    out.y = (packed.x & ((1u << 16) - 1)) << 8;
+    out.y |= packed.y >> 24;
+
+    out.z = packed.y & ((1u << 24) - 1);
+
+    return out;
+}
+
+inline uint32_t u24_u8_to_u32(uint32_t a, uint8_t b)
+{
+    uint32_t out = a << 8;
+
+    out |= b;
+
+    return out;
+}
+
+inline glm::vec<2, uint32_t> u32_to_u24_u8(uint32_t packed)
+{
+    glm::vec<2, uint32_t> out;
+
+    out.x = packed >> 8;
+    out.y = packed & 255u;
+
+    return out;
+}
+
 } // namespace nucleus::utils::bit_coding

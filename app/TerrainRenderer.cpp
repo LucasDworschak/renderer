@@ -38,6 +38,7 @@
 #include <nucleus/tile/GeometryScheduler.h>
 #include <nucleus/tile/TextureScheduler.h>
 #include <nucleus/utils/thread.h>
+#include <nucleus/vector_layer/Scheduler.h>
 
 TerrainRenderer::TerrainRenderer()
 {
@@ -63,6 +64,7 @@ TerrainRenderer::TerrainRenderer()
     // this only works if ALP_ENABLE_THREADING is on, i.e., the tile scheduler is on an extra thread. -> potential issue on webassembly
     QObject::connect(m_camera_controller.get(), &CameraController::definition_changed, ctx->geometry_scheduler(),   &Scheduler::update_camera);
     QObject::connect(m_camera_controller.get(), &CameraController::definition_changed, ctx->map_label_scheduler(),  &Scheduler::update_camera);
+    QObject::connect(m_camera_controller.get(), &CameraController::definition_changed, ctx->vector_layer_scheduler(),  &Scheduler::update_camera);
     QObject::connect(m_camera_controller.get(), &CameraController::definition_changed, ctx->ortho_scheduler(),      &Scheduler::update_camera);
     QObject::connect(m_camera_controller.get(), &CameraController::definition_changed, m_glWindow.get(),            &gl_engine::Window::update_camera);
 
