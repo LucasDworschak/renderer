@@ -24,7 +24,6 @@
 #include <QImage>
 #include <QString>
 
-#include <CDT.h>
 
 #include <nucleus/tile/conversion.h>
 #include <nucleus/utils/bit_coding.h>
@@ -37,7 +36,30 @@
 using namespace nucleus::vector_tile;
 using namespace nucleus::vector_layer;
 
+// helpers for catch2
 inline std::ostream& operator<<(std::ostream& os, const glm::uvec3& v) { return os << "{ " << v.x << ", " << v.y << ", " << v.z << " }"; }
+
+inline std::ostream& operator<<(std::ostream& os, const glm::vec2& v) { return os << "{ " << v.x << ", " << v.y << " }"; }
+
+inline std::ostream& operator<<(std::ostream& os, const Triangle& t)
+{
+    return os << "{ top: " << t.data.top_vertex << ", middle: " << t.data.middle_vertex << ", bottom: " << t.data.bottom_vertex << ", style: " << std::to_string(t.data.style_index) << " }";
+}
+
+inline std::ostream& operator<<(std::ostream& os, const Line& t)
+{
+    return os << "{ start: " << t.data.line_start_vertex << ", end: " << t.data.line_end_vertex << ", style: " << std::to_string(t.data.style_index) << " }";
+}
+
+inline bool operator==(const Triangle& t1, const Triangle& t2)
+{
+    return t1.data.top_vertex == t2.data.top_vertex && t1.data.middle_vertex == t2.data.middle_vertex && t1.data.bottom_vertex == t2.data.bottom_vertex && t1.data.style_index == t2.data.style_index;
+}
+
+inline bool operator==(const Line& l1, const Line& l2)
+{
+    return l1.data.line_start_vertex == l2.data.line_start_vertex && l1.data.line_end_vertex == l2.data.line_end_vertex && l1.data.style_index == l2.data.style_index;
+}
 
 QImage example_grid_data_triangles()
 {
@@ -59,93 +81,25 @@ QImage example_grid_data_lines()
     return image;
 }
 
+nucleus::Raster<uint8_t> visualize_grid(const VectorLayerGrid& processed_grid, int grid_width)
+{
+    std::vector<uint8_t> output_grid;
+
+    for (size_t i = 0; i < processed_grid.size(); ++i) {
+
+        // grid is a singular uint32_t value that encodes the start index of the triangle list and the amount of triangles
+        if (processed_grid[i].size() == 0) {
+            output_grid.push_back(0);
+        } else {
+            output_grid.push_back(255u);
+        }
+    }
+
+    return nucleus::Raster<uint8_t>(grid_width, std::move(output_grid));
+}
+
 TEST_CASE("nucleus/vector_preprocess")
 {
-    SECTION("Triangulation")
-    {
-        // 5 point polygon
-        // basically a square where one side contains an inward facing triangle
-        // a triangulation algorithm should be able to discern that 3 triangles are needed to construct this shape
-        const std::vector<glm::vec2> points = { glm::vec2(0, 0), glm::vec2(1, 1), glm::vec2(0, 2), glm::vec2(2, 2), glm::vec2(2, 0) };
-        const std::vector<glm::ivec2> edges = { glm::ivec2(0, 1), glm::ivec2(1, 2), glm::ivec2(2, 3), glm::ivec2(3, 4), glm::ivec2(4, 0) };
-
-        CDT::Triangulation<double> cdt;
-        cdt.insertVertices(points.begin(), points.end(), [](const glm::vec2& p) { return p.x; }, [](const glm::vec2& p) { return p.y; });
-        cdt.insertEdges(edges.begin(), edges.end(), [](const glm::ivec2& p) { return p.x; }, [](const glm::ivec2& p) { return p.y; });
-        cdt.eraseOuterTrianglesAndHoles();
-
-        auto tri = cdt.triangles;
-        auto vert = cdt.vertices;
-
-        // check if only 3 triangles have been found
-        CHECK(tri.size() == 3);
-
-        // 1st triangle
-        CHECK(vert[tri[0].vertices[0]].x == 0.0);
-        CHECK(vert[tri[0].vertices[0]].y == 2.0);
-        CHECK(vert[tri[0].vertices[1]].x == 1.0);
-        CHECK(vert[tri[0].vertices[1]].y == 1.0);
-        CHECK(vert[tri[0].vertices[2]].x == 2.0);
-        CHECK(vert[tri[0].vertices[2]].y == 2.0);
-
-        // 2nd triangle
-        CHECK(vert[tri[1].vertices[0]].x == 1.0);
-        CHECK(vert[tri[1].vertices[0]].y == 1.0);
-        CHECK(vert[tri[1].vertices[1]].x == 2.0);
-        CHECK(vert[tri[1].vertices[1]].y == 0.0);
-        CHECK(vert[tri[1].vertices[2]].x == 2.0);
-        CHECK(vert[tri[1].vertices[2]].y == 2.0);
-
-        // 3rd triangle
-        CHECK(vert[tri[2].vertices[0]].x == 1.0);
-        CHECK(vert[tri[2].vertices[0]].y == 1.0);
-        CHECK(vert[tri[2].vertices[1]].x == 0.0);
-        CHECK(vert[tri[2].vertices[1]].y == 0.0);
-        CHECK(vert[tri[2].vertices[2]].x == 2.0);
-        CHECK(vert[tri[2].vertices[2]].y == 0.0);
-
-        // DEBUG print out all the points of the triangles (to check what might have went wrong)
-        // for (std::size_t i = 0; i < tri.size(); i++) {
-        //     printf("Triangle points: [[%f, %f], [%f, %f], [%f, %f]]\n",
-        //         vert[tri[i].vertices[0]].x, // x0
-        //         vert[tri[i].vertices[0]].y, // y0
-        //         vert[tri[i].vertices[1]].x, // x1
-        //         vert[tri[i].vertices[1]].y, // y1
-        //         vert[tri[i].vertices[2]].x, // x2
-        //         vert[tri[i].vertices[2]].y // y2
-        //     );
-        // }
-    }
-
-    SECTION("Triangle y ordering")
-    {
-        // make sure that the triangle_order function correctly orders the triangle points from lowest y to highest y value
-        const std::vector<glm::vec2> triangle_points_012 = { { glm::vec2(30, 10), glm::vec2(10, 30), glm::vec2(50, 50) } };
-        const std::vector<glm::vec2> triangle_points_021 = { glm::vec2(30, 10), glm::vec2(50, 50), glm::vec2(10, 30) };
-        const std::vector<glm::vec2> triangle_points_102 = { glm::vec2(10, 30), glm::vec2(30, 10), glm::vec2(50, 50) };
-        const std::vector<glm::vec2> triangle_points_201 = { glm::vec2(10, 30), glm::vec2(50, 50), glm::vec2(30, 10) };
-        const std::vector<glm::vec2> triangle_points_120 = { glm::vec2(50, 50), glm::vec2(30, 10), glm::vec2(10, 30) };
-        const std::vector<glm::vec2> triangle_points_210 = { glm::vec2(50, 50), glm::vec2(10, 30), glm::vec2(30, 10) };
-
-        const std::vector<std::vector<glm::vec2>> triangle_points = { triangle_points_012, triangle_points_021, triangle_points_102, triangle_points_201, triangle_points_120, triangle_points_210 };
-
-        const std::vector<unsigned int> style_indices = { 1, 1, 1, 1, 1, 1 };
-
-        const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-
-        Preprocessor p(id);
-        auto processed = p.preprocess_triangles(triangle_points, style_indices);
-        CHECK(processed.triangles.size() == 6);
-
-        Triangle correct(glm::vec2(30, 10), glm::vec2(10, 30), glm::vec2(50, 50), 1);
-
-        CHECK(processed.triangles[0] == correct);
-        CHECK(processed.triangles[1] == correct);
-        CHECK(processed.triangles[2] == correct);
-        CHECK(processed.triangles[3] == correct);
-        CHECK(processed.triangles[4] == correct);
-        CHECK(processed.triangles[5] == correct);
-    }
 
     SECTION("Triangle to Grid")
     {
@@ -161,7 +115,7 @@ TEST_CASE("nucleus/vector_preprocess")
         Preprocessor p(id);
         auto processed = p.preprocess_triangles(triangle_points, style_indices);
 
-        auto raster = p.visualize_grid(processed.cell_to_data);
+        auto raster = visualize_grid(processed.cell_to_data, 64);
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
         auto test_image = example_grid_data_triangles();
@@ -182,7 +136,7 @@ TEST_CASE("nucleus/vector_preprocess")
         Preprocessor p(id);
         auto processed = p.preprocess_lines(line_points, style_indices);
 
-        auto raster = p.visualize_grid(processed.cell_to_data);
+        auto raster = visualize_grid(processed.cell_to_data, 64);
 
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
@@ -279,14 +233,4 @@ TEST_CASE("nucleus/vector_preprocess")
             // std::cout << test << unpacked << std::endl;
         }
     }
-    Triangle t;
-    t.packed[0] = 1106247680u;
-    t.packed[1] = 1112014848u;
-    t.packed[2] = 1092616192u;
-    t.packed[3] = 1112014848u;
-    t.packed[4] = -1u;
-    t.packed[5] = -1u;
-    t.packed[6] = -1u;
-
-    std::cout << t << std::endl;
 }

@@ -90,29 +90,6 @@ public:
     VectorLayerGrid cell_to_data;
 };
 
-// helpers for catch2
-inline std::ostream& operator<<(std::ostream& os, const glm::vec2& v) { return os << "{ " << v.x << ", " << v.y << " }"; }
-
-inline std::ostream& operator<<(std::ostream& os, const Triangle& t)
-{
-    return os << "{ top: " << t.data.top_vertex << ", middle: " << t.data.middle_vertex << ", bottom: " << t.data.bottom_vertex << ", style: " << std::to_string(t.data.style_index) << " }";
-}
-
-inline std::ostream& operator<<(std::ostream& os, const Line& t)
-{
-    return os << "{ start: " << t.data.line_start_vertex << ", end: " << t.data.line_end_vertex << ", style: " << std::to_string(t.data.style_index) << " }";
-}
-
-inline bool operator==(const Triangle& t1, const Triangle& t2)
-{
-    return t1.data.top_vertex == t2.data.top_vertex && t1.data.middle_vertex == t2.data.middle_vertex && t1.data.bottom_vertex == t2.data.bottom_vertex && t1.data.style_index == t2.data.style_index;
-}
-
-inline bool operator==(const Line& l1, const Line& l2)
-{
-    return l1.data.line_start_vertex == l2.data.line_start_vertex && l1.data.line_end_vertex == l2.data.line_end_vertex && l1.data.style_index == l2.data.style_index;
-}
-
 class Preprocessor {
 
 public:
@@ -126,21 +103,13 @@ public:
 private:
     // VectorLayer m_processed_tile;
 
+    void create_lines(VectorLayerLineCollection& line_collection, const std::vector<glm::vec2> line_points, unsigned int style_index);
+
     const glm::uvec2 m_grid_size = { 64, 64 };
     std::vector<int> m_x_values_per_y_step;
     int m_tile_up_direction;
     tile::SrsBounds m_tile_bounds;
 
-    void create_triangles(VectorLayerTriangleCollection& triangle_collection, const std::vector<glm::vec2> polygon_points, unsigned int style_index);
-    void create_lines(VectorLayerLineCollection& line_collection, const std::vector<glm::vec2> line_points, unsigned int style_index);
 
-    Triangle create_ordered_triangle(glm::vec2 triangle_vertex_a, glm::vec2 triangle_vertex_b, glm::vec2 triangle_vertex_c, unsigned int style_index);
-
-    inline std::pair<glm::vec2, int> calculate_dda_steps(const glm::vec2 line);
-
-    void dda_line(VectorLayerGrid& grid, const glm::vec2 origin, const glm::vec2 line, const glm::vec2 thickness_normal, unsigned int data_index, int fill_direction, bool is_triangle);
-    void dda_triangle(VectorLayerTriangleCollection& triangle_collection, unsigned int triangle_index, float thickness);
-    void add_end_cap(VectorLayerGrid& grid, const glm::vec2 position, unsigned int data_index, float thickness);
-    void write_to_cell(VectorLayerGrid& grid, const glm::vec2 current_position, unsigned int data_index);
 };
 } // namespace nucleus::vector_layer
