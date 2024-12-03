@@ -43,7 +43,7 @@ GpuVectorLayerTile Preprocessor::preprocess(const tile::Data data)
     tile.id = data.id;
 
     // DEBUG polygons
-    const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10, 30), glm::vec2(30, 10), glm::vec2(50, 50) } };
+    const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5, 30.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5) } };
     const std::vector<unsigned int> style_indices = { 1 };
 
     // // TODO somehow parse the data to lines and triangles

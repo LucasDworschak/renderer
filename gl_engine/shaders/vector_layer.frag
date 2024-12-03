@@ -23,13 +23,10 @@
 #include "encoder.glsl"
 #include "tile_id.glsl"
 
-// #define GRID_ON_FRAG
-
-#if defined(GRID_ON_FRAG)
 uniform highp usampler2DArray grid_sampler;
 uniform highp usampler2D vector_map_meta_sampler;
 uniform highp usampler2D vector_map_tile_id_sampler;
-#endif
+
 uniform highp usampler2D triangle_index_sampler;
 uniform highp usampler2D triangle_data_sampler;
 
@@ -46,7 +43,6 @@ in highp vec3 var_normal;
 in lowp float is_curtain;
 #endif
 flat in lowp vec3 vertex_color;
-flat in highp uvec3 grid_data;
 
 highp float calculate_falloff(highp float dist, highp float from, highp float to) {
     return clamp(1.0 - (dist - from) / (to - from), 0.0, 1.0);
@@ -87,7 +83,6 @@ mediump ivec2 to_dict_pixel_2048(mediump uint hash) {
     return ivec2(int(hash & 2047u), int(hash >> 11u));
 }
 
-#if defined(GRID_ON_FRAG)
 lowp ivec2 to_dict_pixel(mediump uint hash) {
     return ivec2(int(hash & 255u), int(hash >> 8u));
 }
@@ -129,7 +124,6 @@ highp uvec3 u32_2_to_u16_u24_u24(highp uvec2 data){
     return res;
 }
 
-#endif
 
 void main() {
 #if CURTAIN_DEBUG_MODE == 2
@@ -139,84 +133,65 @@ void main() {
 #endif
 
 
-#if defined(GRID_ON_FRAG)
+
+
+
+
+
+    // get grid acceleration structure data
     highp uvec3 tile_id = var_tile_id;
     highp vec2 uv = var_uv;
 
-
     lowp ivec2 dict_px;
+    highp uvec3 grid_data = uvec3(0u);
     if (find_tile(tile_id, dict_px, uv)) {
         highp uvec3 vector_meta = u32_2_to_u16_u24_u24(texelFetch(vector_map_meta_sampler, dict_px, 0).rg);
-        highp uint fragColor = texture(grid_sampler, vec3(uv, vector_meta.x)).r;
-        // fragColor = mix(fragColor, conf.material_color.rgb, conf.material_color.a);
-        if(fragColor == 0u)
-            texout_albedo = vec3(0,0,0);
-        else
-            texout_albedo = vec3(1.0,1.0,0);
-    }
-    else {
-        texout_albedo = vec3(1.0, 0.0, 0.5);
+        if(vector_meta.x != highp uint(-1)) // check for valid data
+        {
+            grid_data = uvec3(texture(grid_sampler, vec3(uv, vector_meta.x)).r, vector_meta.yz);
+        }
     }
 
-    lowp vec3 vert_shader_color = vec3(0,0,0);
+    texout_albedo = vec3(0.0, 0.0, 0.0);
 
-    if(grid_data.x != 0u)
+    // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
+    if(grid_data.x != uint(-1)) // only if we have data here
     {
-        // fragColor = mix(fragColor, conf.material_color.rgb, conf.material_color.a);
-        vert_shader_color = vec3(1.0,0,0);
+        // calculate the offset and size of the triangle index list
+        // the offset in grid_data.x is local to the current tile, the value in grid_data.y is global to all tiles
+        highp uvec2 offset_size = to_offset_size(grid_data.x) + uvec2(grid_data.y, 0);
+
+        lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
+
+        vec3 triangle_out = vec3(0.0);
+
+        for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
+        {
+            highp uint triangle_index = texelFetch(triangle_index_sampler, to_dict_pixel_2048(i), 0).r;
+
+            highp vec2 v0;
+            v0.x = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+0u), 0).r) / 64.0f;
+            v0.y = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+1u), 0).r) / 64.0f;
+
+            highp vec2 v1;
+            v1.x = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+2u), 0).r) / 64.0f;
+            v1.y = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+3u), 0).r) / 64.0f;
+
+            highp vec2 v2;
+            v2.x = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+4u), 0).r) / 64.0f;
+            v2.y = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+5u), 0).r) / 64.0f;
+
+            highp uint style_index = texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+6u), 0).r;
+
+            // highp float c1 = 1.0 - step(0.0, sdTriangle(var_uv, v0, v1, v2) - 0.0625f);
+            highp float c1 = 1.0 - step(0.0, sdTriangle(var_uv, v0, v1, v2) - 0.078125f);
+            triangle_out = vec3(0.0f, c1, 0.0f);
+
+            texout_albedo = mix(raw_grid, triangle_out, 0.5);
+
+            // TODO early exit if alpha is 1;
+        }
     }
-
-    texout_albedo = mix(vert_shader_color, texout_albedo, 0.5);
-#else
-
-    // calculate the offset and size of the triangle index list
-    // the offset in grid_data.x is local to the current tile, the value in grid_data.y is global to all tiles
-    highp uvec2 offset_size = to_offset_size(grid_data.x) + uvec2(grid_data.y, 0);
-
-    lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
-
-    vec3 triangle_out = vec3(0.0);
-
-    // for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
-    // {
-    //     highp uint triangle_index = texelFetch(triangle_index_sampler, to_dict_pixel_2048(i), 0).r;
-
-
-    //     highp vec2 v1;
-    //     v1.x = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+0u), 0).r) / 64.0f;
-    //     v1.y = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+1u), 0).r) / 64.0f;
-
-    // }
-
-    highp vec2 v0;
-    highp vec2 v1;
-    highp vec2 v2;
-
-    v0.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec2(0,0), 0).r) / 64.0f;
-    v0.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec2(1,0), 0).r) / 64.0f;
-
-    v1.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec2(2,0), 0).r) / 64.0f;
-    v1.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec2(3,0), 0).r) / 64.0f;
-
-    v2.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec2(4,0), 0).r) / 64.0f;
-    v2.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec2(5,0), 0).r) / 64.0f;
-
-    highp uint style_index = texelFetch(triangle_data_sampler, ivec2(6,0), 0).r;
-
-
-    // highp float c1 = 1.0-step( 0.0, circle(var_uv, v2, 0.1f));
-
-    highp float c1 = 1.0-step( 0.0, sdTriangle(var_uv, v0, v1, v2)- 0.05f);
-    triangle_out = vec3(0.0f, c1, 0.0f);
-
-    // triangle_out = vec3(var_uv.x, var_uv.y, 0.0);
-
-    // texout_albedo = mix(raw_grid, triangle_out, 0.5);
-    texout_albedo = mix(raw_grid, triangle_out, 1.0);
-    // texout_albedo = triangle_out;//mix(raw_grid, triangle_out, 1.0);
-
-
-#endif
 
     // Write Position (and distance) in gbuffer
     highp float dist = length(var_pos_cws);

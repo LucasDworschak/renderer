@@ -34,7 +34,7 @@ VectorLayer::VectorLayer(QObject* parent)
 
 void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
 {
-    m_shader = std::make_shared<ShaderProgram>("vector_layer.vert", "vector_layer.frag");
+    m_shader = std::make_shared<ShaderProgram>("tile.vert", "vector_layer.frag");
     shader_registry->add_shader(m_shader);
 
     m_grid_texture = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
