@@ -113,6 +113,8 @@ void VectorLayer::update_gpu_quads(const std::vector<nucleus::tile::GpuVectorLay
             m_grid_texture->upload(*tile.grid_triangle, layer_index);
         }
     }
+    // TODO there is currently a race condition. where the m_grid_texture has been uploaded while the m_triangle_index_texture has not but a draw call has been executed in the mean time.
+
     update_gpu_data();
 }
 

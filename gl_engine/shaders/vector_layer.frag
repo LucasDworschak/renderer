@@ -163,7 +163,7 @@ void main() {
 
         lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
 
-        vec3 triangle_out = vec3(0.0);
+        float alpha = 0.0;
 
         for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
         {
@@ -183,13 +183,14 @@ void main() {
 
             highp uint style_index = texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+6u), 0).r;
 
-            // highp float c1 = 1.0 - step(0.0, sdTriangle(var_uv, v0, v1, v2) - 0.0625f);
             highp float c1 = 1.0 - step(0.0, sdTriangle(var_uv, v0, v1, v2) - 0.078125f);
-            triangle_out = vec3(0.0f, c1, 0.0f);
+            vec3 triangle_out = vec3(0.0f, c1, 0.0f);
+            alpha += c1;
 
             texout_albedo = mix(raw_grid, triangle_out, 0.5);
 
-            // TODO early exit if alpha is 1;
+            if(alpha > 1.0)
+                break; // early exit if alpha is 1;
         }
     }
 

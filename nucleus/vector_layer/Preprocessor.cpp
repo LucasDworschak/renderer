@@ -48,42 +48,10 @@ GpuVectorLayerTile Preprocessor::preprocess(const tile::Data data)
 
     // // TODO somehow parse the data to lines and triangles
 
-    // tile.data_line = std::make_shared<VectorLayerLineCollection>(preprocess_lines({}, {}));
-    // std::make_shared<VectorLayerTriangleCollection>(preprocess_triangles(triangle_points, style_indices));
     auto processed_triangles = preprocess_triangles(triangle_points, style_indices);
+    tile.data_triangle = std::make_shared<const std::vector<uint32_t>>(std::move(processed_triangles.data));
 
-    { // triangles to GpuVectorLayerTile
-        std::vector<uint32_t> triangles;
-        triangles.reserve(processed_triangles.triangles.size() * 7);
-
-        for (size_t i = 0; i < processed_triangles.triangles.size(); ++i) {
-            triangles.insert(triangles.end(), processed_triangles.triangles[i].packed, processed_triangles.triangles[i].packed + 7);
-        }
-
-        tile.data_triangle = std::make_shared<const std::vector<uint32_t>>(std::move(triangles));
-    }
-
-    { // grid to GpuVectorLayerTile
-        std::vector<uint32_t> grid;
-        std::vector<uint32_t> grid_to_data;
-
-        uint32_t start_offset = 0;
-
-        for (size_t i = 0; i < processed_triangles.cell_to_data.size(); ++i) {
-
-            // grid is a singular uint32_t value that encodes the start index of the triangle list and the amount of triangles
-            if (processed_triangles.cell_to_data[i].size() == 0) {
-                grid.push_back(0);
-            } else {
-                grid.push_back(nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(processed_triangles.cell_to_data[i].size())));
-                start_offset += processed_triangles.cell_to_data[i].size();
-                grid_to_data.insert(grid_to_data.end(), processed_triangles.cell_to_data[i].begin(), processed_triangles.cell_to_data[i].end());
-            }
-        }
-
-        tile.grid_triangle = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(m_grid_size.x, std::move(grid)));
-        tile.grid_to_data = std::make_shared<const std::vector<uint32_t>>(std::move(grid_to_data));
-    }
+    condense_data(processed_triangles, processed_triangles, tile);
 
     return tile;
 }
@@ -91,71 +59,145 @@ GpuVectorLayerTile Preprocessor::preprocess(const tile::Data data)
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-VectorLayerTriangleCollection Preprocessor::preprocess_triangles(const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices)
+VectorLayerCollection Preprocessor::preprocess_triangles(const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices)
 {
-    VectorLayerTriangleCollection triangle_collection;
-    triangle_collection.cell_to_data = std::vector<std::unordered_set<uint32_t>>(m_grid_size.x * m_grid_size.y, std::unordered_set<uint32_t>());
+    VectorLayerCollection triangle_collection;
+    triangle_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(m_grid_size.x * m_grid_size.y, std::unordered_set<uint32_t>());
 
     float thickness = 5.0f;
 
     const auto grid_width = m_grid_size.x;
     const auto tile_bounds = m_tile_bounds;
 
-    const auto cell_writer = [&triangle_collection, grid_width, tile_bounds](glm::vec2 pos, int data_index) {
-        if (tile_bounds.contains(pos)) {
-            triangle_collection.cell_to_data[int(pos.x) + grid_width * int(pos.y)].insert(data_index);
-        }
-    };
+    // TODO static assert to make sure that float are indeed the same size as uint32_t -> so as to not remove some important bits
+
+    size_t data_offset = 0;
 
     // create the triangles from polygons
     for (size_t i = 0; i < polygons.size(); ++i) {
+
         // polygon to ordered triangles
-        std::vector<glm::vec2> triangles = nucleus::utils::rasterizer::triangulize(polygons[i]);
+        std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygons[i]);
 
         // add ordered triangles to collection
-        for (size_t j = 0; j < triangles.size() / 3; ++j) {
-            triangle_collection.triangles.push_back({ triangles[j * 3 + 0], triangles[j * 3 + 1], triangles[j * 3 + 2], style_indices[i] });
+        for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
+            triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 0].x));
+            triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 0].y));
+            triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 1].x));
+            triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 1].y));
+            triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 2].x));
+            triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 2].y));
+            triangle_collection.data.push_back(style_indices[i]);
         }
 
-        nucleus::utils::rasterizer::rasterize_triangle(cell_writer, triangles, thickness);
+        const auto cell_writer = [&triangle_collection, grid_width, tile_bounds, data_offset](glm::vec2 pos, int data_index) {
+            if (tile_bounds.contains(pos)) {
+                triangle_collection.cell_to_temp[int(pos.x) + grid_width * int(pos.y)].insert(data_index + data_offset);
+            }
+        };
+
+        nucleus::utils::rasterizer::rasterize_triangle(cell_writer, triangle_points, thickness);
+
+        // add to the data offset for the next polygon
+        data_offset += triangle_points.size() / 3;
     }
 
     return triangle_collection;
 }
 
-VectorLayerLineCollection Preprocessor::preprocess_lines(const std::vector<std::vector<glm::vec2>> lines, const std::vector<unsigned int> style_indices)
+VectorLayerCollection Preprocessor::preprocess_lines(const std::vector<std::vector<glm::vec2>> lines, const std::vector<unsigned int> style_indices)
 {
-    VectorLayerLineCollection line_collection;
-    line_collection.cell_to_data = std::vector<std::unordered_set<uint32_t>>(m_grid_size.x * m_grid_size.y, std::unordered_set<uint32_t>());
+    VectorLayerCollection line_collection;
+    line_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(m_grid_size.x * m_grid_size.y, std::unordered_set<uint32_t>());
 
     float thickness = 5.0f;
 
     const auto grid_width = m_grid_size.x;
     const auto tile_bounds = m_tile_bounds;
 
-    const auto cell_writer = [&line_collection, grid_width, tile_bounds](glm::vec2 pos, int data_index) {
-        if (tile_bounds.contains(pos)) {
-            line_collection.cell_to_data[int(pos.x) + grid_width * int(pos.y)].insert(data_index);
-        }
-    };
+    size_t data_offset = 0;
 
     // create the triangles from polygons
     for (size_t i = 0; i < lines.size(); ++i) {
-        create_lines(line_collection, lines[i], style_indices[i]);
+        // create_lines(line_collection, lines[i], style_indices[i]);
+
+        // TODO currently line points are duplicated, in the final shader -> ideally we only want to store one large point list for one line.
+        // the problem here is how to also store meta data like style index efficiently (at start or end of line would be ideal but we would need another offset pointer to this location)
+        // idea -> maybe store styleindex for lines and triangles separately (-> this would also probably be better for triangles)
+        line_collection.data.reserve(lines[i].size() * 3);
+        for (size_t j = 0; j < lines[i].size() - 1; j++) {
+            glm::vec2 p0 = lines[i][j];
+            glm::vec2 p1 = lines[i][j + 1];
+            line_collection.data.push_back(*reinterpret_cast<uint32_t*>(&p0.x));
+            line_collection.data.push_back(*reinterpret_cast<uint32_t*>(&p0.y));
+            line_collection.data.push_back(*reinterpret_cast<uint32_t*>(&p1.x));
+            line_collection.data.push_back(*reinterpret_cast<uint32_t*>(&p1.y));
+            line_collection.data.push_back(style_indices[i]);
+        }
+
+        const auto cell_writer = [&line_collection, grid_width, tile_bounds, data_offset](glm::vec2 pos, int data_index) {
+            if (tile_bounds.contains(pos)) {
+                line_collection.cell_to_temp[int(pos.x) + grid_width * int(pos.y)].insert(data_index + data_offset);
+            }
+        };
 
         nucleus::utils::rasterizer::rasterize_line(cell_writer, lines[i], thickness);
+
+        // add to the data offset for the next polyline
+        // TODO test if this is the correct offset (we might be off by one here but it should suffice for now)
+        data_offset += lines[i].size();
     }
 
     return line_collection;
 }
 
-void Preprocessor::create_lines(VectorLayerLineCollection& line_collection, const std::vector<glm::vec2> line_points, unsigned int style_index)
+/*
+ * Function condenses data and fills the GpuVectorLayerTile.
+ * condensing:
+ *      go over every cell and gather distinct indices
+ *      example input(triangle indice for 6 cells): [1], [1], [1,2], [2,3], [2,3], [2,3]
+ *      expected output: [[1], [1,2], [2,3]]
+ *      Note: it is theoretically possible to further condense the above example to [[1,2,3]] where we can both point to 1, 12 and 23
+ *      nevertheless for more complex entries this might be overkill and take more time to compute than it is worth -> only necessary if we need more buffer space
+ * simultaneously we also generate the final grid for the tile that stores the offset and size for lookups into the index_bridge
+ */
+void Preprocessor::condense_data(VectorLayerCollection& triangle_collection, VectorLayerCollection&, GpuVectorLayerTile& tile)
 {
-    // TODO currently line points are duplicated, in the final shader -> ideally we only want to store one large point list for one line.
-    line_collection.lines.reserve(line_points.size());
-    for (size_t i = 0; i < line_points.size() - 1; i++) {
-        line_collection.lines.push_back({ line_points[i], line_points[i + 1], style_index });
+
+    std::unordered_map<std::unordered_set<uint32_t>, uint32_t, Hasher> unique_entries;
+    std::vector<uint32_t> grid;
+    std::vector<uint32_t> index_bridge;
+
+    uint32_t start_offset = 0;
+
+    for (size_t i = 0; i < triangle_collection.cell_to_temp.size(); ++i) {
+        // go through every cell
+        if (triangle_collection.cell_to_temp[i].size() == 0) {
+            grid.push_back(0); // no data -> only add an emtpy cell
+        } else {
+
+            if (unique_entries.contains(triangle_collection.cell_to_temp[i])) {
+                // we already have such an entry -> get the offset_size from there
+                grid.push_back(unique_entries[triangle_collection.cell_to_temp[i]]);
+            } else {
+                // we have to add a new element
+                const auto offset_size = nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(triangle_collection.cell_to_temp[i].size()));
+                unique_entries[triangle_collection.cell_to_temp[i]] = offset_size;
+
+                grid.push_back(offset_size);
+
+                // add the indices to the bridge
+                index_bridge.insert(index_bridge.end(), triangle_collection.cell_to_temp[i].begin(), triangle_collection.cell_to_temp[i].end());
+
+                start_offset += triangle_collection.cell_to_temp[i].size();
+            }
+        }
     }
+
+    tile.grid_triangle = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(m_grid_size.x, std::move(grid)));
+    tile.grid_to_data = std::make_shared<const std::vector<uint32_t>>(std::move(index_bridge));
+
+    // TODO do the same for lines
 }
 
 } // namespace nucleus::vector_layer

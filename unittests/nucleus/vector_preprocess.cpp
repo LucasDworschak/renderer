@@ -31,9 +31,7 @@
 
 #include "nucleus/Raster.h"
 #include "nucleus/vector_layer/Preprocessor.h"
-#include "nucleus/vector_tile/types.h"
 
-using namespace nucleus::vector_tile;
 using namespace nucleus::vector_layer;
 
 // helpers for catch2
@@ -41,25 +39,6 @@ inline std::ostream& operator<<(std::ostream& os, const glm::uvec3& v) { return 
 
 inline std::ostream& operator<<(std::ostream& os, const glm::vec2& v) { return os << "{ " << v.x << ", " << v.y << " }"; }
 
-inline std::ostream& operator<<(std::ostream& os, const Triangle& t)
-{
-    return os << "{ top: " << t.data.top_vertex << ", middle: " << t.data.middle_vertex << ", bottom: " << t.data.bottom_vertex << ", style: " << std::to_string(t.data.style_index) << " }";
-}
-
-inline std::ostream& operator<<(std::ostream& os, const Line& t)
-{
-    return os << "{ start: " << t.data.line_start_vertex << ", end: " << t.data.line_end_vertex << ", style: " << std::to_string(t.data.style_index) << " }";
-}
-
-inline bool operator==(const Triangle& t1, const Triangle& t2)
-{
-    return t1.data.top_vertex == t2.data.top_vertex && t1.data.middle_vertex == t2.data.middle_vertex && t1.data.bottom_vertex == t2.data.bottom_vertex && t1.data.style_index == t2.data.style_index;
-}
-
-inline bool operator==(const Line& l1, const Line& l2)
-{
-    return l1.data.line_start_vertex == l2.data.line_start_vertex && l1.data.line_end_vertex == l2.data.line_end_vertex && l1.data.style_index == l2.data.style_index;
-}
 
 QImage example_grid_data_triangles()
 {
@@ -115,11 +94,19 @@ TEST_CASE("nucleus/vector_preprocess")
         Preprocessor p(id);
         auto processed = p.preprocess_triangles(triangle_points, style_indices);
 
-        auto raster = visualize_grid(processed.cell_to_data, 64);
+        auto raster = visualize_grid(processed.cell_to_temp, 64);
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
         auto test_image = example_grid_data_triangles();
         CHECK(image == test_image);
+
+        GpuVectorLayerTile tile;
+        tile.id = id;
+
+        p.condense_data(processed, processed, tile);
+
+        // we provide two triangles that overlap at one point -> we expect four entries ([0], [1], ([0], [1])
+        CHECK(tile.grid_to_data->size() == 4);
 
         // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
         image.save(QString("vector_layer_grid_triangles.png"));
@@ -136,7 +123,7 @@ TEST_CASE("nucleus/vector_preprocess")
         Preprocessor p(id);
         auto processed = p.preprocess_lines(line_points, style_indices);
 
-        auto raster = visualize_grid(processed.cell_to_data, 64);
+        auto raster = visualize_grid(processed.cell_to_temp, 64);
 
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
@@ -144,54 +131,24 @@ TEST_CASE("nucleus/vector_preprocess")
         image.save(QString("vector_layer_grid_lines.png"));
     }
 
-    SECTION("vec2 to uint array conversion")
+    SECTION("float to uint array conversion")
     {
-        Triangle t;
-        t.data.top_vertex = { 1.3434f, 2.5656f };
-        t.data.middle_vertex = { 3.5656f, 4.111f };
-        t.data.bottom_vertex = { 5.44432f, 6.0f };
-        t.data.style_index = 7u;
+        auto f0 = 1.3434f;
+        auto f1 = 3.5656f;
+        auto f2 = 5.44432f;
 
-        // only copy uint array and check if the union correctly converted the value to glm::vec2
-        Triangle t2;
-        std::copy(std::begin(t.packed), std::end(t.packed), std::begin(t2.packed));
+        uint32_t u0 = *reinterpret_cast<uint32_t*>(&f0);
+        uint32_t u1 = *reinterpret_cast<uint32_t*>(&f1);
+        uint32_t u2 = *reinterpret_cast<uint32_t*>(&f2);
 
-        CHECK(t2.data.top_vertex == glm::vec2(1.3434f, 2.5656f));
-        CHECK(t2.data.middle_vertex == glm::vec2(3.5656f, 4.111f));
-        CHECK(t2.data.bottom_vertex == glm::vec2(5.44432f, 6.0f));
-        CHECK(t2.data.style_index == 7u);
-    }
+        // convert back to values we can test against
+        float t0 = *reinterpret_cast<float*>(&u0);
+        float t1 = *reinterpret_cast<float*>(&u1);
+        float t2 = *reinterpret_cast<float*>(&u2);
 
-    SECTION("vec2 to uint array conversion with vector insert")
-    {
-        auto triangles = std::vector<Triangle> { { { 1.3434f, 2.5656f }, { 3.5656f, 4.111f }, { 5.44432f, 6.0f }, 7u }, { { 10.3434f, 20.5656f }, { 30.5656f, 40.111f }, { 50.44432f, 60.0f }, 70u } };
-
-        std::vector<uint32_t> triangles_ints;
-        triangles_ints.reserve(triangles.size() * 7);
-        for (size_t i = 0; i < triangles.size(); ++i) {
-            triangles_ints.insert(triangles_ints.end(), triangles[i].packed, triangles[i].packed + 7);
-        }
-
-        Triangle t1;
-        for (size_t i = 0; i < 7; ++i) {
-            t1.packed[i] = triangles_ints[i];
-        }
-
-        CHECK(t1.data.top_vertex == glm::vec2(1.3434f, 2.5656f));
-        CHECK(t1.data.middle_vertex == glm::vec2(3.5656f, 4.111f));
-        CHECK(t1.data.bottom_vertex == glm::vec2(5.44432f, 6.0f));
-        CHECK(t1.data.style_index == 7u);
-
-        Triangle t2;
-        for (size_t i = 7; i < 14; ++i) {
-            t2.packed[i - 7] = triangles_ints[i];
-        }
-
-        // { 10.3434f, 20.5656f }, { 30.5656f, 40.111f }, { 30.5656f, 40.111f }, 70u }
-        CHECK(t2.data.top_vertex == glm::vec2(10.3434f, 20.5656f));
-        CHECK(t2.data.middle_vertex == glm::vec2(30.5656f, 40.111f));
-        CHECK(t2.data.bottom_vertex == glm::vec2(50.44432f, 60.0f));
-        CHECK(t2.data.style_index == 70u);
+        CHECK(t0 == 1.3434f);
+        CHECK(t1 == 3.5656f);
+        CHECK(t2 == 5.44432f);
     }
 
     SECTION("16/24/24 Bit Data packer")
