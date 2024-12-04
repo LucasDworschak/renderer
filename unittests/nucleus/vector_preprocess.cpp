@@ -60,7 +60,7 @@ QImage example_grid_data_lines()
     return image;
 }
 
-nucleus::Raster<uint8_t> visualize_grid(const VectorLayerGrid& processed_grid, int grid_width)
+nucleus::Raster<uint8_t> visualize_grid(const nucleus::vector_layer::details::VectorLayerGrid& processed_grid, int grid_width)
 {
     std::vector<uint8_t> output_grid;
 
@@ -89,10 +89,9 @@ TEST_CASE("nucleus/vector_preprocess")
 
         const std::vector<unsigned int> style_indices = { 1, 2 };
 
-        const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+        // const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
 
-        Preprocessor p(id);
-        auto processed = p.preprocess_triangles(triangle_points, style_indices);
+        auto processed = nucleus::vector_layer::details::preprocess_triangles(triangle_points, style_indices);
 
         auto raster = visualize_grid(processed.cell_to_temp, 64);
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
@@ -101,9 +100,9 @@ TEST_CASE("nucleus/vector_preprocess")
         CHECK(image == test_image);
 
         GpuVectorLayerTile tile;
-        tile.id = id;
+        // tile.id = id;
 
-        p.condense_data(processed, processed, tile);
+        nucleus::vector_layer::details::condense_data(processed, processed, tile);
 
         // we provide two triangles that overlap at one point -> we expect four entries ([0], [1], ([0], [1])
         CHECK(tile.grid_to_data->size() == 4);
@@ -118,10 +117,9 @@ TEST_CASE("nucleus/vector_preprocess")
             = { { glm::vec2(10.5, 40.5), glm::vec2(30.5, 20.5) }, { glm::vec2(10.5, 5.5), glm::vec2(30.5, 5.5) }, { glm::vec2(10.5, 50), glm::vec2(30.5, 50) } };
         const std::vector<unsigned int> style_indices = { 1, 2, 3 };
 
-        const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+        // const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
 
-        Preprocessor p(id);
-        auto processed = p.preprocess_lines(line_points, style_indices);
+        auto processed = nucleus::vector_layer::details::preprocess_lines(line_points, style_indices);
 
         auto raster = visualize_grid(processed.cell_to_temp, 64);
 

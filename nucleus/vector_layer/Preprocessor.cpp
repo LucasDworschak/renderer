@@ -30,14 +30,7 @@
 
 namespace nucleus::vector_layer {
 
-Preprocessor::Preprocessor(nucleus::tile::Id id)
-    : m_x_values_per_y_step(m_grid_size.y, 0)
-{
-    m_tile_up_direction = (id.scheme == tile::Scheme::Tms) ? 1 : -1;
-    m_tile_bounds = { glm::dvec2(0, 0), glm::dvec2 { m_grid_size.x, m_grid_size.y } }; // TODO calculate with srs.tile_bounds method
-}
-
-GpuVectorLayerTile Preprocessor::preprocess(const tile::Data data)
+GpuVectorLayerTile preprocess(const tile::Data data)
 {
     GpuVectorLayerTile tile;
     tile.id = data.id;
@@ -48,7 +41,7 @@ GpuVectorLayerTile Preprocessor::preprocess(const tile::Data data)
 
     // // TODO somehow parse the data to lines and triangles
 
-    auto processed_triangles = preprocess_triangles(triangle_points, style_indices);
+    auto processed_triangles = details::preprocess_triangles(triangle_points, style_indices);
     tile.data_triangle = std::make_shared<const std::vector<uint32_t>>(std::move(processed_triangles.data));
 
     condense_data(processed_triangles, processed_triangles, tile);
@@ -56,18 +49,18 @@ GpuVectorLayerTile Preprocessor::preprocess(const tile::Data data)
     return tile;
 }
 
+} // namespace nucleus::vector_layer
+namespace nucleus::vector_layer::details {
+
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-VectorLayerCollection Preprocessor::preprocess_triangles(const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices)
+VectorLayerCollection preprocess_triangles(const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices)
 {
     VectorLayerCollection triangle_collection;
-    triangle_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(m_grid_size.x * m_grid_size.y, std::unordered_set<uint32_t>());
+    triangle_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(grid_size.x * grid_size.y, std::unordered_set<uint32_t>());
 
     float thickness = 5.0f;
-
-    const auto grid_width = m_grid_size.x;
-    const auto tile_bounds = m_tile_bounds;
 
     // TODO static assert to make sure that float are indeed the same size as uint32_t -> so as to not remove some important bits
 
@@ -90,10 +83,9 @@ VectorLayerCollection Preprocessor::preprocess_triangles(const std::vector<std::
             triangle_collection.data.push_back(style_indices[i]);
         }
 
-        const auto cell_writer = [&triangle_collection, grid_width, tile_bounds, data_offset](glm::vec2 pos, int data_index) {
-            if (tile_bounds.contains(pos)) {
-                triangle_collection.cell_to_temp[int(pos.x) + grid_width * int(pos.y)].insert(data_index + data_offset);
-            }
+        const auto cell_writer = [&triangle_collection, data_offset](glm::vec2 pos, int data_index) {
+            if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(grid_size), pos)))
+                triangle_collection.cell_to_temp[int(pos.x) + grid_size.x * int(pos.y)].insert(data_index + data_offset);
         };
 
         nucleus::utils::rasterizer::rasterize_triangle(cell_writer, triangle_points, thickness);
@@ -105,15 +97,12 @@ VectorLayerCollection Preprocessor::preprocess_triangles(const std::vector<std::
     return triangle_collection;
 }
 
-VectorLayerCollection Preprocessor::preprocess_lines(const std::vector<std::vector<glm::vec2>> lines, const std::vector<unsigned int> style_indices)
+VectorLayerCollection preprocess_lines(const std::vector<std::vector<glm::vec2>> lines, const std::vector<unsigned int> style_indices)
 {
     VectorLayerCollection line_collection;
-    line_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(m_grid_size.x * m_grid_size.y, std::unordered_set<uint32_t>());
+    line_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(grid_size.x * grid_size.y, std::unordered_set<uint32_t>());
 
     float thickness = 5.0f;
-
-    const auto grid_width = m_grid_size.x;
-    const auto tile_bounds = m_tile_bounds;
 
     size_t data_offset = 0;
 
@@ -135,10 +124,9 @@ VectorLayerCollection Preprocessor::preprocess_lines(const std::vector<std::vect
             line_collection.data.push_back(style_indices[i]);
         }
 
-        const auto cell_writer = [&line_collection, grid_width, tile_bounds, data_offset](glm::vec2 pos, int data_index) {
-            if (tile_bounds.contains(pos)) {
-                line_collection.cell_to_temp[int(pos.x) + grid_width * int(pos.y)].insert(data_index + data_offset);
-            }
+        const auto cell_writer = [&line_collection, data_offset](glm::vec2 pos, int data_index) {
+            if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(grid_size), pos)))
+                line_collection.cell_to_temp[int(pos.x) + grid_size.x * int(pos.y)].insert(data_index + data_offset);
         };
 
         nucleus::utils::rasterizer::rasterize_line(cell_writer, lines[i], thickness);
@@ -161,7 +149,7 @@ VectorLayerCollection Preprocessor::preprocess_lines(const std::vector<std::vect
  *      nevertheless for more complex entries this might be overkill and take more time to compute than it is worth -> only necessary if we need more buffer space
  * simultaneously we also generate the final grid for the tile that stores the offset and size for lookups into the index_bridge
  */
-void Preprocessor::condense_data(VectorLayerCollection& triangle_collection, VectorLayerCollection&, GpuVectorLayerTile& tile)
+void condense_data(VectorLayerCollection& triangle_collection, VectorLayerCollection&, GpuVectorLayerTile& tile)
 {
 
     std::unordered_map<std::unordered_set<uint32_t>, uint32_t, Hasher> unique_entries;
@@ -194,10 +182,10 @@ void Preprocessor::condense_data(VectorLayerCollection& triangle_collection, Vec
         }
     }
 
-    tile.grid_triangle = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(m_grid_size.x, std::move(grid)));
+    tile.grid_triangle = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(grid_size.x, std::move(grid)));
     tile.grid_to_data = std::make_shared<const std::vector<uint32_t>>(std::move(index_bridge));
 
     // TODO do the same for lines
 }
 
-} // namespace nucleus::vector_layer
+} // namespace nucleus::vector_layer::details
