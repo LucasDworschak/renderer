@@ -77,6 +77,27 @@ nucleus::Raster<uint8_t> visualize_grid(const nucleus::vector_layer::details::Ve
     return nucleus::Raster<uint8_t>(grid_width, std::move(output_grid));
 }
 
+/*
+ *  both raster either have 0 or some value
+ *  the value does not have to be the same
+ *  -> because raster1 is created by visualizegrid and filled with 255 and raster2 contains actual offset data that varies
+ */
+bool same_cells_are_filled(const nucleus::Raster<uint8_t>& raster1, std::shared_ptr<const nucleus::Raster<uint32_t>> raster2)
+{
+    REQUIRE(raster1.size() == raster2->size());
+
+    auto b1 = raster1.buffer();
+    auto b2 = raster2->buffer();
+
+    for (size_t i = 0; i < b1.size(); ++i) {
+
+        if ((b1[i] == 0) != (b2[i] == 0))
+            return false;
+    }
+
+    return true;
+}
+
 TEST_CASE("nucleus/vector_preprocess")
 {
 
@@ -89,8 +110,6 @@ TEST_CASE("nucleus/vector_preprocess")
 
         const std::vector<unsigned int> style_indices = { 1, 2 };
 
-        // const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-
         auto processed = nucleus::vector_layer::details::preprocess_triangles(triangle_points, style_indices);
 
         auto raster = visualize_grid(processed.cell_to_temp, 64);
@@ -99,16 +118,19 @@ TEST_CASE("nucleus/vector_preprocess")
         auto test_image = example_grid_data_triangles();
         CHECK(image == test_image);
 
-        GpuVectorLayerTile tile;
-        // tile.id = id;
+        auto tile = nucleus::vector_layer::details::create_gpu_tile(processed, processed);
 
-        nucleus::vector_layer::details::condense_data(processed, processed, tile);
+        CHECK(same_cells_are_filled(raster, tile.grid_triangle));
 
-        // we provide two triangles that overlap at one point -> we expect four entries ([0], [1], ([0], [1])
-        CHECK(tile.grid_to_data->size() == 4);
+        // we provide two triangles that overlap at one point -> we expect four entries ([1], [0], ([1], [0])
+        REQUIRE(tile.grid_to_data->size() == 4);
+        CHECK(tile.grid_to_data->at(0) == 1);
+        CHECK(tile.grid_to_data->at(1) == 0);
+        CHECK(tile.grid_to_data->at(2) == 1);
+        CHECK(tile.grid_to_data->at(3) == 0);
 
         // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
-        image.save(QString("vector_layer_grid_triangles.png"));
+        // image.save(QString("vector_layer_grid_triangles.png"));
     }
 
     SECTION("Lines to Grid")
@@ -126,7 +148,7 @@ TEST_CASE("nucleus/vector_preprocess")
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
         // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
-        image.save(QString("vector_layer_grid_lines.png"));
+        // image.save(QString("vector_layer_grid_lines.png"));
     }
 
     SECTION("float to uint array conversion")

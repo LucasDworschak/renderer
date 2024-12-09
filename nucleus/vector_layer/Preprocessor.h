@@ -59,7 +59,7 @@ namespace details {
     VectorLayerCollection preprocess_triangles(const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices);
     VectorLayerCollection preprocess_lines(const std::vector<std::vector<glm::vec2>> lines, const std::vector<unsigned int> style_indices);
 
-    void condense_data(VectorLayerCollection& triangle_collection, VectorLayerCollection& line_collection, GpuVectorLayerTile& tile);
+    GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collection, const VectorLayerCollection& line_collection);
 
 } // namespace details
 

@@ -32,9 +32,6 @@ namespace nucleus::vector_layer {
 
 GpuVectorLayerTile preprocess(const tile::Data data)
 {
-    GpuVectorLayerTile tile;
-    tile.id = data.id;
-
     // DEBUG polygons
     const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5, 30.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5) } };
     const std::vector<unsigned int> style_indices = { 1 };
@@ -42,9 +39,9 @@ GpuVectorLayerTile preprocess(const tile::Data data)
     // // TODO somehow parse the data to lines and triangles
 
     auto processed_triangles = details::preprocess_triangles(triangle_points, style_indices);
-    tile.data_triangle = std::make_shared<const std::vector<uint32_t>>(std::move(processed_triangles.data));
 
-    condense_data(processed_triangles, processed_triangles, tile);
+    auto tile = create_gpu_tile(processed_triangles, processed_triangles);
+    tile.id = data.id;
 
     return tile;
 }
@@ -149,8 +146,11 @@ VectorLayerCollection preprocess_lines(const std::vector<std::vector<glm::vec2>>
  *      nevertheless for more complex entries this might be overkill and take more time to compute than it is worth -> only necessary if we need more buffer space
  * simultaneously we also generate the final grid for the tile that stores the offset and size for lookups into the index_bridge
  */
-void condense_data(VectorLayerCollection& triangle_collection, VectorLayerCollection&, GpuVectorLayerTile& tile)
+GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collection, const VectorLayerCollection&)
 {
+    GpuVectorLayerTile tile;
+
+    tile.data_triangle = std::make_shared<const std::vector<uint32_t>>(std::move(triangle_collection.data));
 
     std::unordered_map<std::unordered_set<uint32_t>, uint32_t, Hasher> unique_entries;
     std::vector<uint32_t> grid;
@@ -186,6 +186,8 @@ void condense_data(VectorLayerCollection& triangle_collection, VectorLayerCollec
     tile.grid_to_data = std::make_shared<const std::vector<uint32_t>>(std::move(index_bridge));
 
     // TODO do the same for lines
+
+    return tile;
 }
 
 } // namespace nucleus::vector_layer::details
