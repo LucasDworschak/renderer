@@ -120,6 +120,7 @@ qt_add_library(nucleus STATIC
     vector_layer/Preprocessor.h vector_layer/Preprocessor.cpp
     vector_layer/setup.h
     vector_layer/Scheduler.h vector_layer/Scheduler.cpp
+    vector_layer/Style.h vector_layer/Style.cpp
     utils/rasterizer.h utils/rasterizer.cpp
 )
 

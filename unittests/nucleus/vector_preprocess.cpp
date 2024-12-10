@@ -33,6 +33,7 @@
 
 #include "nucleus/Raster.h"
 #include "nucleus/vector_layer/Preprocessor.h"
+#include "nucleus/vector_layer/Style.h"
 
 using namespace nucleus::vector_layer;
 
@@ -112,8 +113,6 @@ TEST_CASE("nucleus/vector_preprocess")
         const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
         nucleus::tile::TileLoadService service("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/tile/", nucleus::tile::TileLoadService::UrlPattern::ZYX_yPointingSouth, ".pbf");
 
-        std::cout << service.build_tile_url(id).toStdString();
-
         {
             QSignalSpy spy(&service, &nucleus::tile::TileLoadService::load_finished);
             service.load(id);
@@ -130,6 +129,14 @@ TEST_CASE("nucleus/vector_preprocess")
             REQUIRE(tile.data->size() > 0);
             CHECK(tile.data->size() > 2000);
         }
+    }
+
+    SECTION("Style download basemap")
+    {
+        Style s("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/resources/styles/");
+        QSignalSpy spy(&s, &Style::load_finished);
+        s.load();
+        spy.wait(10000);
     }
 
     SECTION("Triangle to Grid")
