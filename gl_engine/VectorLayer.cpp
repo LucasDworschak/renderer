@@ -54,7 +54,11 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_triangle_data_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::R32UI);
     m_triangle_data_texture->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
 
-    update_gpu_data();
+    // initial texture upload with default values (but set width and format)
+    m_tile_id_texture->upload(nucleus::Raster<glm::u32vec2>({ 256, 256 }, glm::u32vec2(-1, -1)));
+    m_meta_texture->upload(nucleus::Raster<glm::u32vec2>({ 256, 256 }, glm::u32vec2(-1, -1)));
+    m_triangle_index_texture->upload(nucleus::Raster<uint32_t>({ 2048, 2048 }, -1u));
+    m_triangle_data_texture->upload(nucleus::Raster<uint32_t>({ 2048, 2048 }, -1u));
 }
 
 void VectorLayer::draw(
@@ -113,7 +117,6 @@ void VectorLayer::update_gpu_quads(const std::vector<nucleus::tile::GpuVectorLay
             m_grid_texture->upload(*tile.grid_triangle, layer_index);
         }
     }
-    // TODO there is currently a race condition. where the m_grid_texture has been uploaded while the m_triangle_index_texture has not but a draw call has been executed in the mean time.
 
     update_gpu_data();
 }
@@ -132,7 +135,7 @@ void VectorLayer::update_gpu_data()
     // - upload m_meta_texture and m_triangle_index_texture and m_triangle_data_texture
 
     auto [packed_ids, layers] = m_gpu_array_helper.generate_dictionary();
-    m_tile_id_texture->upload(packed_ids);
+    m_tile_id_texture->reupload(packed_ids);
 
     // instead of uploading layers directly, we combine the data with global offsets and save it into a meta texture
     // layer -> 16bits
@@ -168,7 +171,7 @@ void VectorLayer::update_gpu_data()
         triangle_offset += m_id_to_triangle_data.at(id)->size();
     }
 
-    m_meta_texture->upload(meta);
+    m_meta_texture->reupload(meta);
 
     // make sure that we have exactly 2048x2048 elements
     assert(triangle_combined_indices.size() <= 4194304u);
@@ -180,8 +183,8 @@ void VectorLayer::update_gpu_data()
     nucleus::Raster<uint32_t> triangle_index(2048, std::move(triangle_combined_indices)); // R32UI
     nucleus::Raster<uint32_t> triangle_data(2048, std::move(triangle_combined_data)); // R32UI
 
-    m_triangle_index_texture->upload(triangle_index);
-    m_triangle_data_texture->upload(triangle_data);
+    m_triangle_index_texture->reupload(triangle_index);
+    m_triangle_data_texture->reupload(triangle_data);
 }
 
 } // namespace gl_engine
