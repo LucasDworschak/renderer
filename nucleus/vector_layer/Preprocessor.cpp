@@ -30,8 +30,11 @@
 
 namespace nucleus::vector_layer {
 
-GpuVectorLayerTile preprocess(const tile::Data data)
+GpuVectorLayerTile preprocess(const QByteArray& vector_tile_data)
 {
+    if (vector_tile_data.isEmpty())
+        return {};
+
     // DEBUG polygons
     const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5, 30.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5) } };
     const std::vector<unsigned int> style_indices = { 1 };
@@ -41,7 +44,6 @@ GpuVectorLayerTile preprocess(const tile::Data data)
     auto processed_triangles = details::preprocess_triangles(triangle_points, style_indices);
 
     auto tile = create_gpu_tile(processed_triangles, processed_triangles);
-    tile.id = data.id;
 
     return tile;
 }

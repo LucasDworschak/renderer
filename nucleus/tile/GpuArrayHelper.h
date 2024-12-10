@@ -34,6 +34,7 @@ public:
     /// returns index in texture array
     unsigned add_tile(const tile::Id& tile_id);
     void remove_tile(const tile::Id& tile_id);
+    bool contains_tile(const tile::Id& tile_id);
     void set_quad_limit(unsigned new_limit);
     unsigned size() const;
     Dictionary generate_dictionary() const;

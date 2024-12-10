@@ -44,6 +44,8 @@ void GpuArrayHelper::remove_tile(const tile::Id& tile_id)
     *t = tile::Id { unsigned(-1), {} };
 }
 
+bool GpuArrayHelper::contains_tile(const tile::Id& tile_id) { return m_id_to_layer.contains(tile_id); }
+
 void GpuArrayHelper::set_quad_limit(unsigned int new_limit)
 {
     assert(m_array.empty());

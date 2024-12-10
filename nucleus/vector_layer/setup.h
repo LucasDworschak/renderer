@@ -35,34 +35,36 @@
 
 namespace nucleus::vector_layer::setup {
 
-class TileLoadServiceMock : public nucleus::tile::TileLoadService {
-public:
-    TileLoadServiceMock(const QString& base_url, UrlPattern url_pattern, const QString& file_ending, const LoadBalancingTargets& load_balancing_targets = {})
-        : nucleus::tile::TileLoadService(base_url, url_pattern, file_ending, load_balancing_targets)
-    {
-    }
-public slots:
-    void load_mock(const tile::Id& tile_id) const
-    {
+// class TileLoadServiceMock : public nucleus::tile::TileLoadService {// TODO REMOVE DEBUG
+// public:
+//     TileLoadServiceMock(const QString& base_url, UrlPattern url_pattern, const QString& file_ending, const LoadBalancingTargets& load_balancing_targets = {})
+//         : nucleus::tile::TileLoadService(base_url, url_pattern, file_ending, load_balancing_targets)
+//     {
+//     }
+// public slots:
+//     void load_mock(const tile::Id& tile_id) const
+//     {
 
-        QTimer* t = new QTimer();
-        t->setSingleShot(true);
+//         QTimer* t = new QTimer();
+//         t->setSingleShot(true);
 
-        // do some fancy stuff after timeout
-        connect(t, &QTimer::timeout, [tile_id, t, this]() {
-            const auto timestamp = utils::time_since_epoch();
+//         // do some fancy stuff after timeout
+//         connect(t, &QTimer::timeout, [tile_id, t, this]() {
+//             const auto timestamp = utils::time_since_epoch();
 
-            auto tile = std::make_shared<QByteArray>();
-            emit load_finished({ tile_id, { tile::NetworkInfo::Status::Good, timestamp }, tile });
-            t->deleteLater();
-        });
+//             auto tile = std::make_shared<QByteArray>();
+//             emit load_finished({ tile_id, { tile::NetworkInfo::Status::Good, timestamp }, tile });
+//             t->deleteLater();
+//         });
 
-        t->start(100);
-    }
-};
-using TileLoadServicePtr = std::unique_ptr<nucleus::vector_layer::setup::TileLoadServiceMock>;
+//         t->start(100);
+//     }
+// };
+// using TileLoadServicePtr = std::unique_ptr<nucleus::vector_layer::setup::TileLoadServiceMock>;
 
 // using TileLoadServicePtr = std::unique_ptr<nucleus::tile::TileLoadService>;
+
+using TileLoadServicePtr = std::unique_ptr<nucleus::tile::TileLoadService>;
 
 struct SchedulerHolder {
     std::unique_ptr<vector_layer::Scheduler> scheduler;
@@ -90,7 +92,8 @@ SchedulerHolder scheduler(std::string name, TileLoadServicePtr tile_service, con
         QObject::connect(sch, &Scheduler::quads_requested, sl, &SlotLimiter::request_quads);
         QObject::connect(sl, &SlotLimiter::quad_requested, rl, &RateLimiter::request_quad);
         QObject::connect(rl, &RateLimiter::quad_requested, qa, &QuadAssembler::load);
-        QObject::connect(qa, &QuadAssembler::tile_requested, tile_service.get(), &TileLoadServiceMock::load_mock);
+        // QObject::connect(qa, &QuadAssembler::tile_requested, tile_service.get(), &TileLoadServiceMock::load_mock); // TODO REMOVE DEBUG
+        QObject::connect(qa, &QuadAssembler::tile_requested, tile_service.get(), &TileLoadService::load);
         QObject::connect(tile_service.get(), &TileLoadService::load_finished, qa, &QuadAssembler::deliver_tile);
 
         QObject::connect(qa, &QuadAssembler::quad_loaded, sl, &SlotLimiter::deliver_quad);

@@ -57,8 +57,8 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     // initial texture upload with default values (but set width and format)
     m_tile_id_texture->upload(nucleus::Raster<glm::u32vec2>({ 256, 256 }, glm::u32vec2(-1, -1)));
     m_meta_texture->upload(nucleus::Raster<glm::u32vec2>({ 256, 256 }, glm::u32vec2(-1, -1)));
-    m_triangle_index_texture->upload(nucleus::Raster<uint32_t>({ 2048, 2048 }, -1u));
-    m_triangle_data_texture->upload(nucleus::Raster<uint32_t>({ 2048, 2048 }, -1u));
+    m_triangle_index_texture->upload(nucleus::Raster<uint32_t>({ TEXTURE_RESOLUTION, TEXTURE_RESOLUTION }, -1u));
+    m_triangle_data_texture->upload(nucleus::Raster<uint32_t>({ TEXTURE_RESOLUTION, TEXTURE_RESOLUTION }, -1u));
 }
 
 void VectorLayer::draw(
@@ -89,6 +89,10 @@ void VectorLayer::update_gpu_quads(const std::vector<nucleus::tile::GpuVectorLay
 
     for (const auto& quad : deleted_quads) {
         for (const auto& id : quad.children()) {
+
+            if (!m_gpu_array_helper.contains_tile(id))
+                continue; // TODO maybe better to move the contains inside remove_tile (but currently do not want to change the assert)
+
             m_gpu_array_helper.remove_tile(id);
 
             assert(m_id_to_data_bridge.contains(id));
@@ -102,7 +106,10 @@ void VectorLayer::update_gpu_quads(const std::vector<nucleus::tile::GpuVectorLay
         for (const auto& tile : quad.tiles) {
             // test for validity
             assert(tile.id.zoom_level < 100);
-            assert(tile.grid_triangle);
+            if (!tile.grid_triangle)
+                continue; // nothing here
+
+            // assert(tile.grid_triangle);
             assert(tile.grid_to_data);
             assert(tile.data_triangle);
 
@@ -147,9 +154,9 @@ void VectorLayer::update_gpu_data()
     // further more for the index indirection map and the triangle data, we combine the data of all tiles into the following vectors
     // and upload them to their respective textures
     std::vector<uint32_t> triangle_combined_indices;
-    triangle_combined_indices.reserve(4194304u);
+    triangle_combined_indices.reserve(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION);
     std::vector<uint32_t> triangle_combined_data;
-    triangle_combined_data.reserve(4194304u);
+    triangle_combined_data.reserve(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION);
 
     uint32_t data_index_offset = 0;
     uint32_t triangle_offset = 0;
@@ -173,15 +180,15 @@ void VectorLayer::update_gpu_data()
 
     m_meta_texture->reupload(meta);
 
-    // make sure that we have exactly 2048x2048 elements
-    assert(triangle_combined_indices.size() <= 4194304u);
-    assert(triangle_combined_data.size() <= 4194304u);
-    triangle_combined_indices.resize(4194304u, -1u);
-    triangle_combined_data.resize(4194304u, -1u);
+    // make sure that we have exactly TEXTURE_RESOLUTIONxTEXTURE_RESOLUTION elements
+    assert(triangle_combined_indices.size() <= TEXTURE_RESOLUTION * TEXTURE_RESOLUTION);
+    assert(triangle_combined_data.size() <= TEXTURE_RESOLUTION * TEXTURE_RESOLUTION);
+    triangle_combined_indices.resize(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION, -1u);
+    triangle_combined_data.resize(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION, -1u);
 
     // pack the data into square raster and upload them
-    nucleus::Raster<uint32_t> triangle_index(2048, std::move(triangle_combined_indices)); // R32UI
-    nucleus::Raster<uint32_t> triangle_data(2048, std::move(triangle_combined_data)); // R32UI
+    nucleus::Raster<uint32_t> triangle_index(TEXTURE_RESOLUTION, std::move(triangle_combined_indices)); // R32UI
+    nucleus::Raster<uint32_t> triangle_data(TEXTURE_RESOLUTION, std::move(triangle_combined_data)); // R32UI
 
     m_triangle_index_texture->reupload(triangle_index);
     m_triangle_data_texture->reupload(triangle_data);

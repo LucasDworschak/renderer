@@ -41,9 +41,8 @@ void Scheduler::transform_and_emit(const std::vector<tile::DataQuad>& new_quads,
         gpu_quad.id = quad.id;
         assert(quad.n_tiles == 4);
         for (unsigned i = 0; i < 4; ++i) {
+            gpu_quad.tiles[i] = nucleus::vector_layer::preprocess(*quad.tiles[i].data);
             gpu_quad.tiles[i].id = quad.tiles[i].id;
-
-            gpu_quad.tiles[i] = nucleus::vector_layer::preprocess(quad.tiles[i]);
         }
         return gpu_quad;
     });

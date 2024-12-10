@@ -17,15 +17,17 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include <QSignalSpy>
 #include <catch2/catch_test_macros.hpp>
-#include <glm/glm.hpp>
 
 #include <QFile>
 #include <QImage>
 #include <QString>
+#include <glm/glm.hpp>
 
-
+#include <nucleus/tile/TileLoadService.h>
 #include <nucleus/tile/conversion.h>
+#include <nucleus/tile/utils.h>
 #include <nucleus/utils/bit_coding.h>
 #include <radix/tile.h>
 
@@ -100,6 +102,35 @@ bool same_cells_are_filled(const nucleus::Raster<uint8_t>& raster1, std::shared_
 
 TEST_CASE("nucleus/vector_preprocess")
 {
+
+    SECTION("Tile download basemap")
+    {
+        // if this fails it is very likely that something on the vector tile server changed
+        // manually download the tile from the below link and check if the changes are valid and replace vectortile.mvt with this new file
+        // https://osm.cg.tuwien.ac.at/vector_tiles/poi_v1/10/548/359
+
+        const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+        nucleus::tile::TileLoadService service("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/tile/", nucleus::tile::TileLoadService::UrlPattern::ZYX_yPointingSouth, ".pbf");
+
+        std::cout << service.build_tile_url(id).toStdString();
+
+        {
+            QSignalSpy spy(&service, &nucleus::tile::TileLoadService::load_finished);
+            service.load(id);
+            spy.wait(10000);
+
+            REQUIRE(spy.count() == 1);
+            QList<QVariant> arguments = spy.takeFirst();
+            REQUIRE(arguments.size() == 1);
+            nucleus::tile::Data tile = arguments.at(0).value<nucleus::tile::Data>();
+            CHECK(tile.id == id);
+            CHECK(tile.network_info.status == nucleus::tile::NetworkInfo::Status::Good);
+            CHECK(nucleus::utils::time_since_epoch() - tile.network_info.timestamp < 10'000);
+
+            REQUIRE(tile.data->size() > 0);
+            CHECK(tile.data->size() > 2000);
+        }
+    }
 
     SECTION("Triangle to Grid")
     {

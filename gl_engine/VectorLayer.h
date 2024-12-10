@@ -57,6 +57,7 @@ private:
     void update_gpu_data();
 
     static constexpr auto GRID_RESOLUTION = 64;
+    static constexpr auto TEXTURE_RESOLUTION = 2048;
 
     std::shared_ptr<ShaderProgram> m_shader;
 

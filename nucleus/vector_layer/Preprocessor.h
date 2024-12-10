@@ -63,6 +63,6 @@ namespace details {
 
 } // namespace details
 
-GpuVectorLayerTile preprocess(const tile::Data data);
+GpuVectorLayerTile preprocess(const QByteArray& vector_tile_data);
 
 } // namespace nucleus::vector_layer
