@@ -113,20 +113,18 @@ void Style::parse_load(std::shared_ptr<QByteArray> data)
 
         for (const QString& key : paint.keys()) {
 
-            // TODO here
-            // convert string colors to int colors
             if (key == "fill-color") {
-                s.fill_color = 0;
+                s.fill_color = parse_color(obj.toObject().value("paint").toObject().value(key).toString().toStdString());
             } else if (key == "line-color") {
-                s.fill_color = 0;
+                s.fill_color = parse_color(obj.toObject().value("paint").toObject().value(key).toString().toStdString());
             } else if (key == "fill-outline-color") {
-                s.outline_color = 0;
+                s.outline_color = parse_color(obj.toObject().value("paint").toObject().value(key).toString().toStdString());
             } else if (key == "fill-outline-color") {
-                s.outline_color = 0;
+                s.outline_color = parse_color(obj.toObject().value("paint").toObject().value(key).toString().toStdString());
             } else if (key == "line-width") {
-                s.outline_width = 0;
+                s.outline_width = obj.toObject().value("paint").toObject().value(key).toDouble();
             } else if (key == "line-dasharray") {
-                s.outline_dash = 0;
+                s.outline_dash = parse_dasharray(obj.toObject().value("paint").toObject().value(key).toArray());
             } else if (key == "line-offset") {
                 // might be needed
             } else if (key == "icon-color" || key == "circle-color" || key == "circle-radius" || key == "circle-stroke-color" || key == "circle-stroke-width" || key == "text-color"
@@ -166,6 +164,102 @@ void Style::parse_load(std::shared_ptr<QByteArray> data)
     }
 
     emit load_finished();
+}
+
+// NOTE std::stof uses the locale to convert strings
+// locale might be german and it expects a "," decimal
+// we howewer want to force an english "." decimal point
+// we could also temporarily change the locale and change it back afterwards
+// but changing the locale might cause performance problems or other unexpected problems
+// snippet from: https://stackoverflow.com/a/78993592 -> also talks about possible multi thread issues with changing locale
+float stringToFloat(const std::string& value)
+{
+    auto index = value.find(".");
+    if (index == std::string::npos) {
+        return std::stoi(value);
+    }
+    int full = std::stoi(value.substr(0, index));
+    int decimals = std::stoi(value.substr(index + 1));
+    return full + double(decimals / pow(10, value.substr(index + 1).size()));
+}
+
+/*
+ * Note so far no useful documentation was found for dash-array and how they are structured/constructed
+ * -> therefore verify that we are using this correctly
+ * Currently: we only support 2 values for dash array -> dash and gap
+ * we assume that index 0 is the dash size and index 1 is the gap size.
+ * https://docs.mapbox.com/android/maps/api/10.2.0/mapbox-maps-android/com.mapbox.maps.plugin.annotation.generated/-polyline-annotation-manager/line-dasharray.html
+ * declares that those values are multiplied by line width to the actual size
+ * we store the ratio between both values and the sum of both values in one uint32_t value
+ * this currently wastes a bit of space -> two 8bit values should suffice here
+ * but we are also not quite clear about all the possible values
+ * -> THEREFORE TODO veryfy the assumptions of this method
+ */
+uint32_t Style::parse_dasharray(QJsonArray dash_values)
+{
+    // TODO there are also values with more than two values
+    // currently only 2 values are allowed here
+    // assert(dash_values.size() == 2);
+
+    double sum = dash_values[0].toDouble() + dash_values[1].toDouble();
+
+    uint16_t dash_gap_ratio = dash_values[0].toDouble() / sum * 65535.f;
+
+    return dash_gap_ratio << 16 | uint16_t(sum);
+}
+
+uint32_t Style::parse_color(std::string value)
+{
+    if (value.starts_with("#")) {
+        if (value.length() == 7)
+            return (std::stoul(value.substr(1), nullptr, 16) << 8) | 255;
+        else if (value.length() == 9)
+            return std::stoul(value.substr(1), nullptr, 16);
+        else {
+            std::cout << "cannot parse color: " << value << std::endl; // TODO change to qdebug (or similar)
+            return 0ul;
+        }
+    } else if (value.starts_with("rgb")) {
+        // parses rgb(int,int,int) and rgba(int,int,int,float)
+        // ints in range [0-255]; float in range [0-1]
+        uint32_t out = 0u;
+
+        auto startPos = value.find("(");
+        auto tmp = value.substr(startPos + 1, value.size() - startPos - 2);
+        int count = 0;
+        auto pos = tmp.find(',');
+        while (pos != std::string::npos) {
+            count++;
+            out = out << 8;
+
+            // find start of next digit or use the full value for the rest
+            auto nextPos = tmp.find(',');
+            auto nextVal = tmp;
+            if (nextPos != std::string::npos)
+                nextVal = tmp.substr(0, nextPos);
+
+            // count < 4 necessary since the alpha value might be 1 -> and has to be multiplied by 255
+            if (nextVal.find(".") == std::string::npos && count < 4) {
+                // integer
+                out |= std::stoul(nextVal);
+            } else {
+                // decimal
+                out |= uint32_t(stringToFloat(nextVal) * 255.f);
+            }
+            // remove the digit we just parsed
+            tmp = tmp.substr(nextPos + 1);
+
+            pos = nextPos;
+        }
+
+        if (count == 3) // only rgb was given -> add full transparancy
+            out = (out << 8) | 255;
+
+        return out;
+    } else {
+        std::cout << "cannot parse color: " << value << std::endl;
+        return 0ul;
+    }
 }
 
 } // namespace nucleus::vector_layer

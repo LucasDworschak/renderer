@@ -139,6 +139,17 @@ TEST_CASE("nucleus/vector_preprocess")
         spy.wait(10000);
     }
 
+    SECTION("Style parsing color")
+    {
+        Style s("");
+        CHECK(s.parse_color("rgba(134,179,1,0.5)") == 0x86B3017F);
+        CHECK(s.parse_color("rgba(134,179,1,1)") == 0x86B301FF);
+        CHECK(s.parse_color("rgb(134,179,1)") == 0x86B301FF);
+        CHECK(s.parse_color("rgb(50,0,100)") == 0x320064FF);
+        CHECK(s.parse_color("#FF55AA") == 0xFF55AAFF);
+        CHECK(s.parse_color("#ABCDEF45") == 0xABCDEF45);
+    }
+
     SECTION("Triangle to Grid")
     {
         const std::vector<glm::vec2> triangle_left_hypo = { glm::vec2(10, 30), glm::vec2(30, 10), glm::vec2(50, 50) };

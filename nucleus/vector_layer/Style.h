@@ -34,13 +34,14 @@ struct Layer_Style {
     uint32_t outline_color; // fill-outline-color or
     float outline_width; // line-width
     uint32_t outline_dash; // line-dasharray
-    // TODO not sure yet how to declare the outline_dash
+
+    bool operator==(const Layer_Style& other) const = default;
 };
 
 template <class T> inline void hash_combine(std::size_t& seed, T const& v) { seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2); }
 
 struct Hasher {
-    size_t operator()(Layer_Style& style) const
+    size_t operator()(const Layer_Style& style) const
     {
         size_t seed = 0;
 
@@ -60,6 +61,9 @@ public:
 
     [[nodiscard]] unsigned int transfer_timeout() const;
     void set_transfer_timeout(unsigned int new_transfer_timeout);
+
+    uint32_t parse_color(std::string value);
+    uint32_t parse_dasharray(QJsonArray dash_values);
 
 public slots:
     void load();
