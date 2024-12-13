@@ -28,16 +28,20 @@
 
 #include "nucleus/utils/rasterizer.h"
 
+#include <mapbox/vector_tile.hpp>
+
 namespace nucleus::vector_layer {
 
-GpuVectorLayerTile preprocess(const QByteArray& vector_tile_data)
+GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
 {
     if (vector_tile_data.isEmpty())
         return {};
 
     // DEBUG polygons
-    const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5, 30.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5) } };
+    // const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5, 30.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5) } };
     const std::vector<unsigned int> style_indices = { 1 };
+
+    auto triangle_points = details::parse_tile(id, vector_tile_data, style);
 
     // // TODO somehow parse the data to lines and triangles
 
@@ -51,10 +55,79 @@ GpuVectorLayerTile preprocess(const QByteArray& vector_tile_data)
 } // namespace nucleus::vector_layer
 namespace nucleus::vector_layer::details {
 
+PointCollectionVec2 parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
+{
+    const auto d = vector_tile_data.toStdString();
+    const mapbox::vector_tile::buffer tile(d);
+
+    bool first_layer = true;
+    float grid_scale = 1.0; // scale between [0-grid_size]
+
+    PointCollectionVec2 polygons;
+    std::vector<size_t> polygon_styles;
+    PointCollectionVec2 lines;
+
+    for (const auto& layer_name : tile.layerNames()) {
+        // std::cout << layer_name << std::endl;
+
+        // if (layer_name != "NUTZUNG_L15_12")
+        if (layer_name != "GEWAESSER_F_GEWF")
+            continue; // DEBUG
+
+        size_t style_index = style.layer_style_index(layer_name, id.zoom_level);
+
+        if (style_index == -1ul) // no style found -> we do not visualize it
+            continue;
+
+        const mapbox::vector_tile::layer layer = tile.getLayer(layer_name);
+        std::size_t feature_count = layer.featureCount();
+
+        if (first_layer) // TODO extent should be the same along all layers -> verify this
+        {
+            first_layer = false;
+            grid_scale = float(grid_size.x) / layer.getExtent();
+        }
+
+        for (std::size_t i = 0; i < feature_count; ++i) {
+            const auto feature = mapbox::vector_tile::feature(layer.getFeature(i), layer);
+            auto props = feature.getProperties();
+
+            // TODO style_index decision should also include props._symbols (and other variables defined there)
+
+            if (feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
+                PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(grid_scale);
+
+                for (size_t j = 0; j < geom.size(); ++j) {
+                    if (geom[j][0] == geom[j][geom[j].size() - 1]) {
+                        // duplicate vertex detected -> has to be removed
+                        geom[j].pop_back();
+                    }
+                }
+
+                // concat
+                // polygons.reserve(polygons.size() + geom.size()); // calling reserve here significantly impacts performance -> see if it is possible to call it outside of the loop
+                polygons.insert(polygons.end(), geom.begin(), geom.end());
+
+            } else if (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) {
+                PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(grid_scale);
+
+                // concat
+                // lines.reserve(lines.size() + geom.size());
+                // lines.insert(lines.end(), geom.begin(), geom.end());
+            }
+        }
+    }
+
+    // TODO here -> call preprocess_triangles
+    // ignore for now style indices -> hard write 1 inside every trianglecollection
+
+    return polygons;
+}
+
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-VectorLayerCollection preprocess_triangles(const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices)
+VectorLayerCollection preprocess_triangles(const PointCollectionVec2 polygons, const std::vector<unsigned int>)
 {
     VectorLayerCollection triangle_collection;
     triangle_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(grid_size.x * grid_size.y, std::unordered_set<uint32_t>());
@@ -68,6 +141,9 @@ VectorLayerCollection preprocess_triangles(const std::vector<std::vector<glm::ve
     // create the triangles from polygons
     for (size_t i = 0; i < polygons.size(); ++i) {
 
+        if (i >= 1)
+            break;
+
         // polygon to ordered triangles
         std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygons[i]);
 
@@ -79,7 +155,8 @@ VectorLayerCollection preprocess_triangles(const std::vector<std::vector<glm::ve
             triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 1].y));
             triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 2].x));
             triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 2].y));
-            triangle_collection.data.push_back(style_indices[i]);
+            // triangle_collection.data.push_back(style_indices[i]);
+            triangle_collection.data.push_back(1); // hardcoded for now
         }
 
         const auto cell_writer = [&triangle_collection, data_offset](glm::vec2 pos, int data_index) {
@@ -96,7 +173,7 @@ VectorLayerCollection preprocess_triangles(const std::vector<std::vector<glm::ve
     return triangle_collection;
 }
 
-VectorLayerCollection preprocess_lines(const std::vector<std::vector<glm::vec2>> lines, const std::vector<unsigned int> style_indices)
+VectorLayerCollection preprocess_lines(const PointCollectionVec2 lines, const std::vector<unsigned int> style_indices)
 {
     VectorLayerCollection line_collection;
     line_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(grid_size.x * grid_size.y, std::unordered_set<uint32_t>());

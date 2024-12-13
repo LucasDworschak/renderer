@@ -24,11 +24,25 @@
 
 #include "nucleus/tile/types.h"
 
+#include "Style.h"
+
 namespace nucleus::vector_layer {
 
 using namespace nucleus::tile;
 
 namespace details {
+
+    class PointCollectionVec2 : public std::vector<std::vector<glm::vec2>> {
+    public:
+        using coordinate_type = float;
+        static inline bool check_limits = false;
+        static inline bool round = false;
+        template <class... Args>
+        PointCollectionVec2(Args&&... args)
+            : std::vector<std::vector<glm::vec2>>(std::forward<Args>(args)...)
+        {
+        }
+    };
 
     constexpr glm::uvec2 grid_size = { 64, 64 };
 
@@ -56,13 +70,14 @@ namespace details {
         VectorLayerGrid cell_to_temp;
     };
 
-    VectorLayerCollection preprocess_triangles(const std::vector<std::vector<glm::vec2>> polygons, const std::vector<unsigned int> style_indices);
-    VectorLayerCollection preprocess_lines(const std::vector<std::vector<glm::vec2>> lines, const std::vector<unsigned int> style_indices);
+    VectorLayerCollection preprocess_triangles(const PointCollectionVec2 polygons, const std::vector<unsigned int> style_indices);
+    VectorLayerCollection preprocess_lines(const PointCollectionVec2 lines, const std::vector<unsigned int> style_indices);
 
     GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collection, const VectorLayerCollection& line_collection);
 
+    PointCollectionVec2 parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
 } // namespace details
 
-GpuVectorLayerTile preprocess(const QByteArray& vector_tile_data);
+GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
 
 } // namespace nucleus::vector_layer

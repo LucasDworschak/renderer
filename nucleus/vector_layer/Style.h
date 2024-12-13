@@ -65,6 +65,8 @@ public:
     uint32_t parse_color(std::string value);
     uint32_t parse_dasharray(QJsonArray dash_values);
 
+    size_t layer_style_index(std::string layer_name, unsigned zoom) const;
+
 public slots:
     void load();
 
@@ -77,7 +79,7 @@ private:
     std::unordered_set<Layer_Style, Hasher> m_fill_styles;
     std::unordered_set<Layer_Style, Hasher> m_line_styles;
 
-    std::map<std::tuple<QString, unsigned>, size_t> m_layer_zoom_to_style;
+    std::map<std::tuple<std::string, unsigned>, size_t> m_layer_zoom_to_style;
 
     QString m_url;
     std::shared_ptr<QNetworkAccessManager> m_network_manager;

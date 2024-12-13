@@ -188,6 +188,7 @@ void main() {
             alpha += c1;
 
             texout_albedo = mix(raw_grid, triangle_out, 0.5);
+            texout_albedo = raw_grid;
 
             if(alpha > 1.0)
                 break; // early exit if alpha is 1;

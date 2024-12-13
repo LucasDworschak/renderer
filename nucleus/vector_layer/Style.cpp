@@ -73,6 +73,19 @@ void Style::set_transfer_timeout(unsigned int new_transfer_timeout)
     m_transfer_timeout = new_transfer_timeout;
 }
 
+size_t Style::layer_style_index(std::string layer_name, unsigned zoom) const
+{
+    const auto key = std::make_tuple(layer_name, zoom);
+
+    // assert(m_layer_zoom_to_style.contains(key)); // no valid style found
+    if (!m_layer_zoom_to_style.contains(key)) {
+        // std::cout << "no style for: " << layer_name << " " << zoom << std::endl;
+        return -1ul;
+    }
+
+    return m_layer_zoom_to_style.at(key);
+}
+
 void Style::parse_load(std::shared_ptr<QByteArray> data)
 {
 
@@ -137,7 +150,6 @@ void Style::parse_load(std::shared_ptr<QByteArray> data)
 
         unsigned min_zoom = 0u;
         unsigned max_zoom = 19u;
-        const auto layer_name = obj.toObject().value("id").toString();
 
         if (obj.toObject().contains("minzoom"))
             min_zoom = obj.toObject().value("minzoom").toInt();
@@ -157,6 +169,7 @@ void Style::parse_load(std::shared_ptr<QByteArray> data)
             }
         }
 
+        const auto layer_name = obj.toObject().value("source-layer").toString().toStdString();
         // map layer name and zoom level to correct style hash
         for (unsigned i = min_zoom; i < max_zoom; i++) {
             m_layer_zoom_to_style[std::make_tuple(layer_name, i)] = style_hash;

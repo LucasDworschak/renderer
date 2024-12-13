@@ -26,7 +26,9 @@ namespace nucleus::vector_layer {
 
 Scheduler::Scheduler(std::string name, QObject* parent)
     : nucleus::tile::Scheduler(std::move(name), 256, parent)
+    , m_style("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/resources/styles/")
 {
+    connect(&m_style, &Style::load_finished, this, &Scheduler::style_loaded);
 }
 Scheduler::~Scheduler() = default;
 
@@ -35,13 +37,15 @@ void Scheduler::transform_and_emit(const std::vector<tile::DataQuad>& new_quads,
     std::vector<nucleus::tile::GpuVectorLayerQuad> new_gpu_quads;
     new_gpu_quads.reserve(new_quads.size());
 
-    std::transform(new_quads.cbegin(), new_quads.cend(), std::back_inserter(new_gpu_quads), [](const auto& quad) {
+    // const auto style = m_style;
+
+    std::transform(new_quads.cbegin(), new_quads.cend(), std::back_inserter(new_gpu_quads), [this](const auto& quad) {
         // create GpuQuad based on cpu quad
         GpuVectorLayerQuad gpu_quad;
         gpu_quad.id = quad.id;
         assert(quad.n_tiles == 4);
         for (unsigned i = 0; i < 4; ++i) {
-            gpu_quad.tiles[i] = nucleus::vector_layer::preprocess(*quad.tiles[i].data);
+            gpu_quad.tiles[i] = nucleus::vector_layer::preprocess(quad.tiles[i].id, *quad.tiles[i].data, m_style);
             gpu_quad.tiles[i].id = quad.tiles[i].id;
         }
         return gpu_quad;
@@ -49,6 +53,12 @@ void Scheduler::transform_and_emit(const std::vector<tile::DataQuad>& new_quads,
 
     emit gpu_quads_updated(new_gpu_quads, deleted_quads);
 }
+
+// TODO not quite sure if this is the correct way we want to do this yet..
+// especially with changing vector layer source this would definitely cause problems
+void Scheduler::load_style() { m_style.load(); }
+
+void Scheduler::style_loaded() { set_enabled(true); }
 
 bool Scheduler::is_ready_to_ship(const nucleus::tile::DataQuad& quad) const
 {

@@ -21,6 +21,8 @@
 #include <nucleus/tile/Scheduler.h>
 #include <nucleus/vector_tile/types.h>
 
+#include "Style.h"
+
 namespace nucleus::vector_layer {
 
 class Scheduler : public nucleus::tile::Scheduler {
@@ -31,6 +33,11 @@ public:
 
     void set_geometry_ram_cache(nucleus::tile::MemoryCache* new_geometry_ram_cache);
 
+    void load_style();
+
+public slots:
+    void style_loaded();
+
 signals:
     void gpu_quads_updated(const std::vector<nucleus::tile::GpuVectorLayerQuad>& new_quads, const std::vector<tile::Id>& deleted_quads);
 
@@ -40,6 +47,8 @@ protected:
 
 private:
     nucleus::tile::MemoryCache* m_geometry_ram_cache = nullptr;
+
+    Style m_style;
 };
 
 } // namespace nucleus::vector_layer
