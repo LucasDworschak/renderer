@@ -35,6 +35,9 @@
 #include "nucleus/vector_layer/Preprocessor.h"
 #include "nucleus/vector_layer/Style.h"
 
+#include "nucleus/utils/rasterizer.h"
+#include "nucleus/vector_layer/constants.h"
+
 using namespace nucleus::vector_layer;
 
 // helpers for catch2
@@ -116,7 +119,7 @@ TEST_CASE("nucleus/vector_preprocess")
         {
             QSignalSpy spy(&service, &nucleus::tile::TileLoadService::load_finished);
             service.load(id);
-            spy.wait(10000);
+            spy.wait(15000);
 
             REQUIRE(spy.count() == 1);
             QList<QVariant> arguments = spy.takeFirst();
@@ -152,16 +155,21 @@ TEST_CASE("nucleus/vector_preprocess")
 
     SECTION("Triangle to Grid")
     {
-        const std::vector<glm::vec2> triangle_left_hypo = { glm::vec2(10, 30), glm::vec2(30, 10), glm::vec2(50, 50) };
-        const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5, 5), glm::vec2(15, 10), glm::vec2(5, 15) };
+        // make sure that the proposed points are still roughly the same (even after tinkering with grid_size)
+        // this would still mean that we have to redo the below data every time we chang the grid scale -> but it isn't too problematic for now
+        constexpr float point_scale = 1.0f / 64.0f * nucleus::vector_layer::constants::grid_size;
+
+        const std::vector<glm::vec2> triangle_left_hypo
+            = { glm::vec2(10 * point_scale, 30 * point_scale), glm::vec2(30 * point_scale, 5 * point_scale), glm::vec2(50 * point_scale, 50 * point_scale) };
+        const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5 * point_scale, 5 * point_scale), glm::vec2(25 * point_scale, 10 * point_scale), glm::vec2(5 * point_scale, 15 * point_scale) };
 
         const std::vector<std::vector<glm::vec2>> triangle_points = { triangle_left_hypo, triangle_right_hypo };
 
-        const std::vector<unsigned int> style_indices = { 1, 2 };
+        const std::vector<unsigned int> style_indices = { 1, 1 };
 
         auto processed = nucleus::vector_layer::details::preprocess_triangles(triangle_points, style_indices);
 
-        auto raster = visualize_grid(processed.cell_to_temp, 64);
+        auto raster = visualize_grid(processed.cell_to_temp, nucleus::vector_layer::constants::grid_size);
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
         auto test_image = example_grid_data_triangles();
@@ -171,12 +179,198 @@ TEST_CASE("nucleus/vector_preprocess")
 
         CHECK(same_cells_are_filled(raster, tile.grid_triangle));
 
-        // we provide two triangles that overlap at one point -> we expect four entries ([1], [0], ([1], [0])
-        REQUIRE(tile.grid_to_data->size() == 4);
-        CHECK(tile.grid_to_data->at(0) == 1);
-        CHECK(tile.grid_to_data->at(1) == 0);
-        CHECK(tile.grid_to_data->at(2) == 1);
-        CHECK(tile.grid_to_data->at(3) == 0);
+        // we provide two triangles that overlap at one point -> we expect four entries [1], [0], ([1], [0])
+        auto bridge_data = tile.grid_to_data->buffer();
+        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
+        CHECK(bridge_data[0] == 1);
+        CHECK(bridge_data[1] == 0);
+        CHECK(bridge_data[2] == 1);
+        CHECK(bridge_data[3] == 0);
+        // the rest should be undefined -> -1u
+        CHECK(bridge_data[4] == -1u);
+        CHECK(bridge_data[5] == -1u);
+        CHECK(bridge_data[nucleus::vector_layer::constants::data_size * 1.5] == -1u);
+
+
+        auto data = tile.data_triangle->buffer();
+        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
+        CHECK(data[0] == 1089470464);
+        CHECK(data[1] == 1067450368);
+        CHECK(data[2] == 1075838976);
+        CHECK(data[3] == 1089470464);
+        CHECK(data[4] == 1095237632);
+        CHECK(data[5] == 1095237632);
+        CHECK(data[6] == 1);
+        CHECK(data[7] == 1067450368);
+        CHECK(data[8] == 1067450368);
+        CHECK(data[9] == 1086849024);
+        CHECK(data[10] == 1075838976);
+        CHECK(data[11] == 1067450368);
+        CHECK(data[12] == 1081081856);
+        CHECK(data[13] == 1);
+        // the rest should be undefined -> -1u
+        CHECK(data[14] == -1u);
+        CHECK(data[15] == -1u);
+        CHECK(data[nucleus::vector_layer::constants::data_size * 1.7] == -1u);
+
+        // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
+        //     std::cout << bridge_data[i] << std::endl;
+        // }
+
+        // std::cout << std::endl;
+        // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
+        //     std::cout << data[i] << std::endl;
+        // }
+
+        // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
+        // image.save(QString("vector_layer_grid_triangles.png"));
+    }
+
+    SECTION("Triangle to Grid (outside vertices)")
+    {
+        // make sure that the proposed points are still roughly the same (even after tinkering with grid_size)
+        // this would still mean that we have to redo the below data every time we chang the grid scale -> but it isn't too problematic for now
+        constexpr float point_scale = 1.0f / 64.0f * nucleus::vector_layer::constants::grid_size;
+
+        const std::vector<glm::vec2> triangle_left_hypo
+            = { glm::vec2(-10 * point_scale, 30 * point_scale), glm::vec2(30 * point_scale, 5 * point_scale), glm::vec2(50 * point_scale, 80 * point_scale) };
+        const std::vector<glm::vec2> triangle_right_hypo
+            = { glm::vec2(5 * point_scale, -5 * point_scale), glm::vec2(90 * point_scale, 10 * point_scale), glm::vec2(5 * point_scale, 15 * point_scale) };
+
+        const std::vector<std::vector<glm::vec2>> triangle_points = { triangle_left_hypo, triangle_right_hypo };
+
+        const std::vector<unsigned int> style_indices = { 1, 1 };
+
+        auto processed = nucleus::vector_layer::details::preprocess_triangles(triangle_points, style_indices);
+
+        auto raster = visualize_grid(processed.cell_to_temp, nucleus::vector_layer::constants::grid_size);
+        auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
+
+        auto tile = nucleus::vector_layer::details::create_gpu_tile(processed, processed);
+
+        CHECK(same_cells_are_filled(raster, tile.grid_triangle));
+
+        // we provide two triangles that overlap at one point -> we expect four entries [1], ([1], [0]), [1]
+        auto bridge_data = tile.grid_to_data->buffer();
+        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
+        CHECK(bridge_data[0] == 1);
+        CHECK(bridge_data[1] == 1);
+        CHECK(bridge_data[2] == 0);
+        CHECK(bridge_data[3] == 0);
+        // the rest should be undefined -> -1u
+        CHECK(bridge_data[4] == -1u);
+        CHECK(bridge_data[5] == -1u);
+        CHECK(bridge_data[nucleus::vector_layer::constants::data_size * 1.5] == -1u);
+
+        auto data = tile.data_triangle->buffer();
+        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
+        CHECK(data[0] == 1089470464);
+        CHECK(data[1] == 1067450368);
+        CHECK(data[2] == 3223322624);
+        CHECK(data[3] == 1089470464);
+        CHECK(data[4] == 1095237632);
+        CHECK(data[5] == 1101004800);
+        CHECK(data[6] == 1);
+        CHECK(data[7] == 1067450368);
+        CHECK(data[8] == 3214934016);
+        CHECK(data[9] == 1102315520);
+        CHECK(data[10] == 1075838976);
+        CHECK(data[11] == 1067450368);
+        CHECK(data[12] == 1081081856);
+        CHECK(data[13] == 1);
+        // the rest should be undefined -> -1u
+        CHECK(data[14] == -1u);
+        CHECK(data[15] == -1u);
+        CHECK(data[nucleus::vector_layer::constants::data_size * 1.7] == -1u);
+
+        // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
+        //     std::cout << bridge_data[i] << std::endl;
+        // }
+
+        // std::cout << std::endl;
+        // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
+        //     std::cout << data[i] << std::endl;
+        // }
+
+        // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
+        // image.save(QString("vector_layer_grid_triangles_outside.png"));
+    }
+
+    SECTION("Basemap decoding - vectortile Neusiedlersee")
+    {
+        // TODO test vectortile_neusiedlersee.pbf and see what is wrong with the rasterization of the lake
+        // const auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 4477 * 2, 2850 * 2 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+        const auto id = nucleus::tile::Id { .zoom_level = 13, .coords = { 4477, 2850 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+
+        QByteArray byte_data;
+
+        {
+            nucleus::tile::TileLoadService service("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/tile/", nucleus::tile::TileLoadService::UrlPattern::ZYX_yPointingSouth, ".pbf");
+            QSignalSpy spy(&service, &nucleus::tile::TileLoadService::load_finished);
+            service.load(id);
+            spy.wait(15000);
+
+            REQUIRE(spy.count() == 1);
+            QList<QVariant> arguments = spy.takeFirst();
+            REQUIRE(arguments.size() == 1);
+            nucleus::tile::Data tile = arguments.at(0).value<nucleus::tile::Data>();
+            byte_data = *tile.data;
+        }
+
+        // auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vectortile_neusiedlersee.pbf"));
+        // file.open(QFile::ReadOnly);
+        // const auto byte_data = file.readAll();
+
+        Style style("");
+
+        // auto processed = nucleus::vector_layer::preprocess(id, byte_data, style);
+        auto polygons = nucleus::vector_layer::details::parse_tile(id, byte_data, style);
+
+        // constexpr float point_scale = 1.0f / 64.0f;
+
+        // const std::vector<glm::vec2> triangle_left_hypo
+        //     = { glm::vec2(10 * point_scale, 30 * point_scale), glm::vec2(30 * point_scale, 5 * point_scale), glm::vec2(50 * point_scale, 50 * point_scale) };
+        // const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5 * point_scale, 5 * point_scale), glm::vec2(25 * point_scale, 10 * point_scale), glm::vec2(5 * point_scale, 15 * point_scale)
+        // };
+
+        // const std::vector<std::vector<glm::vec2>> polygons = { triangle_left_hypo, triangle_right_hypo };
+
+        size_t data_offset = 1;
+
+        for (size_t i = 0; i < polygons.size(); ++i) {
+            std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygons[i], true);
+
+            std::cout << "o Water" << i << std::endl;
+            for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
+
+                std::cout << "v " << triangle_points[j * 3 + 0].x << " 0.0 " << triangle_points[j * 3 + 0].y << std::endl;
+                std::cout << "v " << triangle_points[j * 3 + 1].x << " 0.0 " << triangle_points[j * 3 + 1].y << std::endl;
+                std::cout << "v " << triangle_points[j * 3 + 2].x << " 0.0 " << triangle_points[j * 3 + 2].y << std::endl;
+            }
+
+            for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
+                std::cout << "f " << (data_offset + j * 3 + 0) << " " << (data_offset + j * 3 + 1) << " " << (data_offset + j * 3 + 2) << std::endl;
+            }
+            data_offset += triangle_points.size();
+        }
+
+        // TODO here -> visualize the grid first,
+        // probably best to execute each step individually and rasterize the resulting polygons with own raster with higher level of detail than grid size
+
+        // auto raster = processed.grid_triangle;
+        // auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
+
+        // auto test_image = example_grid_data_triangles();
+        // CHECK(image == test_image);
+
+        // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
+        //     std::cout << bridge_data[i] << std::endl;
+        // }
+
+        // std::cout << std::endl;
+        // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
+        //     std::cout << data[i] << std::endl;
+        // }
 
         // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
         // image.save(QString("vector_layer_grid_triangles.png"));
@@ -192,7 +386,7 @@ TEST_CASE("nucleus/vector_preprocess")
 
         auto processed = nucleus::vector_layer::details::preprocess_lines(line_points, style_indices);
 
-        auto raster = visualize_grid(processed.cell_to_temp, 64);
+        auto raster = visualize_grid(processed.cell_to_temp, nucleus::vector_layer::constants::grid_size);
 
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 

@@ -179,7 +179,8 @@ void RenderingContext::initialise()
         m->ortho_texture.scheduler->set_enabled(true);
     });
     // vector layer must first load the style before enabling the scheduler (enabling scheduler happens internally after load_style)
-    nucleus::utils::thread::async_call(m->vector_layer.scheduler.get(), [this]() { m->vector_layer.scheduler->load_style(); });
+    // nucleus::utils::thread::async_call(m->vector_layer.scheduler.get(), [this]() { m->vector_layer.scheduler->load_style(); });
+    nucleus::utils::thread::async_call(m->vector_layer.scheduler.get(), [this]() { m->vector_layer.scheduler->set_enabled(true); }); // TODO change to load style again
 
     // labels
     m->engine_context->set_map_label_manager(std::make_unique<gl_engine::MapLabels>(m->aabb_decorator));

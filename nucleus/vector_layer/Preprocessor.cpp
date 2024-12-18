@@ -30,15 +30,22 @@
 
 #include <mapbox/vector_tile.hpp>
 
+#include "constants.h"
+
 namespace nucleus::vector_layer {
 
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
+// GpuVectorLayerTile preprocess(tile::Id, const QByteArray& vector_tile_data, const Style&)
 {
     if (vector_tile_data.isEmpty())
         return {};
 
+    // std::cout << id << ": ";
+
     // DEBUG polygons
-    // const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5, 30.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5) } };
+    // const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5 / 64.0 * constants::grid_size, 30.5 / 64.0 * constants::grid_size),
+    //     glm::vec2(30.5 / 64.0 * constants::grid_size, 10.5 / 64.0 * constants::grid_size),
+    //     glm::vec2(50.5 / 64.0 * constants::grid_size, 50.5 / 64.0 * constants::grid_size) } };
     const std::vector<unsigned int> style_indices = { 1 };
 
     auto triangle_points = details::parse_tile(id, vector_tile_data, style);
@@ -55,7 +62,8 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
 } // namespace nucleus::vector_layer
 namespace nucleus::vector_layer::details {
 
-PointCollectionVec2 parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
+// PointCollectionVec2 parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
+PointCollectionVec2 parse_tile(tile::Id, const QByteArray& vector_tile_data, const Style&)
 {
     const auto d = vector_tile_data.toStdString();
     const mapbox::vector_tile::buffer tile(d);
@@ -74,10 +82,10 @@ PointCollectionVec2 parse_tile(tile::Id id, const QByteArray& vector_tile_data, 
         if (layer_name != "GEWAESSER_F_GEWF")
             continue; // DEBUG
 
-        size_t style_index = style.layer_style_index(layer_name, id.zoom_level);
-
-        if (style_index == -1ul) // no style found -> we do not visualize it
-            continue;
+        // TODO enable again
+        // size_t style_index = style.layer_style_index(layer_name, id.zoom_level);
+        // if (style_index == -1ul) // no style found -> we do not visualize it
+        //     continue;
 
         const mapbox::vector_tile::layer layer = tile.getLayer(layer_name);
         std::size_t feature_count = layer.featureCount();
@@ -85,7 +93,7 @@ PointCollectionVec2 parse_tile(tile::Id id, const QByteArray& vector_tile_data, 
         if (first_layer) // TODO extent should be the same along all layers -> verify this
         {
             first_layer = false;
-            grid_scale = float(grid_size.x) / layer.getExtent();
+            grid_scale = float(constants::grid_size) / layer.getExtent();
         }
 
         for (std::size_t i = 0; i < feature_count; ++i) {
@@ -130,9 +138,9 @@ PointCollectionVec2 parse_tile(tile::Id id, const QByteArray& vector_tile_data, 
 VectorLayerCollection preprocess_triangles(const PointCollectionVec2 polygons, const std::vector<unsigned int>)
 {
     VectorLayerCollection triangle_collection;
-    triangle_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(grid_size.x * grid_size.y, std::unordered_set<uint32_t>());
+    triangle_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(constants::grid_size * constants::grid_size, std::unordered_set<uint32_t>());
 
-    float thickness = 5.0f;
+    float thickness = 0.0f;
 
     // TODO static assert to make sure that float are indeed the same size as uint32_t -> so as to not remove some important bits
 
@@ -141,11 +149,14 @@ VectorLayerCollection preprocess_triangles(const PointCollectionVec2 polygons, c
     // create the triangles from polygons
     for (size_t i = 0; i < polygons.size(); ++i) {
 
-        if (i >= 1)
-            break;
+        // if (i >= 10) // TODO REMOVE ME !!!
+        //     break;
+
+        // TODO i think triangulize repeats points
+        // -> we may be able to reduce the data array, if we increase the index array (if neccessary)
 
         // polygon to ordered triangles
-        std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygons[i]);
+        std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygons[i], true);
 
         // add ordered triangles to collection
         for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
@@ -160,8 +171,9 @@ VectorLayerCollection preprocess_triangles(const PointCollectionVec2 polygons, c
         }
 
         const auto cell_writer = [&triangle_collection, data_offset](glm::vec2 pos, int data_index) {
-            if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(grid_size), pos)))
-                triangle_collection.cell_to_temp[int(pos.x) + grid_size.x * int(pos.y)].insert(data_index + data_offset);
+            // if in grid_size bounds than add data_index to vector
+            if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(constants::grid_size), pos)))
+                triangle_collection.cell_to_temp[int(pos.x) + constants::grid_size * int(pos.y)].insert(data_index + data_offset);
         };
 
         nucleus::utils::rasterizer::rasterize_triangle(cell_writer, triangle_points, thickness);
@@ -170,13 +182,15 @@ VectorLayerCollection preprocess_triangles(const PointCollectionVec2 polygons, c
         data_offset += triangle_points.size() / 3;
     }
 
+    // std::cout << "tris: " << data_offset << " "; // DEBUG how many triangles were processed
+
     return triangle_collection;
 }
 
 VectorLayerCollection preprocess_lines(const PointCollectionVec2 lines, const std::vector<unsigned int> style_indices)
 {
     VectorLayerCollection line_collection;
-    line_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(grid_size.x * grid_size.y, std::unordered_set<uint32_t>());
+    line_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(constants::grid_size * constants::grid_size, std::unordered_set<uint32_t>());
 
     float thickness = 5.0f;
 
@@ -201,8 +215,8 @@ VectorLayerCollection preprocess_lines(const PointCollectionVec2 lines, const st
         }
 
         const auto cell_writer = [&line_collection, data_offset](glm::vec2 pos, int data_index) {
-            if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(grid_size), pos)))
-                line_collection.cell_to_temp[int(pos.x) + grid_size.x * int(pos.y)].insert(data_index + data_offset);
+            if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(constants::grid_size), pos)))
+                line_collection.cell_to_temp[int(pos.x) + constants::grid_size * int(pos.y)].insert(data_index + data_offset);
         };
 
         nucleus::utils::rasterizer::rasterize_line(cell_writer, lines[i], thickness);
@@ -229,20 +243,20 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
 {
     GpuVectorLayerTile tile;
 
-    tile.data_triangle = std::make_shared<const std::vector<uint32_t>>(std::move(triangle_collection.data));
-
     std::unordered_map<std::unordered_set<uint32_t>, uint32_t, Hasher> unique_entries;
     std::vector<uint32_t> grid;
     std::vector<uint32_t> index_bridge;
+    std::vector<uint32_t> data_triangle = triangle_collection.data;
 
     uint32_t start_offset = 0;
+
+    // TODO performance: early exit if not a single thing was written -> currently grid is all 0
 
     for (size_t i = 0; i < triangle_collection.cell_to_temp.size(); ++i) {
         // go through every cell
         if (triangle_collection.cell_to_temp[i].size() == 0) {
             grid.push_back(0); // no data -> only add an emtpy cell
         } else {
-
             if (unique_entries.contains(triangle_collection.cell_to_temp[i])) {
                 // we already have such an entry -> get the offset_size from there
                 grid.push_back(unique_entries[triangle_collection.cell_to_temp[i]]);
@@ -260,9 +274,15 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
             }
         }
     }
+    // std::cout << "inds: " << index_bridge.size() << std::endl;
+    assert(index_bridge.size() <= constants::data_size * constants::data_size);
+    index_bridge.resize(constants::data_size * constants::data_size, -1u);
+    assert(triangle_collection.data.size() <= constants::data_size * constants::data_size);
+    data_triangle.resize(constants::data_size * constants::data_size, -1u);
 
-    tile.grid_triangle = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(grid_size.x, std::move(grid)));
-    tile.grid_to_data = std::make_shared<const std::vector<uint32_t>>(std::move(index_bridge));
+    tile.grid_triangle = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size, std::move(grid)));
+    tile.grid_to_data = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size, std::move(index_bridge)));
+    tile.data_triangle = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size, std::move(data_triangle)));
 
     // TODO do the same for lines
 

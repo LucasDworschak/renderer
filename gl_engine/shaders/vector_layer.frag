@@ -24,11 +24,11 @@
 #include "tile_id.glsl"
 
 uniform highp usampler2DArray grid_sampler;
-uniform highp usampler2D vector_map_meta_sampler;
+uniform highp usampler2D grid_index_sampler;
 uniform highp usampler2D vector_map_tile_id_sampler;
 
-uniform highp usampler2D triangle_index_sampler;
-uniform highp usampler2D triangle_data_sampler;
+uniform highp usampler2DArray triangle_index_sampler;
+uniform highp usampler2DArray triangle_data_sampler;
 
 layout (location = 0) out lowp vec3 texout_albedo;
 layout (location = 1) out highp vec4 texout_position;
@@ -43,6 +43,9 @@ in highp vec3 var_normal;
 in lowp float is_curtain;
 #endif
 flat in lowp vec3 vertex_color;
+
+const int grid_size = 16;
+const uint data_size = 7u;
 
 highp float calculate_falloff(highp float dist, highp float from, highp float to) {
     return clamp(1.0 - (dist - from) / (to - from), 0.0, 1.0);
@@ -81,6 +84,10 @@ highp uvec2 to_offset_size(highp uint combined) {
 
 mediump ivec2 to_dict_pixel_2048(mediump uint hash) {
     return ivec2(int(hash & 2047u), int(hash >> 11u));
+}
+
+mediump ivec2 to_dict_pixel_512(mediump uint hash) {
+    return ivec2(int(hash & 511u), int(hash >> 9u));
 }
 
 lowp ivec2 to_dict_pixel(mediump uint hash) {
@@ -133,6 +140,10 @@ void main() {
 #endif
 
 
+    // highp float depth = depthWSEncode2n8(length(var_pos_cws));
+    highp float depth = length(var_pos_cws);
+
+
 
 
 
@@ -140,60 +151,85 @@ void main() {
 
     // get grid acceleration structure data
     highp uvec3 tile_id = var_tile_id;
-    highp vec2 uv = var_uv;
+    highp vec2 uv = var_uv; // TODO here -> uv doesnt change for some specific zoom levels???
 
     lowp ivec2 dict_px;
-    highp uvec3 grid_data = uvec3(0u);
+    highp uvec2 offset_size = uvec2(0u);
+    texout_albedo = vec3(0.0);
+
     if (find_tile(tile_id, dict_px, uv)) {
-        highp uvec3 vector_meta = u32_2_to_u16_u24_u24(texelFetch(vector_map_meta_sampler, dict_px, 0).rg);
-        if(vector_meta.x != highp uint(-1)) // check for valid data
+
+
+        highp float texture_layer_f = float(texelFetch(grid_index_sampler, dict_px, 0).x);
+        if(texture_layer_f != highp uint(-1)) // check for valid data
         {
-            grid_data = uvec3(texture(grid_sampler, vec3(uv, vector_meta.x)).r, vector_meta.yz);
+            // grid_sampler contains the offset and the number of triangles of the current grid cell
+            // offset_size = to_offset_size(texture(grid_sampler, vec3(uv, texture_layer_f)).r); // TODO is texture correct here and not texelfetch???
+            offset_size = to_offset_size(texelFetch(grid_sampler, ivec3(uv*vec2(grid_size,grid_size), texture_layer_f),0).r); // TODO is texture correct here and not texelfetch???
+
+            // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
+            if(offset_size.y != uint(0)) // only if we have data here
+            {
+                // lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
+                lowp vec3 raw_grid = vec3(1,0,0);// DEBUG
+                vec3 triangle_out = vec3(0.0f, 0.0, 0.0f);
+
+                float alpha = 0.0;
+
+                for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
+                {
+                    highp uint triangle_index = texelFetch(triangle_index_sampler, ivec3(to_dict_pixel_512(i), texture_layer_f), 0).r * data_size;
+
+                    highp vec2 v0;
+                    v0.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+0u), texture_layer_f), 0).r) / float(grid_size);
+                    v0.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+1u), texture_layer_f), 0).r) / float(grid_size);
+
+                    highp vec2 v1;
+                    v1.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+2u), texture_layer_f), 0).r) / float(grid_size);
+                    v1.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+3u), texture_layer_f), 0).r) / float(grid_size);
+
+                    highp vec2 v2;
+                    v2.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+4u), texture_layer_f), 0).r) / float(grid_size);
+                    v2.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+5u), texture_layer_f), 0).r) / float(grid_size);
+
+                    highp uint style_index = texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+6u), texture_layer_f), 0).r;
+
+                    // highp float c1 = 1.0 - step(0.0, circle(uv, v0, 0.5) - 0.0);
+                    float thickness = 0.0;
+                    float d = sdTriangle(uv, v0, v1, v2) - thickness;
+                    // highp float c1 = 1.0 - smoothstep(0.0,1.0, d/(depth*0.000004));
+                    // highp float c1 = 1.0 - smoothstep(0.0,1.0, d/0.0003);
+                    // highp float c1 = 1.0 - smoothstep(0.0,d, 0.00003);
+                    highp float c1 = 1.0 - step(0.0, d);
+
+                    vec3 river_blue = vec3(179.0f/255.0f,217.0f/255.0f,255.0f/255.0f);
+
+                    // triangle_out += vec3(0.0f, c1, 0.0f);
+                    alpha += c1;
+                    if(alpha > 1.0)
+                        c1 = alpha - 1.0;
+
+                    triangle_out = mix(triangle_out, river_blue * c1 , c1);
+
+                    if(alpha >= 1.0)
+                        break; // early exit if alpha is 1;
+                }
+
+                texout_albedo = mix(texout_albedo, triangle_out, alpha);
+
+                 // texout_albedo = mix(raw_grid, triangle_out, 0.5);// DEBUG
+
+            }
         }
     }
 
-    texout_albedo = vec3(0.0, 0.0, 0.0);
 
-    // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
-    if(grid_data.x != uint(-1)) // only if we have data here
-    {
-        // calculate the offset and size of the triangle index list
-        // the offset in grid_data.x is local to the current tile, the value in grid_data.y is global to all tiles
-        highp uvec2 offset_size = to_offset_size(grid_data.x) + uvec2(grid_data.y, 0);
 
-        lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
 
-        float alpha = 0.0;
 
-        for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
-        {
-            highp uint triangle_index = texelFetch(triangle_index_sampler, to_dict_pixel_2048(i), 0).r;
 
-            highp vec2 v0;
-            v0.x = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+0u), 0).r) / 64.0f;
-            v0.y = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+1u), 0).r) / 64.0f;
 
-            highp vec2 v1;
-            v1.x = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+2u), 0).r) / 64.0f;
-            v1.y = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+3u), 0).r) / 64.0f;
 
-            highp vec2 v2;
-            v2.x = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+4u), 0).r) / 64.0f;
-            v2.y = uintBitsToFloat(texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+5u), 0).r) / 64.0f;
-
-            highp uint style_index = texelFetch(triangle_data_sampler, to_dict_pixel_2048(triangle_index+6u), 0).r;
-
-            highp float c1 = 1.0 - step(0.0, sdTriangle(var_uv, v0, v1, v2) - 0.078125f);
-            vec3 triangle_out = vec3(0.0f, c1, 0.0f);
-            alpha += c1;
-
-            texout_albedo = mix(raw_grid, triangle_out, 0.5);
-            texout_albedo = raw_grid;
-
-            if(alpha > 1.0)
-                break; // early exit if alpha is 1;
-        }
-    }
 
     // Write Position (and distance) in gbuffer
     highp float dist = length(var_pos_cws);

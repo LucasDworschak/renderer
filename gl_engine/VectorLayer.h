@@ -54,10 +54,7 @@ public slots:
     void set_quad_limit(unsigned new_limit);
 
 private:
-    void update_gpu_data();
-
-    static constexpr auto GRID_RESOLUTION = 64;
-    static constexpr auto TEXTURE_RESOLUTION = 2048;
+    void update_gpu_id_map();
 
     std::shared_ptr<ShaderProgram> m_shader;
 
@@ -66,11 +63,12 @@ private:
     std::unique_ptr<Texture> m_triangle_data_texture;
 
     std::unique_ptr<Texture> m_tile_id_texture;
-    std::unique_ptr<Texture> m_meta_texture;
+    // converts tile_id hash to texture array layer index
+    std::unique_ptr<Texture> m_array_index_texture;
 
     nucleus::tile::GpuArrayHelper m_gpu_array_helper;
 
-    nucleus::tile::IdMap<std::shared_ptr<const std::vector<uint32_t>>> m_id_to_data_bridge;
-    nucleus::tile::IdMap<std::shared_ptr<const std::vector<uint32_t>>> m_id_to_triangle_data;
+    // nucleus::tile::IdMap<std::shared_ptr<const std::vector<uint32_t>>> m_id_to_data_bridge;
+    // nucleus::tile::IdMap<std::shared_ptr<const std::vector<uint32_t>>> m_id_to_triangle_data;
 };
 } // namespace gl_engine

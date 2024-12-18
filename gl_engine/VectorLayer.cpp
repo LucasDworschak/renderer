@@ -22,8 +22,9 @@
 #include "ShaderRegistry.h"
 #include "Texture.h"
 #include "TileGeometry.h"
-#include "nucleus/utils/bit_coding.h"
 #include <QOpenGLExtraFunctions>
+
+#include "nucleus/vector_layer/constants.h"
 
 namespace gl_engine {
 
@@ -40,25 +41,31 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_grid_texture = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
     m_grid_texture->setParams(gl_engine::Texture::Filter::Nearest, gl_engine::Texture::Filter::Nearest);
     // // TODO: might become larger than GL_MAX_ARRAY_TEXTURE_LAYERS
-    m_grid_texture->allocate_array(GRID_RESOLUTION, GRID_RESOLUTION, unsigned(m_gpu_array_helper.size()));
+    m_grid_texture->allocate_array(nucleus::vector_layer::constants::grid_size, nucleus::vector_layer::constants::grid_size, unsigned(m_gpu_array_helper.size()));
 
     m_tile_id_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RG32UI);
     m_tile_id_texture->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
 
-    m_meta_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RG32UI);
-    m_meta_texture->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
+    m_array_index_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::R16UI);
+    m_array_index_texture->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
 
-    m_triangle_index_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::R32UI);
+    m_triangle_index_texture = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
     m_triangle_index_texture->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
+    m_triangle_index_texture->allocate_array(nucleus::vector_layer::constants::data_size, nucleus::vector_layer::constants::data_size, unsigned(m_gpu_array_helper.size()));
 
-    m_triangle_data_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::R32UI);
+    m_triangle_data_texture = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
     m_triangle_data_texture->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
+    m_triangle_data_texture->allocate_array(nucleus::vector_layer::constants::data_size, nucleus::vector_layer::constants::data_size, unsigned(m_gpu_array_helper.size()));
 
-    // initial texture upload with default values (but set width and format)
-    m_tile_id_texture->upload(nucleus::Raster<glm::u32vec2>({ 256, 256 }, glm::u32vec2(-1, -1)));
-    m_meta_texture->upload(nucleus::Raster<glm::u32vec2>({ 256, 256 }, glm::u32vec2(-1, -1)));
-    m_triangle_index_texture->upload(nucleus::Raster<uint32_t>({ TEXTURE_RESOLUTION, TEXTURE_RESOLUTION }, -1u));
-    m_triangle_data_texture->upload(nucleus::Raster<uint32_t>({ TEXTURE_RESOLUTION, TEXTURE_RESOLUTION }, -1u));
+    QOpenGLFunctions* f = QOpenGLContext::currentContext()->functions();
+    GLint max_layers;
+    GLint max_size;
+    f->glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &max_layers);
+    f->glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_size);
+    std::cout << "max layers: " << max_layers << std::endl;
+    std::cout << "max size: " << max_size << std::endl;
+
+    update_gpu_id_map();
 }
 
 void VectorLayer::draw(
@@ -68,8 +75,8 @@ void VectorLayer::draw(
     m_shader->set_uniform("grid_sampler", 2);
     m_grid_texture->bind(2);
 
-    m_shader->set_uniform("vector_map_meta_sampler", 5);
-    m_meta_texture->bind(5);
+    m_shader->set_uniform("grid_index_sampler", 5);
+    m_array_index_texture->bind(5);
     m_shader->set_uniform("vector_map_tile_id_sampler", 6);
     m_tile_id_texture->bind(6);
 
@@ -91,14 +98,9 @@ void VectorLayer::update_gpu_quads(const std::vector<nucleus::tile::GpuVectorLay
         for (const auto& id : quad.children()) {
 
             if (!m_gpu_array_helper.contains_tile(id))
-                continue; // TODO maybe better to move the contains inside remove_tile (but currently do not want to change the assert)
+                continue; // TODO maybe better to move the contains inside m_gpu_array_helper.remove_tile (but currently do not want to change the assert)
 
             m_gpu_array_helper.remove_tile(id);
-
-            assert(m_id_to_data_bridge.contains(id));
-            m_id_to_data_bridge.erase(id);
-            assert(m_id_to_triangle_data.contains(id));
-            m_id_to_triangle_data.erase(id);
         }
     }
 
@@ -113,85 +115,42 @@ void VectorLayer::update_gpu_quads(const std::vector<nucleus::tile::GpuVectorLay
             assert(tile.grid_to_data);
             assert(tile.data_triangle);
 
-            assert(!m_id_to_data_bridge.contains(tile.id));
-            m_id_to_data_bridge.emplace(tile.id, tile.grid_to_data);
-
-            assert(!m_id_to_triangle_data.contains(tile.id));
-            m_id_to_triangle_data.emplace(tile.id, tile.data_triangle);
-
             // find empty spot and upload texture
             const auto layer_index = m_gpu_array_helper.add_tile(tile.id);
             m_grid_texture->upload(*tile.grid_triangle, layer_index);
+
+            m_triangle_index_texture->upload(*tile.grid_to_data, layer_index);
+            m_triangle_data_texture->upload(*tile.data_triangle, layer_index);
+
+            // int count = 0;
+            // for (auto data : tile.data_triangle->buffer()) {
+            //     if (count++ > 15)
+            //         break;
+            //     std::cout << *reinterpret_cast<float*>(&data) << "\t";
+            // }
+            // std::cout << std::endl;
+
+            // // int count = 0;
+            // for (auto data : tile.grid_to_data->buffer()) {
+            //     if (data == 0 || data == -1u)
+            //         // count++;
+            //         // break;
+            //         std::cout << data << "\t";
+            // }
+            // std::cout << std::endl << std::endl;
         }
     }
 
-    update_gpu_data();
+    update_gpu_id_map();
 }
 
 void VectorLayer::set_quad_limit(unsigned int new_limit) { m_gpu_array_helper.set_quad_limit(new_limit); }
 
-void VectorLayer::update_gpu_data()
+void VectorLayer::update_gpu_id_map()
 {
-    // instead of straight up uploading the m_array_index_texture (like TextureLayer),
-    // we first want to add the bridge and triangle offsets to the array_index
-
-    // - use m_gpu_array_helper to get layer id and upload the grid as is.
-    // - save the data offsets per tile for the data_triangle
-    // - combine and reupload data_triangles
-    // - combine and reupload grid_to_data
-    // - upload m_meta_texture and m_triangle_index_texture and m_triangle_data_texture
-
     auto [packed_ids, layers] = m_gpu_array_helper.generate_dictionary();
-    m_tile_id_texture->reupload(packed_ids);
-
-    // instead of uploading layers directly, we combine the data with global offsets and save it into a meta texture
-    // layer -> 16bits
-    // triangle_offset -> 24bits
-    // data_index_offset -> 24bits
-    // = 2*32 bits
-    nucleus::Raster<glm::u32vec2> meta({ 256, 256 }, glm::u32vec2(-1, -1)); // RG32UI
-
-    // further more for the index indirection map and the triangle data, we combine the data of all tiles into the following vectors
-    // and upload them to their respective textures
-    std::vector<uint32_t> triangle_combined_indices;
-    triangle_combined_indices.reserve(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION);
-    std::vector<uint32_t> triangle_combined_data;
-    triangle_combined_data.reserve(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION);
-
-    uint32_t data_index_offset = 0;
-    uint32_t triangle_offset = 0;
-
-    const auto hash_to_pixel_255 = [](uint16_t hash) { return glm::uvec2(hash & 255, hash >> 8); };
-    for (const auto& [id, data_bridge] : m_id_to_data_bridge) {
-        auto hash = nucleus::srs::hash_uint16(id);
-        while (meta.pixel(hash_to_pixel_255(hash)) != glm::u32vec2(-1, -1))
-            hash++;
-
-        meta.pixel(hash_to_pixel_255(hash)) = nucleus::utils::bit_coding::u16_u24_u24_to_u32_2(layers.pixel(hash_to_pixel_255(hash)), data_index_offset, triangle_offset);
-
-        // add index and triangle data to combined vectors
-        triangle_combined_indices.insert(triangle_combined_indices.end(), data_bridge->begin(), data_bridge->end());
-
-        triangle_combined_data.insert(triangle_combined_data.end(), m_id_to_triangle_data.at(id)->begin(), m_id_to_triangle_data.at(id)->end());
-
-        data_index_offset += data_bridge->size();
-        triangle_offset += m_id_to_triangle_data.at(id)->size();
-    }
-
-    m_meta_texture->reupload(meta);
-
-    // make sure that we have exactly TEXTURE_RESOLUTIONxTEXTURE_RESOLUTION elements
-    assert(triangle_combined_indices.size() <= TEXTURE_RESOLUTION * TEXTURE_RESOLUTION);
-    assert(triangle_combined_data.size() <= TEXTURE_RESOLUTION * TEXTURE_RESOLUTION);
-    triangle_combined_indices.resize(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION, -1u);
-    triangle_combined_data.resize(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION, -1u);
-
-    // pack the data into square raster and upload them
-    nucleus::Raster<uint32_t> triangle_index(TEXTURE_RESOLUTION, std::move(triangle_combined_indices)); // R32UI
-    nucleus::Raster<uint32_t> triangle_data(TEXTURE_RESOLUTION, std::move(triangle_combined_data)); // R32UI
-
-    m_triangle_index_texture->reupload(triangle_index);
-    m_triangle_data_texture->reupload(triangle_data);
+    m_array_index_texture->upload(layers);
+    m_tile_id_texture->upload(packed_ids);
 }
 
 } // namespace gl_engine

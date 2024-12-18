@@ -121,7 +121,9 @@ qt_add_library(nucleus STATIC
     vector_layer/setup.h
     vector_layer/Scheduler.h vector_layer/Scheduler.cpp
     vector_layer/Style.h vector_layer/Style.cpp
+    vector_layer/constants.h
     utils/rasterizer.h utils/rasterizer.cpp
+
 )
 
 if (ALP_ENABLE_AVLANCHE_WARNING_LAYER)

@@ -43,8 +43,10 @@ void Scheduler::transform_and_emit(const std::vector<tile::DataQuad>& new_quads,
         // create GpuQuad based on cpu quad
         GpuVectorLayerQuad gpu_quad;
         gpu_quad.id = quad.id;
+
         assert(quad.n_tiles == 4);
         for (unsigned i = 0; i < 4; ++i) {
+
             gpu_quad.tiles[i] = nucleus::vector_layer::preprocess(quad.tiles[i].id, *quad.tiles[i].data, m_style);
             gpu_quad.tiles[i].id = quad.tiles[i].id;
         }
@@ -58,7 +60,11 @@ void Scheduler::transform_and_emit(const std::vector<tile::DataQuad>& new_quads,
 // especially with changing vector layer source this would definitely cause problems
 void Scheduler::load_style() { m_style.load(); }
 
-void Scheduler::style_loaded() { set_enabled(true); }
+void Scheduler::style_loaded()
+{
+    std::cout << "style loaded" << std::endl;
+    set_enabled(true);
+}
 
 bool Scheduler::is_ready_to_ship(const nucleus::tile::DataQuad& quad) const
 {
