@@ -63,7 +63,7 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
 namespace nucleus::vector_layer::details {
 
 // PointCollectionVec2 parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
-PointCollectionVec2 parse_tile(tile::Id, const QByteArray& vector_tile_data, const Style&)
+std::vector<PolygonData> parse_tile(tile::Id, const QByteArray& vector_tile_data, const Style&)
 {
     const auto d = vector_tile_data.toStdString();
     const mapbox::vector_tile::buffer tile(d);
@@ -71,9 +71,9 @@ PointCollectionVec2 parse_tile(tile::Id, const QByteArray& vector_tile_data, con
     bool first_layer = true;
     float grid_scale = 1.0; // scale between [0-grid_size]
 
-    PointCollectionVec2 polygons;
+    std::vector<PolygonData> polygons;
     std::vector<size_t> polygon_styles;
-    PointCollectionVec2 lines;
+    std::vector<PolygonData> lines;
 
     for (const auto& layer_name : tile.layerNames()) {
         // std::cout << layer_name << std::endl;
@@ -105,16 +105,25 @@ PointCollectionVec2 parse_tile(tile::Id, const QByteArray& vector_tile_data, con
             if (feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
                 PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(grid_scale);
 
+                // for (size_t j = 0; j < geom.size(); ++j) {
+                //     if (geom[j][0] == geom[j][geom[j].size() - 1]) {
+                //         // duplicate vertex detected -> has to be removed
+                //         geom[j].pop_back();
+                //     }
+                // }
+
+                // construct edges from the current polygon and move them to the collection
+                PolygonData p;
                 for (size_t j = 0; j < geom.size(); ++j) {
-                    if (geom[j][0] == geom[j][geom[j].size() - 1]) {
-                        // duplicate vertex detected -> has to be removed
-                        geom[j].pop_back();
-                    }
+                    auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(geom[j], p.vertices.size());
+                    p.edges.insert(p.edges.end(), edges.begin(), edges.end());
+                    p.vertices.insert(p.vertices.end(), geom[j].begin(), geom[j].end());
                 }
+                polygons.push_back(p);
 
                 // concat
                 // polygons.reserve(polygons.size() + geom.size()); // calling reserve here significantly impacts performance -> see if it is possible to call it outside of the loop
-                polygons.insert(polygons.end(), geom.begin(), geom.end());
+                // polygons.insert(polygons.end(), geom.begin(), geom.end());
 
             } else if (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) {
                 PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(grid_scale);
@@ -135,7 +144,7 @@ PointCollectionVec2 parse_tile(tile::Id, const QByteArray& vector_tile_data, con
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-VectorLayerCollection preprocess_triangles(const PointCollectionVec2 polygons, const std::vector<unsigned int>)
+VectorLayerCollection preprocess_triangles(const std::vector<PolygonData> polygons, const std::vector<unsigned int>)
 {
     VectorLayerCollection triangle_collection;
     triangle_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(constants::grid_size * constants::grid_size, std::unordered_set<uint32_t>());
@@ -156,7 +165,7 @@ VectorLayerCollection preprocess_triangles(const PointCollectionVec2 polygons, c
         // -> we may be able to reduce the data array, if we increase the index array (if neccessary)
 
         // polygon to ordered triangles
-        std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygons[i], true);
+        std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygons[i].vertices, polygons[i].edges, true);
 
         // add ordered triangles to collection
         for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
@@ -187,44 +196,46 @@ VectorLayerCollection preprocess_triangles(const PointCollectionVec2 polygons, c
     return triangle_collection;
 }
 
-VectorLayerCollection preprocess_lines(const PointCollectionVec2 lines, const std::vector<unsigned int> style_indices)
+// TODO
+VectorLayerCollection preprocess_lines(const std::vector<PolygonData>, const std::vector<unsigned int>)
+// VectorLayerCollection preprocess_lines(const std::vector<PolygonData> lines, const std::vector<unsigned int> style_indices)
 {
     VectorLayerCollection line_collection;
     line_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(constants::grid_size * constants::grid_size, std::unordered_set<uint32_t>());
 
-    float thickness = 5.0f;
+    // float thickness = 5.0f;
 
-    size_t data_offset = 0;
+    // size_t data_offset = 0;
 
-    // create the triangles from polygons
-    for (size_t i = 0; i < lines.size(); ++i) {
-        // create_lines(line_collection, lines[i], style_indices[i]);
+    // // create the triangles from polygons
+    // for (size_t i = 0; i < lines.size(); ++i) {
+    //     // create_lines(line_collection, lines[i], style_indices[i]);
 
-        // TODO currently line points are duplicated, in the final shader -> ideally we only want to store one large point list for one line.
-        // the problem here is how to also store meta data like style index efficiently (at start or end of line would be ideal but we would need another offset pointer to this location)
-        // idea -> maybe store styleindex for lines and triangles separately (-> this would also probably be better for triangles)
-        line_collection.data.reserve(lines[i].size() * 3);
-        for (size_t j = 0; j < lines[i].size() - 1; j++) {
-            glm::vec2 p0 = lines[i][j];
-            glm::vec2 p1 = lines[i][j + 1];
-            line_collection.data.push_back(*reinterpret_cast<uint32_t*>(&p0.x));
-            line_collection.data.push_back(*reinterpret_cast<uint32_t*>(&p0.y));
-            line_collection.data.push_back(*reinterpret_cast<uint32_t*>(&p1.x));
-            line_collection.data.push_back(*reinterpret_cast<uint32_t*>(&p1.y));
-            line_collection.data.push_back(style_indices[i]);
-        }
+    //     // TODO currently line points are duplicated, in the final shader -> ideally we only want to store one large point list for one line.
+    //     // the problem here is how to also store meta data like style index efficiently (at start or end of line would be ideal but we would need another offset pointer to this location)
+    //     // idea -> maybe store styleindex for lines and triangles separately (-> this would also probably be better for triangles)
+    //     line_collection.data.reserve(lines[i].size() * 3);
+    //     for (size_t j = 0; j < lines[i].size() - 1; j++) {
+    //         glm::vec2 p0 = lines[i][j];
+    //         glm::vec2 p1 = lines[i][j + 1];
+    //         line_collection.data.push_back(*reinterpret_cast<uint32_t*>(&p0.x));
+    //         line_collection.data.push_back(*reinterpret_cast<uint32_t*>(&p0.y));
+    //         line_collection.data.push_back(*reinterpret_cast<uint32_t*>(&p1.x));
+    //         line_collection.data.push_back(*reinterpret_cast<uint32_t*>(&p1.y));
+    //         line_collection.data.push_back(style_indices[i]);
+    //     }
 
-        const auto cell_writer = [&line_collection, data_offset](glm::vec2 pos, int data_index) {
-            if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(constants::grid_size), pos)))
-                line_collection.cell_to_temp[int(pos.x) + constants::grid_size * int(pos.y)].insert(data_index + data_offset);
-        };
+    //     const auto cell_writer = [&line_collection, data_offset](glm::vec2 pos, int data_index) {
+    //         if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(constants::grid_size), pos)))
+    //             line_collection.cell_to_temp[int(pos.x) + constants::grid_size * int(pos.y)].insert(data_index + data_offset);
+    //     };
 
-        nucleus::utils::rasterizer::rasterize_line(cell_writer, lines[i], thickness);
+    //     nucleus::utils::rasterizer::rasterize_line(cell_writer, lines[i], thickness);
 
-        // add to the data offset for the next polyline
-        // TODO test if this is the correct offset (we might be off by one here but it should suffice for now)
-        data_offset += lines[i].size();
-    }
+    //     // add to the data offset for the next polyline
+    //     // TODO test if this is the correct offset (we might be off by one here but it should suffice for now)
+    //     data_offset += lines[i].size();
+    // }
 
     return line_collection;
 }

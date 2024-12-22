@@ -58,6 +58,11 @@ namespace details {
         }
     };
 
+    struct PolygonData {
+        std::vector<glm::vec2> vertices;
+        std::vector<glm::ivec2> edges;
+    };
+
     using VectorLayerGrid = std::vector<std::unordered_set<uint32_t>>;
 
     struct VectorLayerCollection {
@@ -68,12 +73,12 @@ namespace details {
         VectorLayerGrid cell_to_temp;
     };
 
-    VectorLayerCollection preprocess_triangles(const PointCollectionVec2 polygons, const std::vector<unsigned int> style_indices);
-    VectorLayerCollection preprocess_lines(const PointCollectionVec2 lines, const std::vector<unsigned int> style_indices);
+    VectorLayerCollection preprocess_triangles(const std::vector<PolygonData> polygons, const std::vector<unsigned int> style_indices);
+    VectorLayerCollection preprocess_lines(const std::vector<PolygonData> lines, const std::vector<unsigned int> style_indices);
 
     GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collection, const VectorLayerCollection& line_collection);
 
-    PointCollectionVec2 parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
+    std::vector<PolygonData> parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
 } // namespace details
 
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
