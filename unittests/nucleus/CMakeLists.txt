@@ -70,8 +70,8 @@ qt_add_resources(unittests_nucleus "test_data"
     data/eaws_0-0-0.mvt
     data/eaws_2-2-0.mvt
     data/eaws_10-236-299.mvt
-    data/vector_layer_grid_triangles.png
-    data/vector_layer_grid_lines.png
+    data/rasterizer_simple_triangle.png
+    data/rasterizer_output_random_triangle.png
     data/vectortile_neusiedlersee.pbf
 )
 target_link_libraries(unittests_nucleus PUBLIC nucleus Catch2::Catch2 Qt::Test Qt::Gui)
