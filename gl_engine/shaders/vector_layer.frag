@@ -23,6 +23,8 @@
 #include "encoder.glsl"
 #include "tile_id.glsl"
 
+#include "hashing.glsl" // DEBUG
+
 uniform highp usampler2DArray grid_sampler;
 uniform highp usampler2D grid_index_sampler;
 uniform highp usampler2D vector_map_tile_id_sampler;
@@ -172,8 +174,11 @@ void main() {
             {
                 // lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
                 lowp vec3 raw_grid = vec3(1,0,0);// DEBUG
-                vec3 triangle_out = vec3(0.0f, 0.0, 0.0f);
+                ivec2 grid_cell = ivec2(uv*vec2(grid_size,grid_size)); // DEBUG
+                lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
+                vec3 triangle_lines_out = vec3(0.0f, 0.0, 0.0f); // DEBUG
 
+                vec3 triangle_out = vec3(0.0f, 0.0, 0.0f);
                 float alpha = 0.0;
 
                 for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
@@ -200,31 +205,48 @@ void main() {
                     // highp float c1 = 1.0 - smoothstep(0.0,1.0, d/(depth*0.000004));
                     // highp float c1 = 1.0 - smoothstep(0.0,1.0, d/0.0003);
                     // highp float c1 = 1.0 - smoothstep(0.0,d, 0.00003);
+
+
+
+                    { // DEBUG -> triangle lines
+                        highp float t_line = 0.0;
+                        if(d <= -0.0001 && d >= -0.0005)
+                            t_line = 0.2;
+                        triangle_lines_out += vec3(0.0f, t_line, 0.0f);
+                    }
+
+
                     highp float c1 = 1.0 - step(0.0, d);
 
-                    vec3 river_blue = vec3(179.0f/255.0f,217.0f/255.0f,255.0f/255.0f);
-
-                    // triangle_out += vec3(0.0f, c1, 0.0f);
                     alpha += c1;
                     if(alpha > 1.0)
                         c1 = alpha - 1.0;
 
+                    vec3 river_blue = vec3(179.0f/255.0f,217.0f/255.0f,255.0f/255.0f);
                     triangle_out = mix(triangle_out, river_blue * c1 , c1);
 
                     if(alpha >= 1.0)
                         break; // early exit if alpha is 1;
+
                 }
 
                 texout_albedo = mix(texout_albedo, triangle_out, alpha);
 
-                 // texout_albedo = mix(raw_grid, triangle_out, 0.5);// DEBUG
+                // texout_albedo = mix(cells, triangle_out, 0.9);// DEBUG
+                // texout_albedo = mix(texout_albedo, triangle_lines_out, 0.9);// DEBUG
+
+                // texout_albedo = mix(raw_grid, triangle_out, 0.5);// DEBUG
 
             }
         }
     }
 
 
-
+    // DEBUG tile bounds
+    // if(uv.x <= 0.01 || uv.y <= 0.01)
+    // {
+    //     texout_albedo = vec3(1.0, 0.0, 0.0);
+    // }
 
 
 

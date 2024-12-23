@@ -302,7 +302,8 @@ TEST_CASE("nucleus/vector_preprocess")
     {
         // TODO test vectortile_neusiedlersee.pbf and see what is wrong with the rasterization of the lake
         // const auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 4477 * 2, 2850 * 2 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-        const auto id = nucleus::tile::Id { .zoom_level = 13, .coords = { 4477, 2850 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+        // const auto id = nucleus::tile::Id { .zoom_level = 13, .coords = { 4477, 2850 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+        const auto id = nucleus::tile::Id { .zoom_level = 15, .coords = { (4477 * 2 + 1) * 2, (2850 * 2 + 1) * 2 }, .scheme = nucleus::tile::Scheme::SlippyMap };
 
         QByteArray byte_data;
 
