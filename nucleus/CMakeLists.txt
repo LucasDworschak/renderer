@@ -122,6 +122,8 @@ qt_add_library(nucleus STATIC
     vector_layer/Scheduler.h vector_layer/Scheduler.cpp
     vector_layer/Style.h vector_layer/Style.cpp
     vector_layer/constants.h
+    vector_layer/StyleFilter.h vector_layer/StyleFilter.cpp
+    vector_layer/StyleExpression.h vector_layer/StyleExpression.cpp
     utils/rasterizer.h utils/rasterizer.cpp
 
 )
@@ -181,6 +183,13 @@ qt_add_resources(nucleus "charset"
     PREFIX "/charset"
     BASE ${CMAKE_SOURCE_DIR}/app/
     FILES ${CMAKE_SOURCE_DIR}/app/charset.txt
+)
+
+qt_add_resources(nucleus "vectorlayerstyles"
+    PREFIX "/vectorlayerstyles"
+    BASE ${CMAKE_SOURCE_DIR}/app/vectorlayerstyles
+    FILES ${CMAKE_SOURCE_DIR}/app/vectorlayerstyles/basemap.json
+    FILES ${CMAKE_SOURCE_DIR}/app/vectorlayerstyles/openstreetmap.json
 )
 
 

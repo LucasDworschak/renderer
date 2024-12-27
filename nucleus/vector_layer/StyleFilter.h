@@ -18,10 +18,31 @@
 
 #pragma once
 
-namespace nucleus::vector_layer::constants {
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 
-constexpr auto grid_size = 16; // 64
-constexpr auto data_size = 512;
-constexpr auto style_data_size = 64;
+#include <glm/glm.hpp>
 
-} // namespace nucleus::vector_layer::constants
+#include "StyleExpression.h"
+
+namespace mapbox::vector_tile {
+class feature;
+}
+
+namespace nucleus::vector_layer {
+
+class StyleFilter {
+public:
+    StyleFilter() { }
+
+    void add_filter(uint32_t style_index, std::shared_ptr<StyleExpressionBase> filter, glm::uvec2 zoom_range);
+
+    uint32_t style_index(unsigned zoom, const mapbox::vector_tile::feature& feature) const;
+
+private:
+    // zoom level -> vector<style_index,StyleExpression>
+    std::unordered_map<unsigned, std::vector<std::pair<uint32_t, std::shared_ptr<StyleExpressionBase>>>> m_filter;
+};
+
+} // namespace nucleus::vector_layer

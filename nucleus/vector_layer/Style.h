@@ -21,11 +21,10 @@
 #include <QObject>
 #include <QString>
 
-#include <unordered_set>
+#include "StyleFilter.h"
+#include "nucleus/Raster.h"
 
-#include "nucleus/tile/constants.h"
-
-class QNetworkAccessManager;
+#include <radix/hasher.h>
 
 namespace nucleus::vector_layer {
 
@@ -54,18 +53,22 @@ struct Hasher {
     }
 };
 
+struct Style_Buffer_Holder {
+    std::shared_ptr<const nucleus::Raster<uint32_t>> fill_styles;
+    std::shared_ptr<const nucleus::Raster<uint32_t>> line_styles;
+};
+
 class Style : public QObject {
     Q_OBJECT
 public:
-    Style(const QString& url);
-
-    [[nodiscard]] unsigned int transfer_timeout() const;
-    void set_transfer_timeout(unsigned int new_transfer_timeout);
+    Style(const QString& filename);
 
     uint32_t parse_color(std::string value);
     uint32_t parse_dasharray(QJsonArray dash_values);
 
-    size_t layer_style_index(std::string layer_name, unsigned zoom) const;
+    uint32_t layer_style_index(std::string layer_name, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
+
+    Style_Buffer_Holder style_buffer() const;
 
 public slots:
     void load();
@@ -74,17 +77,12 @@ signals:
     void load_finished();
 
 private:
-    unsigned m_transfer_timeout = tile::constants::default_network_timeout;
+    Style_Buffer_Holder m_styles;
 
-    std::unordered_set<Layer_Style, Hasher> m_fill_styles;
-    std::unordered_set<Layer_Style, Hasher> m_line_styles;
+    // std::unordered_map<std::tuple<std::string, unsigned>, size_t, radix::hasher::for_tuple<std::string, unsigned>> m_layer_zoom_to_style;
+    std::unordered_map<std::string, StyleFilter> m_layer_to_style;
 
-    std::map<std::tuple<std::string, unsigned>, size_t> m_layer_zoom_to_style;
-
-    QString m_url;
-    std::shared_ptr<QNetworkAccessManager> m_network_manager;
-
-    void parse_load(std::shared_ptr<QByteArray> data);
+    QString m_filename;
 };
 
 } // namespace nucleus::vector_layer

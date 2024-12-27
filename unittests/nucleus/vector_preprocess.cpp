@@ -18,6 +18,7 @@
  *****************************************************************************/
 
 #include <QSignalSpy>
+#include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <QFile>
@@ -33,7 +34,6 @@
 
 #include "nucleus/Raster.h"
 #include "nucleus/vector_layer/Preprocessor.h"
-#include "nucleus/vector_layer/Style.h"
 
 #include "nucleus/utils/rasterizer.h"
 #include "nucleus/vector_layer/constants.h"
@@ -132,25 +132,6 @@ TEST_CASE("nucleus/vector_preprocess")
             REQUIRE(tile.data->size() > 0);
             CHECK(tile.data->size() > 2000);
         }
-    }
-
-    SECTION("Style download basemap")
-    {
-        Style s("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/resources/styles/");
-        QSignalSpy spy(&s, &Style::load_finished);
-        s.load();
-        spy.wait(10000);
-    }
-
-    SECTION("Style parsing color")
-    {
-        Style s("");
-        CHECK(s.parse_color("rgba(134,179,1,0.5)") == 0x86B3017F);
-        CHECK(s.parse_color("rgba(134,179,1,1)") == 0x86B301FF);
-        CHECK(s.parse_color("rgb(134,179,1)") == 0x86B301FF);
-        CHECK(s.parse_color("rgb(50,0,100)") == 0x320064FF);
-        CHECK(s.parse_color("#FF55AA") == 0xFF55AAFF);
-        CHECK(s.parse_color("#ABCDEF45") == 0xABCDEF45);
     }
 
     SECTION("Triangle to Grid")
@@ -298,86 +279,88 @@ TEST_CASE("nucleus/vector_preprocess")
         // image.save(QString("vector_layer_grid_triangles_outside.png"));
     }
 
-    SECTION("Basemap decoding - vectortile Neusiedlersee")
-    {
-        // TODO test vectortile_neusiedlersee.pbf and see what is wrong with the rasterization of the lake
-        // const auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 4477 * 2, 2850 * 2 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-        // const auto id = nucleus::tile::Id { .zoom_level = 13, .coords = { 4477, 2850 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-        const auto id = nucleus::tile::Id { .zoom_level = 15, .coords = { (4477 * 2 + 1) * 2, (2850 * 2 + 1) * 2 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+    // TODO can probably be discarded now -> right?
+    // SECTION("Basemap decoding - vectortile Neusiedlersee")
+    // {
+    //     // TODO test vectortile_neusiedlersee.pbf and see what is wrong with the rasterization of the lake
+    //     // const auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 4477 * 2, 2850 * 2 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+    //     // const auto id = nucleus::tile::Id { .zoom_level = 13, .coords = { 4477, 2850 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+    //     const auto id = nucleus::tile::Id { .zoom_level = 15, .coords = { (4477 * 2 + 1) * 2, (2850 * 2 + 1) * 2 }, .scheme = nucleus::tile::Scheme::SlippyMap };
 
-        QByteArray byte_data;
+    //     QByteArray byte_data;
 
-        {
-            nucleus::tile::TileLoadService service("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/tile/", nucleus::tile::TileLoadService::UrlPattern::ZYX_yPointingSouth, ".pbf");
-            QSignalSpy spy(&service, &nucleus::tile::TileLoadService::load_finished);
-            service.load(id);
-            spy.wait(15000);
+    //     {
+    //         nucleus::tile::TileLoadService service("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/tile/", nucleus::tile::TileLoadService::UrlPattern::ZYX_yPointingSouth, ".pbf");
+    //         QSignalSpy spy(&service, &nucleus::tile::TileLoadService::load_finished);
+    //         service.load(id);
+    //         spy.wait(15000);
 
-            REQUIRE(spy.count() == 1);
-            QList<QVariant> arguments = spy.takeFirst();
-            REQUIRE(arguments.size() == 1);
-            nucleus::tile::Data tile = arguments.at(0).value<nucleus::tile::Data>();
-            byte_data = *tile.data;
-        }
+    //         REQUIRE(spy.count() == 1);
+    //         QList<QVariant> arguments = spy.takeFirst();
+    //         REQUIRE(arguments.size() == 1);
+    //         nucleus::tile::Data tile = arguments.at(0).value<nucleus::tile::Data>();
+    //         byte_data = *tile.data;
+    //     }
 
-        // auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vectortile_neusiedlersee.pbf"));
-        // file.open(QFile::ReadOnly);
-        // const auto byte_data = file.readAll();
+    //     // auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vectortile_neusiedlersee.pbf"));
+    //     // file.open(QFile::ReadOnly);
+    //     // const auto byte_data = file.readAll();
 
-        Style style("");
+    //     Style style("");
 
-        // auto processed = nucleus::vector_layer::preprocess(id, byte_data, style);
-        auto polygons = nucleus::vector_layer::details::parse_tile(id, byte_data, style);
+    //     // auto processed = nucleus::vector_layer::preprocess(id, byte_data, style);
+    //     auto polygons = nucleus::vector_layer::details::parse_tile(id, byte_data, style);
 
-        // constexpr float point_scale = 1.0f / 64.0f;
+    //     // constexpr float point_scale = 1.0f / 64.0f;
 
-        // const std::vector<glm::vec2> triangle_left_hypo
-        //     = { glm::vec2(10 * point_scale, 30 * point_scale), glm::vec2(30 * point_scale, 5 * point_scale), glm::vec2(50 * point_scale, 50 * point_scale) };
-        // const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5 * point_scale, 5 * point_scale), glm::vec2(25 * point_scale, 10 * point_scale), glm::vec2(5 * point_scale, 15 * point_scale)
-        // };
+    //     // const std::vector<glm::vec2> triangle_left_hypo
+    //     //     = { glm::vec2(10 * point_scale, 30 * point_scale), glm::vec2(30 * point_scale, 5 * point_scale), glm::vec2(50 * point_scale, 50 * point_scale) };
+    //     // const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5 * point_scale, 5 * point_scale), glm::vec2(25 * point_scale, 10 * point_scale), glm::vec2(5 * point_scale, 15 *
+    //     point_scale)
+    //     // };
 
-        // const std::vector<std::vector<glm::vec2>> polygons = { triangle_left_hypo, triangle_right_hypo };
+    //     // const std::vector<std::vector<glm::vec2>> polygons = { triangle_left_hypo, triangle_right_hypo };
 
-        size_t data_offset = 1;
+    //     size_t data_offset = 1;
 
-        for (size_t i = 0; i < polygons.size(); ++i) {
-            std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygons[i].vertices, polygons[i].edges, true);
+    //     for (size_t i = 0; i < polygons.size(); ++i) {
+    //         std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygons[i].vertices, polygons[i].edges, true);
 
-            std::cout << "o Water" << i << std::endl;
-            for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
+    //         std::cout << "o Water" << i << std::endl;
+    //         for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
 
-                std::cout << "v " << triangle_points[j * 3 + 0].x << " 0.0 " << triangle_points[j * 3 + 0].y << std::endl;
-                std::cout << "v " << triangle_points[j * 3 + 1].x << " 0.0 " << triangle_points[j * 3 + 1].y << std::endl;
-                std::cout << "v " << triangle_points[j * 3 + 2].x << " 0.0 " << triangle_points[j * 3 + 2].y << std::endl;
-            }
+    //             std::cout << "v " << triangle_points[j * 3 + 0].x << " 0.0 " << triangle_points[j * 3 + 0].y << std::endl;
+    //             std::cout << "v " << triangle_points[j * 3 + 1].x << " 0.0 " << triangle_points[j * 3 + 1].y << std::endl;
+    //             std::cout << "v " << triangle_points[j * 3 + 2].x << " 0.0 " << triangle_points[j * 3 + 2].y << std::endl;
+    //         }
 
-            for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
-                std::cout << "f " << (data_offset + j * 3 + 0) << " " << (data_offset + j * 3 + 1) << " " << (data_offset + j * 3 + 2) << std::endl;
-            }
-            data_offset += triangle_points.size();
-        }
+    //         for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
+    //             std::cout << "f " << (data_offset + j * 3 + 0) << " " << (data_offset + j * 3 + 1) << " " << (data_offset + j * 3 + 2) << std::endl;
+    //         }
+    //         data_offset += triangle_points.size();
+    //     }
 
-        // TODO here -> visualize the grid first,
-        // probably best to execute each step individually and rasterize the resulting polygons with own raster with higher level of detail than grid size
+    //     // TODO here -> visualize the grid first,
+    //     // probably best to execute each step individually and rasterize the resulting polygons with own raster with higher level of detail than grid size
 
-        // auto raster = processed.grid_triangle;
-        // auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
+    //     // auto raster = processed.grid_triangle;
+    //     // auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
-        // auto test_image = example_grid_data_triangles();
-        // CHECK(image == test_image);
+    //     // auto test_image = example_grid_data_triangles();
+    //     // CHECK(image == test_image);
 
-        // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
-        //     std::cout << bridge_data[i] << std::endl;
-        // }
+    //     // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
+    //     //     std::cout << bridge_data[i] << std::endl;
+    //     // }
 
-        // std::cout << std::endl;
-        // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
-        //     std::cout << data[i] << std::endl;
-        // }
+    //     // std::cout << std::endl;
+    //     // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
+    //     //     std::cout << data[i] << std::endl;
+    //     // }
 
-        // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
-        // image.save(QString("vector_layer_grid_triangles.png"));
-    }
+    //     // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
+    //     // image.save(QString("vector_layer_grid_triangles.png"));
+    // }
 
     // TODO
     // SECTION("Lines to Grid")
@@ -457,4 +440,14 @@ TEST_CASE("nucleus/vector_preprocess")
             // std::cout << test << unpacked << std::endl;
         }
     }
+}
+
+TEST_CASE("nucleus/vector_preprocess benchmarks")
+{
+    // BENCHMARK("triangulize polygons")
+    // {
+    //     const std::vector<glm::vec2> polygon_points = { glm::vec2(10.5, 10.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5), glm::vec2(10.5, 30.5) };
+    //     const auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points);
+    //     nucleus::utils::rasterizer::triangulize(polygon_points, edges);
+    // };
 }

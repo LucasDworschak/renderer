@@ -18,85 +18,42 @@
 
 #include "Style.h"
 
+#include <QFile>
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QtVersionChecks>
 
-#include <iostream>
-
-// #include <mapbox/vector_tile.hpp>
-#include "nucleus/vector_tile/util.h"
+#include "nucleus/vector_layer/StyleExpression.h"
+#include "nucleus/vector_layer/constants.h"
 
 namespace nucleus::vector_layer {
 
-Style::Style(const QString& url)
-    : m_url(url)
-    , m_network_manager(new QNetworkAccessManager(this))
+Style::Style(const QString& filename)
+    : m_filename(filename)
 {
 }
 
 void Style::load()
 {
-    QNetworkRequest request(m_url);
-    request.setTransferTimeout(m_transfer_timeout);
-    request.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::PreferCache);
-#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
-    request.setAttribute(QNetworkRequest::UseCredentialsAttribute, false);
-#endif
+    QFile file(m_filename);
+    const auto open = file.open(QIODeviceBase::OpenModeFlag::ReadOnly);
+    assert(open);
 
-    QNetworkReply* reply = m_network_manager->get(request);
-    connect(reply, &QNetworkReply::finished, [reply, this]() {
-        const auto error = reply->error();
-        if (error == QNetworkReply::NoError) {
-            auto tile = std::make_shared<QByteArray>(reply->readAll());
-            parse_load(tile);
-        } else if (error == QNetworkReply::ContentNotFoundError) {
-            auto tile = std::make_shared<QByteArray>();
-            parse_load(tile);
-        } else {
-            //            qDebug() << reply->url() << ": " << error;
-            auto tile = std::make_shared<QByteArray>();
-            parse_load(tile);
-        }
-        reply->deleteLater();
-    });
-}
+    const auto data = file.readAll();
 
-unsigned int Style::transfer_timeout() const { return m_transfer_timeout; }
-
-void Style::set_transfer_timeout(unsigned int new_transfer_timeout)
-{
-    assert(new_transfer_timeout < unsigned(std::numeric_limits<int>::max()));
-    m_transfer_timeout = new_transfer_timeout;
-}
-
-size_t Style::layer_style_index(std::string layer_name, unsigned zoom) const
-{
-    const auto key = std::make_tuple(layer_name, zoom);
-
-    // assert(m_layer_zoom_to_style.contains(key)); // no valid style found
-    if (!m_layer_zoom_to_style.contains(key)) {
-        // std::cout << "no style for: " << layer_name << " " << zoom << std::endl;
-        return -1ul;
-    }
-
-    return m_layer_zoom_to_style.at(key);
-}
-
-void Style::parse_load(std::shared_ptr<QByteArray> data)
-{
-
-    if (data->isEmpty()) {
-        std::cout << "" << std::endl;
+    if (data.isEmpty()) {
+        qDebug() << "no data";
         return;
     }
 
-    const auto style_hasher = Hasher();
+    std::vector<uint32_t> fill_style_values;
+    std::vector<uint32_t> line_style_values;
 
-    QJsonDocument doc = QJsonDocument::fromJson(*data);
+    std::unordered_map<Layer_Style, uint32_t, Hasher> style_to_fill_index;
+    std::unordered_map<Layer_Style, uint32_t, Hasher> style_to_line_index;
+
+    QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonArray layers = doc.object().value("layers").toArray();
 
     for (const QJsonValue& obj : layers) {
@@ -116,16 +73,22 @@ void Style::parse_load(std::shared_ptr<QByteArray> data)
 
         if (!obj.toObject().contains("paint") || obj.toObject().value("paint").toObject().keys().size() == 0) {
             // no style was given
-            // std::cout << "no style: " << obj.toObject().value("id").toString().toStdString() << std::endl;
+            // qDebug() << "no style: " << obj.toObject().value("id").toString().toStdString();
             continue;
         }
 
+        // qDebug() << obj.toObject().value("source-layer").toString();
+
         auto paint = obj.toObject().value("paint").toObject();
+        auto filterData = obj.toObject().value("filter").toArray();
 
         Layer_Style s;
+        std::shared_ptr<StyleExpressionBase> filter = StyleExpressionBase::create_filter_expression(filterData);
 
         for (const QString& key : paint.keys()) {
 
+            // TODO support fill-opacity
+            // fill-antialias ?
             if (key == "fill-color") {
                 s.fill_color = parse_color(obj.toObject().value("paint").toObject().value(key).toString().toStdString());
             } else if (key == "line-color") {
@@ -144,40 +107,77 @@ void Style::parse_load(std::shared_ptr<QByteArray> data)
                 || key == "text-halo-color" || key == "text-halo-width") {
                 // not used
             } else {
-                std::cout << "new key detected: " << key.toStdString() << std::endl;
+                qDebug() << "new key detected: " << key.toStdString();
             }
         }
 
-        unsigned min_zoom = 0u;
-        unsigned max_zoom = 19u;
-
-        if (obj.toObject().contains("minzoom"))
-            min_zoom = obj.toObject().value("minzoom").toInt();
-        if (obj.toObject().contains("maxzoom"))
-            max_zoom = obj.toObject().value("maxzoom").toInt();
-
-        const auto style_hash = style_hasher(s);
+        uint32_t style_index = -1u;
 
         // insert styles if they aren't inserted yet
+        // and get the index of the style we want to use
         if (fill) {
-            if (!m_fill_styles.contains(s)) {
-                m_fill_styles.insert(s);
+            if (!style_to_fill_index.contains(s)) {
+                style_to_fill_index[s] = fill_style_values.size();
+                style_index = fill_style_values.size();
+
+                // add the style to the raster
+                fill_style_values.push_back(s.fill_color);
+                fill_style_values.push_back(s.outline_color);
+                fill_style_values.push_back(*reinterpret_cast<uint32_t*>(&s.outline_width)); // float to uint32 representation
+                fill_style_values.push_back(s.outline_dash);
+            } else {
+                style_index = style_to_fill_index[s];
             }
         } else {
-            if (!m_line_styles.contains(s)) {
-                m_fill_styles.insert(s);
+            if (!style_to_line_index.contains(s)) {
+                style_to_line_index[s] = line_style_values.size();
+                style_index = line_style_values.size();
+
+                // add the style to the raster
+                line_style_values.push_back(s.fill_color);
+                line_style_values.push_back(s.outline_color);
+                line_style_values.push_back(*reinterpret_cast<uint32_t*>(&s.outline_width)); // float to uint32 representation
+                line_style_values.push_back(s.outline_dash);
+            } else {
+                style_index = style_to_line_index[s];
             }
         }
 
+        glm::uvec2 zoom_range(0u, 19u);
+        if (obj.toObject().contains("minzoom"))
+            zoom_range.x = obj.toObject().value("minzoom").toInt();
+        if (obj.toObject().contains("maxzoom"))
+            zoom_range.y = obj.toObject().value("maxzoom").toInt();
+
         const auto layer_name = obj.toObject().value("source-layer").toString().toStdString();
-        // map layer name and zoom level to correct style hash
-        for (unsigned i = min_zoom; i < max_zoom; i++) {
-            m_layer_zoom_to_style[std::make_tuple(layer_name, i)] = style_hash;
-        }
+        if (!m_layer_to_style.contains(layer_name))
+            m_layer_to_style[layer_name] = StyleFilter();
+        m_layer_to_style[layer_name].add_filter(style_index, filter, zoom_range);
     }
+
+    // make sure that the style values are within the buffer size; resize them to this size and create the raster images
+    assert(fill_style_values.size() <= constants::style_data_size * constants::style_data_size);
+    assert(line_style_values.size() <= constants::style_data_size * constants::style_data_size);
+    fill_style_values.resize(constants::style_data_size * constants::style_data_size, -1u);
+    line_style_values.resize(constants::style_data_size * constants::style_data_size, -1u);
+
+    m_styles.fill_styles = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::style_data_size, std::move(fill_style_values)));
+    m_styles.line_styles = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::style_data_size, std::move(line_style_values)));
 
     emit load_finished();
 }
+
+uint32_t Style::layer_style_index(std::string layer_name, unsigned zoom, const mapbox::vector_tile::feature& feature) const // + properties // type=Polygon/Point/... // class? subclass
+{
+    if (!m_layer_to_style.contains(layer_name)) {
+        qDebug() << "no style for: " << layer_name;
+        return -1u;
+    }
+
+    return m_layer_to_style.at(layer_name).style_index(zoom, feature);
+}
+
+Style_Buffer_Holder Style::style_buffer() const { return m_styles; }
 
 // NOTE std::stof uses the locale to convert strings
 // locale might be german and it expects a "," decimal
@@ -222,14 +222,14 @@ uint32_t Style::parse_dasharray(QJsonArray dash_values)
 }
 
 uint32_t Style::parse_color(std::string value)
-{
+{ // TODO support hsl
     if (value.starts_with("#")) {
         if (value.length() == 7)
             return (std::stoul(value.substr(1), nullptr, 16) << 8) | 255;
         else if (value.length() == 9)
             return std::stoul(value.substr(1), nullptr, 16);
         else {
-            std::cout << "cannot parse color: " << value << std::endl; // TODO change to qdebug (or similar)
+            qDebug() << "cannot parse color: " << value; // TODO change to qdebug (or similar)
             return 0ul;
         }
     } else if (value.starts_with("rgb")) {
@@ -270,7 +270,7 @@ uint32_t Style::parse_color(std::string value)
 
         return out;
     } else {
-        std::cout << "cannot parse color: " << value << std::endl;
+        qDebug() << "cannot parse color: " << value;
         return 0ul;
     }
 }

@@ -35,6 +35,87 @@ namespace detail {
         QString operator()(std::string const& val) const { return QString::fromStdString(val); }
         QString operator()(bool val) const { return val ? QStringLiteral("true") : QStringLiteral("false"); }
     };
+
+    class CompareVisitor {
+    public:
+        bool operator()(std::vector<mapbox::feature::value>, QString, QString) const { return false; }
+        bool operator()(std::unordered_map<std::string, mapbox::feature::value>, QString, QString) const { return false; }
+        bool operator()(mapbox::feature::null_value_t, QString, QString) const { return false; }
+        bool operator()(std::nullptr_t, QString, QString) const { return false; }
+        bool operator()(uint64_t val, QString compare, QString comparator) const
+        {
+            // qDebug() << "compare uint: " << val << comparator << compare.toULongLong();
+            if (comparator == "==")
+                return val == compare.toULongLong();
+            else if (comparator == "!=")
+                return val != compare.toULongLong();
+            else if (comparator == "<")
+                return val < compare.toULongLong();
+            else if (comparator == "<=")
+                return val <= compare.toULongLong();
+            else if (comparator == ">")
+                return val > compare.toULongLong();
+            else if (comparator == ">=")
+                return val >= compare.toULongLong();
+            return false;
+        }
+        bool operator()(int64_t val, QString compare, QString comparator) const
+        {
+            // qDebug() << "compare int: " << val << comparator << compare.toLongLong();
+            if (comparator == "==")
+                return val == compare.toLongLong();
+            else if (comparator == "!=")
+                return val != compare.toLongLong();
+            else if (comparator == "<")
+                return val < compare.toLongLong();
+            else if (comparator == "<=")
+                return val <= compare.toLongLong();
+            else if (comparator == ">")
+                return val > compare.toLongLong();
+            else if (comparator == ">=")
+                return val >= compare.toLongLong();
+            return false;
+        }
+        bool operator()(double val, QString compare, QString comparator) const
+        {
+            // qDebug() << "compare double: " << val << comparator << compare.toDouble();
+            if (comparator == "==")
+                return val == compare.toDouble();
+            else if (comparator == "!=")
+                return val != compare.toDouble();
+            else if (comparator == "<")
+                return val < compare.toDouble();
+            else if (comparator == "<=")
+                return val <= compare.toDouble();
+            else if (comparator == ">")
+                return val > compare.toDouble();
+            else if (comparator == ">=")
+                return val >= compare.toDouble();
+            return false;
+        }
+        bool operator()(std::string const& val, QString compare, QString comparator) const
+        {
+            // qDebug() << "compare string: " << val << comparator << compare.toStdString();
+            if (comparator == "==")
+                return val == compare.toStdString();
+            else if (comparator == "!=")
+                return val != compare.toStdString();
+            return false;
+        }
+        bool operator()(bool val, QString compare, QString comparator) const
+        {
+            // qDebug() << "compare bool: " << val << comparator << compare.toStdString();
+            if (comparator == "==")
+                return val == (compare.toLower() == "true") ? true : false;
+            else if (comparator == "!=")
+                return val != (compare.toLower() == "true") ? true : false;
+
+            return false;
+        }
+    };
+
 } // namespace detail
 const static detail::StringPrintVisitor string_print_visitor = {};
+const static detail::CompareVisitor compare_visitor = {};
+
 } // namespace nucleus::vector_tile::util

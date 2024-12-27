@@ -1,0 +1,15 @@
+Folder contains stylesheets for vectorlayer.
+
+Sources:
+
+basemap.json
+last update: 2024-12-23
+https://mapsneu.wien.gv.at/basemapv/bmapv/3857/resources/styles/
+
+
+openstreetmap.json
+last update: 2024-12-24
+https://maplibre.org/maputnik/
+on the site -> open -> "OSM OpenMapTiles"
+styled map should be visible -> Export -> Download Style
+alternative: https://github.com/openmaptiles/openmaptiles
