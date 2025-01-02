@@ -34,13 +34,23 @@
 
 namespace nucleus::vector_layer {
 
+// TODO here:
+// - integrate style buffer into gl engine / shader
+// - write style index to buffer per triangle
+// - open the floodgates and visualize other polygons
+// - probably improve shader so that everything is visualized correctly
+
+// - ok if we allow all polygons we are over our size for each individual tile for some tiles...
+// -> possible solution split each tile into smaller portions (to prevent too much empty data), but allow overflow -> tile x,y,z data is available in texture index 400, 401, and 408
+// -> here we sucessfully split it up (at least it should be split up) -> next gl engine upload the split up thing than interpret it on the shader correctly
+
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
 // GpuVectorLayerTile preprocess(tile::Id, const QByteArray& vector_tile_data, const Style&)
 {
     if (vector_tile_data.isEmpty())
         return {};
 
-    // std::cout << id << ": ";
+    // std::cout << "entry:\t" << id.zoom_level << "\t";
 
     // DEBUG polygons
     // const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5 / 64.0 * constants::grid_size, 30.5 / 64.0 * constants::grid_size),
@@ -135,9 +145,6 @@ std::vector<PolygonData> parse_tile(tile::Id, const QByteArray& vector_tile_data
         }
     }
 
-    // TODO here -> call preprocess_triangles
-    // ignore for now style indices -> hard write 1 inside every trianglecollection
-
     return polygons;
 }
 
@@ -157,9 +164,6 @@ VectorLayerCollection preprocess_triangles(const std::vector<PolygonData> polygo
 
     // create the triangles from polygons
     for (size_t i = 0; i < polygons.size(); ++i) {
-
-        // if (i >= 10) // TODO REMOVE ME !!!
-        //     break;
 
         // TODO i think triangulize repeats points
         // -> we may be able to reduce the data array, if we increase the index array (if neccessary)
@@ -240,6 +244,27 @@ VectorLayerCollection preprocess_lines(const std::vector<PolygonData>, const std
     return line_collection;
 }
 
+std::vector<std::shared_ptr<const nucleus::Raster<uint32_t>>> split_to_multi_raster(const std::vector<uint32_t>& data)
+{
+    std::vector<std::shared_ptr<const nucleus::Raster<uint32_t>>> multi_raster;
+
+    constexpr auto squared_size = constants::data_size * constants::data_size;
+
+    for (size_t i = 0; i < floor(double(data.size()) / double(squared_size)); i++) {
+        auto layer_data = std::vector<uint32_t>(data.begin() + i * squared_size, data.begin() + (i + 1) * squared_size);
+        const auto r = nucleus::Raster<uint32_t>(constants::data_size, std::move(layer_data));
+        multi_raster.push_back(std::make_shared<const nucleus::Raster<uint32_t>>(r));
+    }
+
+    // add the last of the triangle data (will most likely not be of data_size)
+    auto layer_data = std::vector<uint32_t>(data.begin() + multi_raster.size() * squared_size, data.end());
+    layer_data.resize(squared_size, -1u); // resize and fill the last layer to the full size
+    const auto r = nucleus::Raster<uint32_t>(constants::data_size, std::move(layer_data));
+    multi_raster.push_back(std::make_shared<const nucleus::Raster<uint32_t>>(r));
+
+    return multi_raster;
+}
+
 /*
  * Function condenses data and fills the GpuVectorLayerTile.
  * condensing:
@@ -257,7 +282,6 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
     std::unordered_map<std::unordered_set<uint32_t>, uint32_t, Hasher> unique_entries;
     std::vector<uint32_t> grid;
     std::vector<uint32_t> index_bridge;
-    std::vector<uint32_t> data_triangle = triangle_collection.data;
 
     uint32_t start_offset = 0;
 
@@ -285,15 +309,17 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
             }
         }
     }
-    // std::cout << "inds: " << index_bridge.size() << std::endl;
-    assert(index_bridge.size() <= constants::data_size * constants::data_size);
-    index_bridge.resize(constants::data_size * constants::data_size, -1u);
-    assert(triangle_collection.data.size() <= constants::data_size * constants::data_size);
-    data_triangle.resize(constants::data_size * constants::data_size, -1u);
+    // std::cout << "\t" << index_bridge.size() << ""; // << std::endl;
+    // std::cout << "\t" << triangle_collection.data.size() << std::endl;
+
+    constexpr auto max_layer_amount = 8; // 8 * constants::data_size should be sufficient, if not there should be 8 bit available (TODO look if this is still correct)
+
+    assert(index_bridge.size() <= constants::data_size * constants::data_size * max_layer_amount);
+    assert(triangle_collection.data.size() <= constants::data_size * constants::data_size * max_layer_amount);
 
     tile.grid_triangle = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size, std::move(grid)));
-    tile.grid_to_data = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size, std::move(index_bridge)));
-    tile.data_triangle = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size, std::move(data_triangle)));
+    tile.grid_to_data = split_to_multi_raster(index_bridge);
+    tile.data_triangle = split_to_multi_raster(triangle_collection.data);
 
     // TODO do the same for lines
 

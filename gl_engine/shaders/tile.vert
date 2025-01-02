@@ -25,7 +25,7 @@
 out highp vec2 var_uv;
 out highp vec3 var_pos_cws;
 out highp vec3 var_normal;
-flat out highp uvec3 var_tile_id;
+flat out highp uvec4 var_tile_id;
 #if CURTAIN_DEBUG_MODE > 0
 out lowp float is_curtain;
 #endif

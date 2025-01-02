@@ -20,7 +20,11 @@
 
 namespace nucleus::vector_layer::constants {
 
+// sizes are all only one side -> and have to be squared to get the actual amount of data stored in them
+
 constexpr auto grid_size = 16; // 64
+// 280=7*40 -> if 7 is part of the size (regarding prime factorization), we dont have to worry for corner cases where part of data is on another tile (since the data currently is also 7 vars long)
+// constexpr auto data_size = 280;
 constexpr auto data_size = 512;
 constexpr auto style_data_size = 64;
 

@@ -89,33 +89,62 @@ glm::dvec3 lat_long_alt_to_world(const glm::dvec3& lat_long_alt)
     return { world_xy.x, world_xy.y, lat_long_alt.z / std::abs(std::cos(lat_rad_)) };
 }
 
-uint16_t hash_uint16(const tile::Id& id)
+uint16_t hash_uint16(const tile::Id& id, uint8_t sub_layer)
 {
-    // https://en.wikipedia.org/wiki/Linear_congruential_generator
-    // could be possible to find better factors.
     const uint16_t z = uint16_t(id.zoom_level) * uint16_t(4 * 199 * 59 + 1) + uint16_t(10859);
     const uint16_t x = uint16_t(id.coords.x) * uint16_t(4 * 149 * 101 + 1) + uint16_t(12253);
     const uint16_t y = uint16_t(id.coords.y) * uint16_t(4 * 293 * 53 + 1) + uint16_t(59119);
+    const uint16_t w = uint16_t(sub_layer) * uint16_t(4 * 107 * 29 + 1) + uint16_t(8677);
 
-    return x + y + z;
+    return x + y + z + w;
 }
 
-glm::vec<2, uint32_t> pack(const tile::Id& id)
+// glm::vec<2, uint32_t> pack(const tile::Id& id)
+// {
+//     uint32_t a = id.zoom_level << (32 - 5);
+//     a = a | (id.coords.x >> 3);
+//     uint32_t b = id.coords.x << (32 - 3);
+//     b = b | id.coords.y;
+//     return { a, b };
+// }
+
+// tile::Id unpack(const glm::vec<2, uint32_t>& packed)
+// {
+//     tile::Id id;
+//     id.zoom_level = packed.x >> (32 - 5);
+//     id.coords.x = (packed.x & ((1u << (32 - 5)) - 1)) << 3;
+//     id.coords.x = id.coords.x | (packed.y >> (32 - 3));
+//     id.coords.y = packed.y & ((1u << (32 - 3)) - 1);
+//     return id;
+// }
+
+glm::vec<2, uint32_t> pack(const tile::Id& id, const uint8_t sub_layer)
 {
-    uint32_t a = id.zoom_level << (32 - 5);
-    a = a | (id.coords.x >> 3);
-    uint32_t b = id.coords.x << (32 - 3);
-    b = b | id.coords.y;
+    uint32_t a = sub_layer << 24;
+
+    a = a | (id.zoom_level << 16);
+
+    a = a | (id.coords.x >> 8);
+    uint32_t b = id.coords.x << 24;
+
+    b = b | (id.coords.y & ((1u << 24) - 1));
+
     return { a, b };
 }
 
-tile::Id unpack(const glm::vec<2, uint32_t>& packed)
+std::pair<tile::Id, uint8_t> unpack(const glm::vec<2, uint32_t>& packed)
 {
     tile::Id id;
-    id.zoom_level = packed.x >> (32 - 5);
-    id.coords.x = (packed.x & ((1u << (32 - 5)) - 1)) << 3;
-    id.coords.x = id.coords.x | (packed.y >> (32 - 3));
-    id.coords.y = packed.y & ((1u << (32 - 3)) - 1);
-    return id;
+    uint8_t sub_layer;
+
+    sub_layer = packed.x >> 24;
+    id.zoom_level = (packed.x & ((1u << 8) - 1) << 16) >> 16;
+
+    id.coords.x = (packed.x & ((1u << 16) - 1)) << 8;
+    id.coords.x |= packed.y >> 24;
+
+    id.coords.y = packed.y & ((1u << 24) - 1);
+
+    return { id, sub_layer };
 }
 }
