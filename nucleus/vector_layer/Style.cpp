@@ -50,8 +50,8 @@ void Style::load()
     std::vector<uint32_t> fill_style_values;
     std::vector<uint32_t> line_style_values;
 
-    std::unordered_map<Layer_Style, uint32_t, Hasher> style_to_fill_index;
-    std::unordered_map<Layer_Style, uint32_t, Hasher> style_to_line_index;
+    std::unordered_map<LayerStyle, uint32_t, Hasher> style_to_fill_index;
+    std::unordered_map<LayerStyle, uint32_t, Hasher> style_to_line_index;
 
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonArray layers = doc.object().value("layers").toArray();
@@ -82,7 +82,7 @@ void Style::load()
         auto paint = obj.toObject().value("paint").toObject();
         auto filterData = obj.toObject().value("filter").toArray();
 
-        Layer_Style s;
+        LayerStyle s;
         std::shared_ptr<StyleExpressionBase> filter = StyleExpressionBase::create_filter_expression(filterData);
 
         for (const QString& key : paint.keys()) {
@@ -177,7 +177,7 @@ uint32_t Style::layer_style_index(std::string layer_name, unsigned zoom, const m
     return m_layer_to_style.at(layer_name).style_index(zoom, feature);
 }
 
-Style_Buffer_Holder Style::style_buffer() const { return m_styles; }
+StyleBufferHolder Style::style_buffer() const { return m_styles; }
 
 // NOTE std::stof uses the locale to convert strings
 // locale might be german and it expects a "," decimal

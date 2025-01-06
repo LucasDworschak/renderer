@@ -34,6 +34,12 @@
 
 namespace nucleus::vector_layer {
 
+// TODO here:
+// - integrate style buffer into gl engine / shader
+// - write style index to buffer per triangle
+// - open the floodgates and visualize other polygons
+// - probably improve shader so that everything is visualized correctly
+
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
 // GpuVectorLayerTile preprocess(tile::Id, const QByteArray& vector_tile_data, const Style&)
 {
@@ -135,9 +141,6 @@ std::vector<PolygonData> parse_tile(tile::Id, const QByteArray& vector_tile_data
         }
     }
 
-    // TODO here -> call preprocess_triangles
-    // ignore for now style indices -> hard write 1 inside every trianglecollection
-
     return polygons;
 }
 
@@ -158,9 +161,6 @@ VectorLayerCollection preprocess_triangles(const std::vector<PolygonData> polygo
     // create the triangles from polygons
     for (size_t i = 0; i < polygons.size(); ++i) {
 
-        // if (i >= 10) // TODO REMOVE ME !!!
-        //     break;
-
         // TODO i think triangulize repeats points
         // -> we may be able to reduce the data array, if we increase the index array (if neccessary)
 
@@ -169,6 +169,12 @@ VectorLayerCollection preprocess_triangles(const std::vector<PolygonData> polygo
 
         // add ordered triangles to collection
         for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
+            // TODO reduce the bits needed for the triangle data
+            // 96 bits -> rgb32UI
+            // 2*3*13=78 bits for all coordinate values
+            // 14 bits for style
+            // 78+14 bits = 92 -> 4 bits remain
+
             triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 0].x));
             triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 0].y));
             triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 1].x));
@@ -278,6 +284,11 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
 
                 grid.push_back(offset_size);
 
+                // TODO possible performance
+                // R32UI 32 bit / index
+                // RG32UI 21bit / index -> 3 indices per pixel
+                // offset_size of grid could also save 2 bits for where in the rg32ui it should start to pack them tightly
+
                 // add the indices to the bridge
                 index_bridge.insert(index_bridge.end(), triangle_collection.cell_to_temp[i].begin(), triangle_collection.cell_to_temp[i].end());
 
@@ -291,9 +302,9 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
     assert(triangle_collection.data.size() <= constants::data_size * constants::data_size);
     data_triangle.resize(constants::data_size * constants::data_size, -1u);
 
-    tile.grid_triangle = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size, std::move(grid)));
-    tile.grid_to_data = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size, std::move(index_bridge)));
-    tile.data_triangle = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size, std::move(data_triangle)));
+    tile.triangle_acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size, std::move(grid)));
+    tile.triangle_index_buffer = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size, std::move(index_bridge)));
+    tile.triangle_vertex_buffer = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size, std::move(data_triangle)));
 
     // TODO do the same for lines
 

@@ -159,10 +159,10 @@ TEST_CASE("nucleus/vector_preprocess")
 
         auto tile = nucleus::vector_layer::details::create_gpu_tile(processed, processed);
 
-        CHECK(same_cells_are_filled(raster, tile.grid_triangle));
+        CHECK(same_cells_are_filled(raster, tile.triangle_acceleration_grid));
 
         // we provide two triangles that overlap at one point -> we expect four entries [1], [0], ([1], [0])
-        auto bridge_data = tile.grid_to_data->buffer();
+        auto bridge_data = tile.triangle_index_buffer->buffer();
         REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
         CHECK(bridge_data[0] == 1);
         CHECK(bridge_data[1] == 0);
@@ -174,7 +174,7 @@ TEST_CASE("nucleus/vector_preprocess")
         CHECK(bridge_data[nucleus::vector_layer::constants::data_size * 1.5] == -1u);
 
 
-        auto data = tile.data_triangle->buffer();
+        auto data = tile.triangle_vertex_buffer->buffer();
         REQUIRE(data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
         CHECK(data[0] == 1089470464);
         CHECK(data[1] == 1067450368);
@@ -231,10 +231,10 @@ TEST_CASE("nucleus/vector_preprocess")
 
         auto tile = nucleus::vector_layer::details::create_gpu_tile(processed, processed);
 
-        CHECK(same_cells_are_filled(raster, tile.grid_triangle));
+        CHECK(same_cells_are_filled(raster, tile.triangle_acceleration_grid));
 
         // we provide two triangles that overlap at one point -> we expect four entries [1], ([1], [0]), [1]
-        auto bridge_data = tile.grid_to_data->buffer();
+        auto bridge_data = tile.triangle_index_buffer->buffer();
         REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
         CHECK(bridge_data[0] == 1);
         CHECK(bridge_data[1] == 1);
@@ -245,7 +245,7 @@ TEST_CASE("nucleus/vector_preprocess")
         CHECK(bridge_data[5] == -1u);
         CHECK(bridge_data[nucleus::vector_layer::constants::data_size * 1.5] == -1u);
 
-        auto data = tile.data_triangle->buffer();
+        auto data = tile.triangle_vertex_buffer->buffer();
         REQUIRE(data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
         CHECK(data[0] == 1089470464);
         CHECK(data[1] == 1067450368);

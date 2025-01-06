@@ -28,19 +28,19 @@
 
 namespace nucleus::vector_layer {
 
-struct Layer_Style {
+struct LayerStyle {
     uint32_t fill_color; // fill-color or line-color
     uint32_t outline_color; // fill-outline-color or
     float outline_width; // line-width
     uint32_t outline_dash; // line-dasharray
 
-    bool operator==(const Layer_Style& other) const = default;
+    bool operator==(const LayerStyle& other) const = default;
 };
 
 template <class T> inline void hash_combine(std::size_t& seed, T const& v) { seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2); }
 
 struct Hasher {
-    size_t operator()(const Layer_Style& style) const
+    size_t operator()(const LayerStyle& style) const
     {
         size_t seed = 0;
 
@@ -53,7 +53,7 @@ struct Hasher {
     }
 };
 
-struct Style_Buffer_Holder {
+struct StyleBufferHolder {
     std::shared_ptr<const nucleus::Raster<uint32_t>> fill_styles;
     std::shared_ptr<const nucleus::Raster<uint32_t>> line_styles;
 };
@@ -68,7 +68,7 @@ public:
 
     uint32_t layer_style_index(std::string layer_name, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
 
-    Style_Buffer_Holder style_buffer() const;
+    StyleBufferHolder style_buffer() const;
 
 public slots:
     void load();
@@ -77,7 +77,7 @@ signals:
     void load_finished();
 
 private:
-    Style_Buffer_Holder m_styles;
+    StyleBufferHolder m_styles;
 
     // std::unordered_map<std::tuple<std::string, unsigned>, size_t, radix::hasher::for_tuple<std::string, unsigned>> m_layer_zoom_to_style;
     std::unordered_map<std::string, StyleFilter> m_layer_to_style;

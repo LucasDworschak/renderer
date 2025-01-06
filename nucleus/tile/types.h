@@ -113,11 +113,18 @@ static_assert(NamedTile<GpuGeometryQuad>);
 
 struct GpuVectorLayerTile {
     tile::Id id;
-    std::shared_ptr<const nucleus::Raster<uint32_t>> grid_triangle; // 24 bits start_index, 8 bits size
-    std::shared_ptr<const nucleus::Raster<uint32_t>> grid_lines; // 24 bits start_index, 8 bits size
-    std::shared_ptr<const nucleus::Raster<uint32_t>> grid_to_data; // index to triangles buffer (having this interim buffer should prevent duplication of data if it appears on multiple grid cells)
-    std::shared_ptr<const nucleus::Raster<uint32_t>> data_triangle; // vertex 0, 1, 2 position + style_index
-    std::shared_ptr<const nucleus::Raster<uint32_t>> data_lines; // vertex 0, 1 position + style_index
+    // 24 bits start_index, 8 bits size
+    std::shared_ptr<const nucleus::Raster<uint32_t>> triangle_acceleration_grid;
+    // 24 bits start_index, 8 bits size
+    std::shared_ptr<const nucleus::Raster<uint32_t>> line_acceleration_grid;
+    // index to triangles buffer (having this interim buffer should prevent duplication of data if it appears on multiple grid cells)
+    std::shared_ptr<const nucleus::Raster<uint32_t>> triangle_index_buffer;
+    // index to line buffer (having this interim buffer should prevent duplication of data if it appears on multiple grid cells)
+    std::shared_ptr<const nucleus::Raster<uint32_t>> line_index_buffer;
+    // vertex 0, 1, 2 position + style_index
+    std::shared_ptr<const nucleus::Raster<uint32_t>> triangle_vertex_buffer;
+    // vertex 0, 1 position + style_index
+    std::shared_ptr<const nucleus::Raster<uint32_t>> line_vertex_buffer;
 };
 
 static_assert(NamedTile<GpuVectorLayerTile>);

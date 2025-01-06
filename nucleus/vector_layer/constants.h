@@ -19,7 +19,7 @@
 #pragma once
 
 namespace nucleus::vector_layer::constants {
-
+// sizes are all only one side -> and have to be squared to get the actual amount of data stored in the buffer
 constexpr auto grid_size = 16; // 64
 constexpr auto data_size = 512;
 constexpr auto style_data_size = 64;

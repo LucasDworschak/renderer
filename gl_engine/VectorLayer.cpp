@@ -57,14 +57,6 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_triangle_data_texture->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
     m_triangle_data_texture->allocate_array(nucleus::vector_layer::constants::data_size, nucleus::vector_layer::constants::data_size, unsigned(m_gpu_array_helper.size()));
 
-    QOpenGLFunctions* f = QOpenGLContext::currentContext()->functions();
-    GLint max_layers;
-    GLint max_size;
-    f->glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &max_layers);
-    f->glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_size);
-    std::cout << "max layers: " << max_layers << std::endl;
-    std::cout << "max size: " << max_size << std::endl;
-
     update_gpu_id_map();
 }
 
@@ -108,22 +100,22 @@ void VectorLayer::update_gpu_quads(const std::vector<nucleus::tile::GpuVectorLay
         for (const auto& tile : quad.tiles) {
             // test for validity
             assert(tile.id.zoom_level < 100);
-            if (!tile.grid_triangle)
+            if (!tile.triangle_acceleration_grid)
                 continue; // nothing here
 
             // assert(tile.grid_triangle);
-            assert(tile.grid_to_data);
-            assert(tile.data_triangle);
+            assert(tile.triangle_index_buffer);
+            assert(tile.triangle_vertex_buffer);
 
             // find empty spot and upload texture
             const auto layer_index = m_gpu_array_helper.add_tile(tile.id);
-            m_grid_texture->upload(*tile.grid_triangle, layer_index);
+            m_grid_texture->upload(*tile.triangle_acceleration_grid, layer_index);
 
-            m_triangle_index_texture->upload(*tile.grid_to_data, layer_index);
-            m_triangle_data_texture->upload(*tile.data_triangle, layer_index);
+            m_triangle_index_texture->upload(*tile.triangle_index_buffer, layer_index);
+            m_triangle_data_texture->upload(*tile.triangle_vertex_buffer, layer_index);
 
             // int count = 0;
-            // for (auto data : tile.data_triangle->buffer()) {
+            // for (auto data : tile.triangle_vertex_buffer->buffer()) {
             //     if (count++ > 15)
             //         break;
             //     std::cout << *reinterpret_cast<float*>(&data) << "\t";
