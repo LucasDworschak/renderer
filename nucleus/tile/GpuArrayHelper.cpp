@@ -1,7 +1,6 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2024 Adam Celarek
- * Copyright (C) 2024 Lucas Dworschak
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,51 +18,39 @@
 
 #include "GpuArrayHelper.h"
 #include <nucleus/srs.h>
-#include <nucleus/utils/bit_coding.h>
 
 namespace nucleus::tile {
 GpuArrayHelper::GpuArrayHelper() { }
 
-unsigned GpuArrayHelper::add_tile(const tile::Id& id, const uint8_t sub_layer)
+unsigned GpuArrayHelper::add_tile(const tile::Id& id)
 {
-    const auto id_sub = TileIDWithSubLayer { id, sub_layer };
-    constexpr auto empty_id = TileIDWithSubLayer { tile::Id { unsigned(-1), {} }, uint8_t(-1u) };
-
-    assert(!m_id_to_layer.contains(id_sub));
-    const auto t = std::find(m_array.begin(), m_array.end(), empty_id);
+    assert(!m_id_to_layer.contains(id));
+    const auto t = std::find(m_array.begin(), m_array.end(), tile::Id { unsigned(-1), {} });
     assert(t != m_array.end());
-    *t = id_sub;
+    *t = id;
 
     // returns index in texture array
     const auto layer = unsigned(t - m_array.begin());
-    m_id_to_layer.emplace(id_sub, layer);
+    m_id_to_layer.emplace(id, layer);
     return layer;
 }
 
-void GpuArrayHelper::remove_tile(const tile::Id& tile_id, const uint8_t sub_layer)
+void GpuArrayHelper::remove_tile(const tile::Id& tile_id)
 {
-    const auto id_sub = TileIDWithSubLayer { tile_id, sub_layer };
-    constexpr auto empty_id = TileIDWithSubLayer { tile::Id { unsigned(-1), {} }, uint8_t(-1u) };
-
-    assert(m_id_to_layer.contains(id_sub));
-    m_id_to_layer.erase(id_sub);
-    const auto t = std::find(m_array.begin(), m_array.end(), id_sub);
+    assert(m_id_to_layer.contains(tile_id));
+    m_id_to_layer.erase(tile_id);
+    const auto t = std::find(m_array.begin(), m_array.end(), tile_id);
     assert(t != m_array.end()); // removing a tile that's not here. likely there is a race.
-    *t = empty_id;
+    *t = tile::Id { unsigned(-1), {} };
 }
 
-bool GpuArrayHelper::contains_tile(const tile::Id& tile_id, const uint8_t sub_layer)
-{
-    const auto id_sub = TileIDWithSubLayer { tile_id, sub_layer };
-    return m_id_to_layer.contains(id_sub);
-}
+bool GpuArrayHelper::contains_tile(const tile::Id& tile_id) { return m_id_to_layer.contains(tile_id); }
 
 void GpuArrayHelper::set_quad_limit(unsigned int new_limit)
 {
-    constexpr auto empty_id = TileIDWithSubLayer { tile::Id { unsigned(-1), {} }, uint8_t(-1u) };
     assert(m_array.empty());
     m_array.resize(new_limit * 4);
-    std::fill(m_array.begin(), m_array.end(), empty_id);
+    std::fill(m_array.begin(), m_array.end(), tile::Id { unsigned(-1), {} });
 }
 
 unsigned GpuArrayHelper::size() const { return unsigned(m_array.size()); }
@@ -74,11 +61,11 @@ GpuArrayHelper::Dictionary GpuArrayHelper::generate_dictionary() const
     nucleus::Raster<glm::u32vec2> packed_ids({ 256, 256 }, glm::u32vec2(-1, -1));
     nucleus::Raster<uint16_t> layers({ 256, 256 }, 0);
     for (const auto& [id, layer] : m_id_to_layer) {
-        auto hash = nucleus::srs::hash_uint16(id.id, id.sub_layer);
+        auto hash = nucleus::srs::hash_uint16(id);
         while (packed_ids.pixel(hash_to_pixel(hash)) != glm::u32vec2(-1, -1))
             hash++;
 
-        packed_ids.pixel(hash_to_pixel(hash)) = nucleus::srs::pack(id.id, id.sub_layer);
+        packed_ids.pixel(hash_to_pixel(hash)) = nucleus::srs::pack(id);
         layers.pixel(hash_to_pixel(hash)) = layer;
     }
 

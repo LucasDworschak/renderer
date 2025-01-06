@@ -265,7 +265,7 @@ TEST_CASE("nucleus/srs")
         const auto packing_roundtrip_cpp = [](const tile::Id& id) {
             const auto packed = pack(id);
             const auto unpacked = unpack(packed);
-            CHECK(id == unpacked.first);
+            CHECK(id == unpacked);
         };
 
         packing_roundtrip_cpp({ 0, { 0, 0 } });

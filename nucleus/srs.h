@@ -43,9 +43,7 @@ glm::dvec2 lat_long_to_world(const glm::dvec2& lat_long);
 glm::dvec3 lat_long_alt_to_world(const glm::dvec3& lat_long_alt);
 glm::dvec2 world_to_lat_long(const glm::dvec2& world_pos);
 glm::dvec3 world_to_lat_long_alt(const glm::dvec3& world_pos);
-uint16_t hash_uint16(const tile::Id& id, uint8_t sub_layer = 0);
-// glm::vec<2, uint32_t> pack(const tile::Id& id);
-// tile::Id unpack(const glm::vec<2, uint32_t>& packed);
-glm::vec<2, uint32_t> pack(const tile::Id& id, const uint8_t sub_layer = 0);
-std::pair<tile::Id, uint8_t> unpack(const glm::vec<2, uint32_t>& packed);
-} // namespace nucleus::srs
+uint16_t hash_uint16(const tile::Id& id);
+glm::vec<2, uint32_t> pack(const tile::Id& id);
+tile::Id unpack(const glm::vec<2, uint32_t>& packed);
+}

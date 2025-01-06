@@ -37,7 +37,7 @@ layout (location = 1) out highp vec4 texout_position;
 layout (location = 2) out highp uvec2 texout_normal;
 layout (location = 3) out lowp vec4 texout_depth;
 
-flat in highp uvec4 var_tile_id;
+flat in highp uvec3 var_tile_id;
 in highp vec2 var_uv;
 in highp vec3 var_pos_cws;
 in highp vec3 var_normal;
@@ -96,12 +96,12 @@ lowp ivec2 to_dict_pixel(mediump uint hash) {
     return ivec2(int(hash & 255u), int(hash >> 8u));
 }
 
-bool find_tile(inout highp uvec4 tile_id, out lowp ivec2 dict_px, inout highp vec2 uv) {
+bool find_tile(inout highp uvec3 tile_id, out lowp ivec2 dict_px, inout highp vec2 uv) {
     uvec2 missing_packed_tile_id = uvec2((-1u) & 65535u, (-1u) & 65535u);
     uint iter = 0u;
     do {
-        mediump uint hash = hash_tile_id(tile_id.xyz, 0u);//tile_id.w);
-        highp uvec2 wanted_packed_tile_id = pack_tile_id(tile_id.xyz, 0u);
+        mediump uint hash = hash_tile_id(tile_id);
+        highp uvec2 wanted_packed_tile_id = pack_tile_id(tile_id);
         highp uvec2 found_packed_tile_id = texelFetch(vector_map_tile_id_sampler, to_dict_pixel(hash), 0).xy;
         while(found_packed_tile_id != wanted_packed_tile_id && found_packed_tile_id != missing_packed_tile_id) {
             hash++;
@@ -116,7 +116,7 @@ bool find_tile(inout highp uvec4 tile_id, out lowp ivec2 dict_px, inout highp ve
             return true;
         }
     }
-    while (decrease_zoom_level_by_one(tile_id.xyz, uv)); // TOOD how to we handle decrease zoom level by one??
+    while (decrease_zoom_level_by_one(tile_id, uv));
     return false;
 }
 
@@ -152,8 +152,8 @@ void main() {
 
 
     // get grid acceleration structure data
-    highp uvec4 tile_id = var_tile_id;
-    highp vec2 uv = var_uv;
+    highp uvec3 tile_id = var_tile_id;
+    highp vec2 uv = var_uv; // TODO here -> uv doesnt change for some specific zoom levels???
 
     lowp ivec2 dict_px;
     highp uvec2 offset_size = uvec2(0u);

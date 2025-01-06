@@ -70,14 +70,14 @@ void hashing_cpp_same_as_glsl(const Id& id)
             out lowp vec4 out_color;
             void main() {
                 mediump uint hash_ref = %1u;
-                mediump uint hash_glsl = hash_tile_id(uvec3(%2u, %3u, %4u), 0u);
+                mediump uint hash_glsl = hash_tile_id(uvec3(%2u, %3u, %4u));
                 out_color = vec4((hash_ref == hash_glsl) ? 121.0 / 255.0 : 9.0 / 255.0, 0, 0, 1);
             }
         )")
-                .arg(hash_uint16(id))
-                .arg(id.coords.x)
-                .arg(id.coords.y)
-                .arg(id.zoom_level));
+                                                       .arg(hash_uint16(id))
+                                                       .arg(id.coords.x)
+                                                       .arg(id.coords.y)
+                                                       .arg(id.zoom_level));
         shader.bind();
         gl_engine::helpers::create_screen_quad_geometry().draw();
 
@@ -104,7 +104,7 @@ void hashing_cpp_same_as_glsl(const Id& id)
             out highp vec2 texcoords;
             flat out mediump uint hash;
             void main() {
-                hash = hash_tile_id(uvec3(%1u, %2u, %3u), 0u);
+                hash = hash_tile_id(uvec3(%1u, %2u, %3u));
                 vec2 vertices[3]=vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
                 gl_Position = vec4(vertices[gl_VertexID], 0.0, 1.0);
                 texcoords = 0.5 * gl_Position.xy + vec2(0.5);
@@ -134,18 +134,18 @@ void packing_cpp_same_as_glsl(const Id& id)
             void main() {
                 highp uvec2 cpp_packed_id = uvec2(%1u, %2u);
                 highp uvec3 id = uvec3(%3u, %4u, %5u);
-                highp uvec4 unpacked_id = unpack_tile_id(cpp_packed_id);
-                bool unpack_ok = id == unpacked_id.xyz;
-                highp uvec2 packed_id = pack_tile_id(id, 0u);
+                highp uvec3 unpacked_id = unpack_tile_id(cpp_packed_id);
+                bool unpack_ok = id == unpacked_id;
+                highp uvec2 packed_id = pack_tile_id(id);
                 bool pack_ok = packed_id == cpp_packed_id;
                 out_color = vec4(unpack_ok ? 121.0 / 255.0 : 9.0 / 255.0, pack_ok ? 122.0 / 255.0 : 9.0 / 255.0, 0, 1);
             }
         )")
-                .arg(pack(id).x)
-                .arg(pack(id).y)
-                .arg(id.coords.x)
-                .arg(id.coords.y)
-                .arg(id.zoom_level));
+                                                       .arg(pack(id).x)
+                                                       .arg(pack(id).y)
+                                                       .arg(id.coords.x)
+                                                       .arg(id.coords.y)
+                                                       .arg(id.zoom_level));
         shader.bind();
         gl_engine::helpers::create_screen_quad_geometry().draw();
 
@@ -173,9 +173,9 @@ void packing_cpp_same_as_glsl(const Id& id)
             void main() {
                 highp uvec2 cpp_packed_id = uvec2(%1u, %2u);
                 highp uvec3 id = uvec3(%3u, %4u, %5u);
-                highp uvec4 unpacked_id = unpack_tile_id(cpp_packed_id);
-                bool unpack_ok = id == unpacked_id.xyz;
-                highp uvec2 packed_id = pack_tile_id(id, 0u);
+                highp uvec3 unpacked_id = unpack_tile_id(cpp_packed_id);
+                bool unpack_ok = id == unpacked_id;
+                highp uvec2 packed_id = pack_tile_id(id);
                 bool pack_ok = packed_id == cpp_packed_id;
                 ok = vec2(unpack_ok ? 121.0 / 255.0 : 9.0 / 255.0, pack_ok ? 122.0 / 255.0 : 9.0 / 255.0);
 

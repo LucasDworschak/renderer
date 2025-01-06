@@ -33,7 +33,7 @@ layout (location = 1) out highp vec4 texout_position;
 layout (location = 2) out highp uvec2 texout_normal;
 layout (location = 3) out lowp vec4 texout_depth;
 
-flat in highp uvec4 var_tile_id;
+flat in highp uvec3 var_tile_id;
 in highp vec2 var_uv;
 in highp vec3 var_pos_cws;
 in highp vec3 var_normal;
@@ -60,8 +60,8 @@ bool find_tile(inout highp uvec3 tile_id, out lowp ivec2 dict_px, inout highp ve
     uvec2 missing_packed_tile_id = uvec2((-1u) & 65535u, (-1u) & 65535u);
     uint iter = 0u;
     do {
-        mediump uint hash = hash_tile_id(tile_id, 0u);
-        highp uvec2 wanted_packed_tile_id = pack_tile_id(tile_id,0u);
+        mediump uint hash = hash_tile_id(tile_id);
+        highp uvec2 wanted_packed_tile_id = pack_tile_id(tile_id);
         highp uvec2 found_packed_tile_id = texelFetch(ortho_map_tile_id_sampler, to_dict_pixel(hash), 0).xy;
         while(found_packed_tile_id != wanted_packed_tile_id && found_packed_tile_id != missing_packed_tile_id) {
             hash++;
@@ -72,7 +72,7 @@ bool find_tile(inout highp uvec3 tile_id, out lowp ivec2 dict_px, inout highp ve
         }
         if (found_packed_tile_id == wanted_packed_tile_id) {
             dict_px = to_dict_pixel(hash);
-            tile_id = unpack_tile_id(wanted_packed_tile_id).xyz;
+            tile_id = unpack_tile_id(wanted_packed_tile_id);
             return true;
         }
     }
@@ -86,7 +86,7 @@ void main() {
         discard;
     }
 #endif
-    highp uvec3 tile_id = var_tile_id.xyz;
+    highp uvec3 tile_id = var_tile_id;
     highp vec2 uv = var_uv;
 
     lowp ivec2 dict_px;

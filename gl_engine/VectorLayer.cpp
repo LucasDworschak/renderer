@@ -112,23 +112,15 @@ void VectorLayer::update_gpu_quads(const std::vector<nucleus::tile::GpuVectorLay
                 continue; // nothing here
 
             // assert(tile.grid_triangle);
-            assert(tile.grid_to_data.size() > 0);
-            assert(tile.data_triangle.size() > 0);
-
-            const auto max_layer_amount = std::max(tile.grid_to_data.size(), tile.data_triangle.size());
+            assert(tile.grid_to_data);
+            assert(tile.data_triangle);
 
             // find empty spot and upload texture
-            for (size_t i = 0; i < max_layer_amount; i++) {
-                const auto layer_index = m_gpu_array_helper.add_tile(tile.id, i);
-                if (i == 0) // only one grid texture needed
-                    m_grid_texture->upload(*tile.grid_triangle, layer_index);
+            const auto layer_index = m_gpu_array_helper.add_tile(tile.id);
+            m_grid_texture->upload(*tile.grid_triangle, layer_index);
 
-                // upload index and data if there is still data to upload
-                if (i < tile.grid_to_data.size())
-                    m_triangle_index_texture->upload(*tile.grid_to_data[i], layer_index);
-                if (i < tile.data_triangle.size())
-                    m_triangle_data_texture->upload(*tile.data_triangle[i], layer_index);
-            }
+            m_triangle_index_texture->upload(*tile.grid_to_data, layer_index);
+            m_triangle_data_texture->upload(*tile.data_triangle, layer_index);
 
             // int count = 0;
             // for (auto data : tile.data_triangle->buffer()) {

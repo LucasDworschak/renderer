@@ -41,9 +41,7 @@
 using namespace nucleus::vector_layer;
 
 // helpers for catch2
-inline std::ostream& operator<<(std::ostream& os, const glm::uvec4& v) { return os << "{ " << v.x << ", " << v.y << ", " << v.z << ", " << v.w << " }"; }
 inline std::ostream& operator<<(std::ostream& os, const glm::uvec3& v) { return os << "{ " << v.x << ", " << v.y << ", " << v.z << " }"; }
-inline std::ostream& operator<<(std::ostream& os, const glm::uvec2& v) { return os << "{ " << v.x << ", " << v.y << " }"; }
 
 inline std::ostream& operator<<(std::ostream& os, const glm::vec2& v) { return os << "{ " << v.x << ", " << v.y << " }"; }
 
@@ -164,7 +162,7 @@ TEST_CASE("nucleus/vector_preprocess")
         CHECK(same_cells_are_filled(raster, tile.grid_triangle));
 
         // we provide two triangles that overlap at one point -> we expect four entries [1], [0], ([1], [0])
-        auto bridge_data = tile.grid_to_data[0]->buffer();
+        auto bridge_data = tile.grid_to_data->buffer();
         REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
         CHECK(bridge_data[0] == 1);
         CHECK(bridge_data[1] == 0);
@@ -175,7 +173,8 @@ TEST_CASE("nucleus/vector_preprocess")
         CHECK(bridge_data[5] == -1u);
         CHECK(bridge_data[nucleus::vector_layer::constants::data_size * 1.5] == -1u);
 
-        auto data = tile.data_triangle[0]->buffer();
+
+        auto data = tile.data_triangle->buffer();
         REQUIRE(data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
         CHECK(data[0] == 1089470464);
         CHECK(data[1] == 1067450368);
@@ -235,7 +234,7 @@ TEST_CASE("nucleus/vector_preprocess")
         CHECK(same_cells_are_filled(raster, tile.grid_triangle));
 
         // we provide two triangles that overlap at one point -> we expect four entries [1], ([1], [0]), [1]
-        auto bridge_data = tile.grid_to_data[0]->buffer();
+        auto bridge_data = tile.grid_to_data->buffer();
         REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
         CHECK(bridge_data[0] == 1);
         CHECK(bridge_data[1] == 1);
@@ -246,7 +245,7 @@ TEST_CASE("nucleus/vector_preprocess")
         CHECK(bridge_data[5] == -1u);
         CHECK(bridge_data[nucleus::vector_layer::constants::data_size * 1.5] == -1u);
 
-        auto data = tile.data_triangle[0]->buffer();
+        auto data = tile.data_triangle->buffer();
         REQUIRE(data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
         CHECK(data[0] == 1089470464);
         CHECK(data[1] == 1067450368);
@@ -439,26 +438,6 @@ TEST_CASE("nucleus/vector_preprocess")
             CHECK(unpacked == test);
 
             // std::cout << test << unpacked << std::endl;
-        }
-    }
-
-    SECTION("8/8/24/24 Bit Data packer")
-    {
-        {
-            auto test = std::make_pair<nucleus::tile::Id, uint8_t>(nucleus::tile::Id { 10u, { 38u, 44u } }, 19u);
-            auto packed = nucleus::srs::pack(test.first, test.second);
-            auto unpacked = nucleus::srs::unpack(packed);
-            CHECK(unpacked == test);
-
-            // std::cout << test << " " << unpacked << " " << packed << std::endl;
-        }
-        {
-            auto test = std::make_pair<nucleus::tile::Id, uint8_t>(nucleus::tile::Id { 85u, { 4825733u, 4711465u } }, 165u);
-            auto packed = nucleus::srs::pack(test.first, test.second);
-            auto unpacked = nucleus::srs::unpack(packed);
-            CHECK(unpacked == test);
-
-            // std::cout << test << " " << unpacked << " " << packed << std::endl;
         }
     }
 }

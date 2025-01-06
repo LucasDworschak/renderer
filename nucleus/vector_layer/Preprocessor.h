@@ -79,9 +79,6 @@ namespace details {
     GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collection, const VectorLayerCollection& line_collection);
 
     std::vector<PolygonData> parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
-
-    std::vector<std::shared_ptr<const nucleus::Raster<uint32_t>>> split_to_multi_raster(const std::vector<uint32_t>& data);
-
 } // namespace details
 
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
