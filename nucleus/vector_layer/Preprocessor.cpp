@@ -54,11 +54,11 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
     //     glm::vec2(50.5 / 64.0 * constants::grid_size, 50.5 / 64.0 * constants::grid_size) } };
     const std::vector<unsigned int> style_indices = { 1 };
 
-    auto triangle_points = details::parse_tile(id, vector_tile_data, style);
+    auto tile_data = details::parse_tile(id, vector_tile_data, style);
 
     // // TODO somehow parse the data to lines and triangles
 
-    auto processed_triangles = details::preprocess_triangles(triangle_points, style_indices);
+    auto processed_triangles = details::preprocess_triangles(tile_data);
 
     auto tile = create_gpu_tile(processed_triangles, processed_triangles);
 
@@ -69,17 +69,14 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
 namespace nucleus::vector_layer::details {
 
 // PointCollectionVec2 parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
-std::vector<PolygonData> parse_tile(tile::Id, const QByteArray& vector_tile_data, const Style&)
+TempDataHolder parse_tile(tile::Id, const QByteArray& vector_tile_data, const Style&)
 {
     const auto d = vector_tile_data.toStdString();
     const mapbox::vector_tile::buffer tile(d);
 
     bool first_layer = true;
-    float grid_scale = 1.0; // scale between [0-grid_size]
 
-    std::vector<PolygonData> polygons;
-    std::vector<size_t> polygon_styles;
-    std::vector<PolygonData> lines;
+    TempDataHolder data;
 
     for (const auto& layer_name : tile.layerNames()) {
         // std::cout << layer_name << std::endl;
@@ -99,17 +96,17 @@ std::vector<PolygonData> parse_tile(tile::Id, const QByteArray& vector_tile_data
         if (first_layer) // TODO extent should be the same along all layers -> verify this
         {
             first_layer = false;
-            grid_scale = float(constants::grid_size) / layer.getExtent();
+            data.extent = layer.getExtent();
         }
 
         for (std::size_t i = 0; i < feature_count; ++i) {
             const auto feature = mapbox::vector_tile::feature(layer.getFeature(i), layer);
             auto props = feature.getProperties();
 
-            // TODO style_index decision should also include props._symbols (and other variables defined there)
+            // TODO style_index
 
             if (feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
-                PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(grid_scale);
+                PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(1.0);
 
                 // for (size_t j = 0; j < geom.size(); ++j) {
                 //     if (geom[j][0] == geom[j][geom[j].size() - 1]) {
@@ -121,18 +118,18 @@ std::vector<PolygonData> parse_tile(tile::Id, const QByteArray& vector_tile_data
                 // construct edges from the current polygon and move them to the collection
                 PolygonData p;
                 for (size_t j = 0; j < geom.size(); ++j) {
-                    auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(geom[j], p.vertices.size());
+                    auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(geom[j].size(), p.vertices.size());
                     p.edges.insert(p.edges.end(), edges.begin(), edges.end());
                     p.vertices.insert(p.vertices.end(), geom[j].begin(), geom[j].end());
                 }
-                polygons.push_back(p);
+                data.polygons.push_back(p);
 
                 // concat
                 // polygons.reserve(polygons.size() + geom.size()); // calling reserve here significantly impacts performance -> see if it is possible to call it outside of the loop
                 // polygons.insert(polygons.end(), geom.begin(), geom.end());
 
             } else if (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) {
-                PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(grid_scale);
+                PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(1.0);
 
                 // concat
                 // lines.reserve(lines.size() + geom.size());
@@ -141,48 +138,113 @@ std::vector<PolygonData> parse_tile(tile::Id, const QByteArray& vector_tile_data
         }
     }
 
-    return polygons;
+    return data;
+}
+
+glm::uvec3 pack_triangle_data(glm::vec2 a, glm::vec2 b, glm::vec2 c, uint32_t style_index)
+{
+    glm::uvec3 out;
+    // coordinates 13 bits
+    // style 14 bits
+
+    constexpr uint32_t sign_mask = (1u << 31);
+    constexpr uint32_t bitmask_12 = (1u << 12) - 1u;
+    constexpr uint32_t bitmask_6 = (1u << 6) - 1u;
+    constexpr uint32_t bitmask_2 = (1u << 2) - 1u;
+
+    out.x = uint32_t(a.x) << (32u - 13u);
+    out.x = out.x | (uint32_t(a.x) & sign_mask);
+    out.x = out.x | ((uint32_t(a.y) & bitmask_12) << (32u - 26u));
+    out.x = out.x | ((uint32_t(a.y) & sign_mask) >> (13u));
+
+    out.y = uint32_t(b.x) << (32u - 13u);
+    out.y = out.y | (uint32_t(b.x) & sign_mask);
+    out.y = out.y | ((uint32_t(b.y) & bitmask_12) << (32u - 26u));
+    out.y = out.y | ((uint32_t(b.y) & sign_mask) >> (13u));
+
+    out.z = uint32_t(c.x) << (32u - 13u);
+    out.z = out.z | (uint32_t(c.x) & sign_mask);
+    out.z = out.z | ((uint32_t(c.y) & bitmask_12) << (32u - 26u));
+    out.z = out.z | ((uint32_t(c.y) & sign_mask) >> (13u));
+
+    out.x = out.x | ((style_index >> (14u - 6u)) & bitmask_6);
+    out.y = out.y | ((style_index >> (14u - 12u)) & bitmask_6);
+    out.z = out.z | ((style_index & bitmask_2) << 4u);
+
+    // last 4 bits of out.z are empty
+
+    return out;
+}
+
+std::tuple<glm::vec2, glm::vec2, glm::vec2, uint32_t> unpack_triangle_data(glm::uvec3 packed)
+{
+    constexpr uint32_t sign_mask_first = (1u << 31);
+    constexpr uint32_t sign_mask_middle = (1u << (31u - 13u));
+    constexpr uint32_t bitmask_12_first = ((1u << 12) - 1u) << (32u - 13u);
+    constexpr uint32_t bitmask_12_middle = ((1u << 12) - 1u) << (32u - 26u);
+    constexpr uint32_t bitmask_6 = (1u << 6) - 1u;
+    constexpr uint32_t bitmask_2 = (1u << 2) - 1u;
+
+    constexpr int32_t negative_bits = ((1u << 31) - 1u) << 12u;
+
+    glm::vec2 a;
+    glm::vec2 b;
+    glm::vec2 c;
+    uint32_t style_index;
+
+    // a.x = ((packed.x & bitmask_12_first) >> (32u - 13u)) ^ -(int32_t((packed.x & sign_mask_first) >> 31));
+    // a.x = int32_t((packed.x & bitmask_12_first) >> (32u - 13u)) | (negative_bits & -int32_t((packed.x & sign_mask_first) >> 31));
+    // a.y = (packed.x & sign_mask_first);
+    // b.x = (packed.x & sign_mask_first) >> 31u;
+    // b.y = -int32_t((packed.x & sign_mask_first) >> 31);
+    // c.x = negative_bits;
+    // c.y = 0;
+
+    a.x = int32_t((packed.x & bitmask_12_first) >> (32u - 13u)) | (negative_bits & -int32_t((packed.x & sign_mask_first) >> 31));
+    a.y = int32_t((packed.x & bitmask_12_middle) >> (32u - 26u)) | (negative_bits & -int32_t((packed.x & sign_mask_middle) >> (31 - 13)));
+    b.x = int32_t((packed.y & bitmask_12_first) >> (32u - 13u)) | (negative_bits & -int32_t((packed.y & sign_mask_first) >> 31));
+    b.y = int32_t((packed.y & bitmask_12_middle) >> (32u - 26u)) | (negative_bits & -int32_t((packed.y & sign_mask_middle) >> (31 - 13)));
+    c.x = int32_t((packed.z & bitmask_12_first) >> (32u - 13u)) | (negative_bits & -int32_t((packed.z & sign_mask_first) >> 31));
+    c.y = int32_t((packed.z & bitmask_12_middle) >> (32u - 26u)) | (negative_bits & -int32_t((packed.z & sign_mask_middle) >> (31 - 13)));
+
+    style_index = (packed.x & bitmask_6) << (14u - 6u);
+    style_index = style_index | (packed.y & bitmask_6) << (14u - 12u);
+    style_index = style_index | ((packed.z & (bitmask_2 << 4u)) >> 4u);
+
+    return { a, b, c, style_index };
 }
 
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-VectorLayerCollection preprocess_triangles(const std::vector<PolygonData> polygons, const std::vector<unsigned int>)
+VectorLayerCollection preprocess_triangles(const TempDataHolder data)
 {
     VectorLayerCollection triangle_collection;
     triangle_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(constants::grid_size * constants::grid_size, std::unordered_set<uint32_t>());
 
     float thickness = 0.0f;
 
-    // TODO static assert to make sure that float are indeed the same size as uint32_t -> so as to not remove some important bits
-
     size_t data_offset = 0;
 
+    qDebug() << "extent: " << data.extent;
+
     // create the triangles from polygons
-    for (size_t i = 0; i < polygons.size(); ++i) {
+    for (size_t i = 0; i < data.polygons.size(); ++i) {
 
         // TODO i think triangulize repeats points
         // -> we may be able to reduce the data array, if we increase the index array (if neccessary)
 
         // polygon to ordered triangles
-        std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygons[i].vertices, polygons[i].edges, true);
+        std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(data.polygons[i].vertices, data.polygons[i].edges, true);
 
         // add ordered triangles to collection
         for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
             // TODO reduce the bits needed for the triangle data
-            // 96 bits -> rgb32UI
-            // 2*3*13=78 bits for all coordinate values
-            // 14 bits for style
-            // 78+14 bits = 92 -> 4 bits remain
+            auto packed = pack_triangle_data(triangle_points[j * 3 + 0], triangle_points[j * 3 + 1], triangle_points[j * 3 + 2], 1);
 
-            triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 0].x));
-            triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 0].y));
-            triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 1].x));
-            triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 1].y));
-            triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 2].x));
-            triangle_collection.data.push_back(*reinterpret_cast<uint32_t*>(&triangle_points[j * 3 + 2].y));
-            // triangle_collection.data.push_back(style_indices[i]);
-            triangle_collection.data.push_back(1); // hardcoded for now
+            triangle_collection.data.push_back(packed.x);
+            triangle_collection.data.push_back(packed.y);
+            triangle_collection.data.push_back(packed.z);
         }
 
         const auto cell_writer = [&triangle_collection, data_offset](glm::vec2 pos, int data_index) {
@@ -191,7 +253,7 @@ VectorLayerCollection preprocess_triangles(const std::vector<PolygonData> polygo
                 triangle_collection.cell_to_temp[int(pos.x) + constants::grid_size * int(pos.y)].insert(data_index + data_offset);
         };
 
-        nucleus::utils::rasterizer::rasterize_triangle(cell_writer, triangle_points, thickness);
+        nucleus::utils::rasterizer::rasterize_triangle(cell_writer, triangle_points, thickness, float(constants::grid_size) / data.extent);
 
         // add to the data offset for the next polygon
         data_offset += triangle_points.size() / 3;
@@ -203,7 +265,7 @@ VectorLayerCollection preprocess_triangles(const std::vector<PolygonData> polygo
 }
 
 // TODO
-VectorLayerCollection preprocess_lines(const std::vector<PolygonData>, const std::vector<unsigned int>)
+VectorLayerCollection preprocess_lines(const TempDataHolder)
 // VectorLayerCollection preprocess_lines(const std::vector<PolygonData> lines, const std::vector<unsigned int> style_indices)
 {
     VectorLayerCollection line_collection;

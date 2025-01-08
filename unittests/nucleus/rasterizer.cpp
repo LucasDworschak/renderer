@@ -288,12 +288,12 @@ TEST_CASE("nucleus/rasterizer")
 
         const std::vector<glm::vec2> correct = { { glm::vec2(30, 10), glm::vec2(10, 30), glm::vec2(50, 50) } };
 
-        const auto edges_012 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_012);
-        const auto edges_021 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_021);
-        const auto edges_102 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_102);
-        const auto edges_201 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_201);
-        const auto edges_120 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_120);
-        const auto edges_210 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_210);
+        const auto edges_012 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_012.size());
+        const auto edges_021 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_021.size());
+        const auto edges_102 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_102.size());
+        const auto edges_201 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_201.size());
+        const auto edges_120 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_120.size());
+        const auto edges_210 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_210.size());
 
         CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_012, edges_012));
         CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_021, edges_021));
@@ -335,7 +335,7 @@ TEST_CASE("nucleus/rasterizer")
         const auto pixel_writer = [&output](glm::ivec2 pos) { output.pixel(pos) = 255; };
         nucleus::utils::rasterizer::rasterize_polygon(pixel_writer, polygon_points);
 
-        const auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points);
+        const auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points.size());
         const auto triangles = nucleus::utils::rasterizer::triangulize(polygon_points, edges);
         nucleus::Raster<uint8_t> output2({ 64, 64 }, 0u);
         auto pixel_writer2 = [&output2](glm::ivec2 pos) { output2.pixel(pos) = 255; };
@@ -616,7 +616,7 @@ TEST_CASE("nucleus/rasterizer")
         std::vector<glm::ivec2> edges;
 
         for (size_t i = 0; i < polygon_points.size(); i++) {
-            auto current_edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points[i], vertices.size());
+            auto current_edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points[i].size(), vertices.size());
             edges.insert(edges.end(), current_edges.begin(), current_edges.end());
             vertices.insert(vertices.end(), polygon_points[i].begin(), polygon_points[i].end());
         }
@@ -912,7 +912,7 @@ TEST_CASE("nucleus/utils/rasterizer benchmarks")
     BENCHMARK("triangulize polygons")
     {
         const std::vector<glm::vec2> polygon_points = { glm::vec2(10.5, 10.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5), glm::vec2(10.5, 30.5) };
-        const auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points);
+        const auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points.size());
         nucleus::utils::rasterizer::triangulize(polygon_points, edges);
     };
 

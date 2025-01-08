@@ -73,12 +73,29 @@ namespace details {
         VectorLayerGrid cell_to_temp;
     };
 
-    VectorLayerCollection preprocess_triangles(const std::vector<PolygonData> polygons, const std::vector<unsigned int> style_indices);
-    VectorLayerCollection preprocess_lines(const std::vector<PolygonData> lines, const std::vector<unsigned int> style_indices);
+    struct TempDataHolder {
+        std::vector<PolygonData> polygons;
+        uint32_t extent;
+        std::vector<size_t> polygon_styles;
+        std::vector<PolygonData> lines;
+        std::vector<size_t> line_styles;
+    };
+
+    VectorLayerCollection preprocess_triangles(const TempDataHolder data);
+    VectorLayerCollection preprocess_lines(const TempDataHolder data);
 
     GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collection, const VectorLayerCollection& line_collection);
 
-    std::vector<PolygonData> parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
+    TempDataHolder parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
+
+    /**
+     * 96 bits -> rgb32UI
+     * 2*3*13=78 bits for all coordinate values
+     * 14 bits for style
+     * 78+14 bits = 92 -> 4 bits remain
+     */
+    glm::uvec3 pack_triangle_data(glm::vec2 a, glm::vec2 b, glm::vec2 c, uint32_t style_index);
+    std::tuple<glm::vec2, glm::vec2, glm::vec2, uint32_t> unpack_triangle_data(glm::uvec3 packed);
 } // namespace details
 
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style);

@@ -44,7 +44,7 @@ using namespace nucleus::vector_layer;
 inline std::ostream& operator<<(std::ostream& os, const glm::uvec3& v) { return os << "{ " << v.x << ", " << v.y << ", " << v.z << " }"; }
 
 inline std::ostream& operator<<(std::ostream& os, const glm::vec2& v) { return os << "{ " << v.x << ", " << v.y << " }"; }
-
+inline std::ostream& operator<<(std::ostream& os, const glm::ivec2& v) { return os << "{ " << v.x << ", " << v.y << " }"; }
 
 QImage example_grid_data_triangles()
 {
@@ -136,20 +136,16 @@ TEST_CASE("nucleus/vector_preprocess")
 
     SECTION("Triangle to Grid")
     {
-        // make sure that the proposed points are still roughly the same (even after tinkering with grid_size)
-        // this would still mean that we have to redo the below data every time we chang the grid scale -> but it isn't too problematic for now
-        constexpr float point_scale = 1.0f / 64.0f * nucleus::vector_layer::constants::grid_size;
+        constexpr auto extent = 64u;
+        const std::vector<glm::vec2> triangle_left_hypo = { glm::vec2(10, 30), glm::vec2(30, 5), glm::vec2(50, 50) };
+        const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5, 5), glm::vec2(25, 10), glm::vec2(5, 15) };
 
-        const std::vector<glm::vec2> triangle_left_hypo
-            = { glm::vec2(10 * point_scale, 30 * point_scale), glm::vec2(30 * point_scale, 5 * point_scale), glm::vec2(50 * point_scale, 50 * point_scale) };
-        const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5 * point_scale, 5 * point_scale), glm::vec2(25 * point_scale, 10 * point_scale), glm::vec2(5 * point_scale, 15 * point_scale) };
+        const std::vector<nucleus::vector_layer::details::PolygonData> polygons = { { triangle_left_hypo, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_left_hypo.size()) },
+            { triangle_right_hypo, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_right_hypo.size()) } };
 
-        const std::vector<nucleus::vector_layer::details::PolygonData> polygons = { { triangle_left_hypo, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_left_hypo) },
-            { triangle_right_hypo, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_right_hypo) } };
+        const nucleus::vector_layer::details::TempDataHolder tile_data { polygons, extent, { 1, 1 }, {}, {} };
 
-        const std::vector<unsigned int> style_indices = { 1, 1 };
-
-        auto processed = nucleus::vector_layer::details::preprocess_triangles(polygons, style_indices);
+        auto processed = nucleus::vector_layer::details::preprocess_triangles(tile_data);
 
         auto raster = visualize_grid(processed.cell_to_temp, nucleus::vector_layer::constants::grid_size);
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
@@ -176,23 +172,15 @@ TEST_CASE("nucleus/vector_preprocess")
 
         auto data = tile.triangle_vertex_buffer->buffer();
         REQUIRE(data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
-        CHECK(data[0] == 1089470464);
-        CHECK(data[1] == 1067450368);
-        CHECK(data[2] == 1075838976);
-        CHECK(data[3] == 1089470464);
-        CHECK(data[4] == 1095237632);
-        CHECK(data[5] == 1095237632);
-        CHECK(data[6] == 1);
-        CHECK(data[7] == 1067450368);
-        CHECK(data[8] == 1067450368);
-        CHECK(data[9] == 1086849024);
-        CHECK(data[10] == 1075838976);
-        CHECK(data[11] == 1067450368);
-        CHECK(data[12] == 1081081856);
-        CHECK(data[13] == 1);
+        CHECK(data[0] == 15728960);
+        CHECK(data[1] == 5244800);
+        CHECK(data[2] == 26217616);
+        CHECK(data[3] == 2621760);
+        CHECK(data[4] == 13107840);
+        CHECK(data[5] == 2622416);
         // the rest should be undefined -> -1u
-        CHECK(data[14] == -1u);
-        CHECK(data[15] == -1u);
+        CHECK(data[6] == -1u);
+        CHECK(data[7] == -1u);
         CHECK(data[nucleus::vector_layer::constants::data_size * 1.7] == -1u);
 
         // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
@@ -204,7 +192,7 @@ TEST_CASE("nucleus/vector_preprocess")
         //     std::cout << data[i] << std::endl;
         // }
 
-        // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
+        // // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
         // image.save(QString("vector_layer_grid_triangles.png"));
     }
 
@@ -212,19 +200,17 @@ TEST_CASE("nucleus/vector_preprocess")
     {
         // make sure that the proposed points are still roughly the same (even after tinkering with grid_size)
         // this would still mean that we have to redo the below data every time we chang the grid scale -> but it isn't too problematic for now
-        constexpr float point_scale = 1.0f / 64.0f * nucleus::vector_layer::constants::grid_size;
+        constexpr auto extent = 64u;
 
-        const std::vector<glm::vec2> triangle_left_hypo
-            = { glm::vec2(-10 * point_scale, 30 * point_scale), glm::vec2(30 * point_scale, 5 * point_scale), glm::vec2(50 * point_scale, 80 * point_scale) };
-        const std::vector<glm::vec2> triangle_right_hypo
-            = { glm::vec2(5 * point_scale, -5 * point_scale), glm::vec2(90 * point_scale, 10 * point_scale), glm::vec2(5 * point_scale, 15 * point_scale) };
+        const std::vector<glm::vec2> triangle_left_hypo = { glm::vec2(-10, 30), glm::vec2(30, 5), glm::vec2(50, 80) };
+        const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5, -5), glm::vec2(90, 10), glm::vec2(5, 15) };
 
-        const std::vector<nucleus::vector_layer::details::PolygonData> polygons = { { triangle_left_hypo, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_left_hypo) },
-            { triangle_right_hypo, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_right_hypo) } };
+        const std::vector<nucleus::vector_layer::details::PolygonData> polygons = { { triangle_left_hypo, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_left_hypo.size()) },
+            { triangle_right_hypo, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_right_hypo.size()) } };
 
-        const std::vector<unsigned int> style_indices = { 1, 1 };
+        const nucleus::vector_layer::details::TempDataHolder tile_data { polygons, extent, { 1, 1 }, {}, {} };
 
-        auto processed = nucleus::vector_layer::details::preprocess_triangles(polygons, style_indices);
+        auto processed = nucleus::vector_layer::details::preprocess_triangles(tile_data);
 
         auto raster = visualize_grid(processed.cell_to_temp, nucleus::vector_layer::constants::grid_size);
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
@@ -247,23 +233,16 @@ TEST_CASE("nucleus/vector_preprocess")
 
         auto data = tile.triangle_vertex_buffer->buffer();
         REQUIRE(data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
-        CHECK(data[0] == 1089470464);
-        CHECK(data[1] == 1067450368);
-        CHECK(data[2] == 3223322624);
-        CHECK(data[3] == 1089470464);
-        CHECK(data[4] == 1095237632);
-        CHECK(data[5] == 1101004800);
-        CHECK(data[6] == 1);
-        CHECK(data[7] == 1067450368);
-        CHECK(data[8] == 3214934016);
-        CHECK(data[9] == 1102315520);
-        CHECK(data[10] == 1075838976);
-        CHECK(data[11] == 1067450368);
-        CHECK(data[12] == 1081081856);
-        CHECK(data[13] == 1);
+        CHECK(data[0] == 15728960);
+        CHECK(data[1] == 4289726336);
+        CHECK(data[2] == 26219536);
+        CHECK(data[3] == 3145408);
+        CHECK(data[4] == 47186560);
+        CHECK(data[5] == 2622416);
         // the rest should be undefined -> -1u
-        CHECK(data[14] == -1u);
-        CHECK(data[15] == -1u);
+        CHECK(data[6] == -1u);
+        CHECK(data[7] == -1u);
+
         CHECK(data[nucleus::vector_layer::constants::data_size * 1.7] == -1u);
 
         // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
@@ -275,7 +254,7 @@ TEST_CASE("nucleus/vector_preprocess")
         //     std::cout << data[i] << std::endl;
         // }
 
-        // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
+        // // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
         // image.save(QString("vector_layer_grid_triangles_outside.png"));
     }
 
@@ -438,6 +417,91 @@ TEST_CASE("nucleus/vector_preprocess")
             CHECK(unpacked == test);
 
             // std::cout << test << unpacked << std::endl;
+        }
+    }
+
+    SECTION("Triangle Data packer")
+    {
+        {
+            // auto a = glm::ivec2(-4095, 0b000000000000);
+            // auto b = glm::ivec2(4095, 0b000000000000);
+            // auto c = glm::ivec2(-1, 0b000000000000);
+            // uint32_t style = 0b000000000000;
+
+            auto a = glm::ivec2(0b110101010100, 0b111101110100);
+            auto b = glm::ivec2(0b001111000101, 0b001111101101);
+            auto c = glm::ivec2(0b010110011011, 0b100111001110);
+            uint32_t style = 0b11000111000101;
+
+            auto packed = nucleus::vector_layer::details::pack_triangle_data(a, b, c, style);
+            auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
+
+            CHECK(a == glm::ivec2(std::get<0>(unpacked)));
+            CHECK(b == glm::ivec2(std::get<1>(unpacked)));
+            CHECK(c == glm::ivec2(std::get<2>(unpacked)));
+            CHECK(style == std::get<3>(unpacked));
+
+            // std::cout << packed << std::endl;
+            // std::cout << a.x << " " << a.y << std::endl;
+            // std::cout << b.x << " " << b.y << std::endl;
+            // std::cout << c.x << " " << c.y << std::endl;
+            // std::cout << std::get<3>(unpacked) << std::endl;
+            // std::cout << int32_t(std::get<0>(unpacked).x) << " " << int32_t(std::get<0>(unpacked).y) << std::endl;
+            // std::cout << int32_t(std::get<1>(unpacked).x) << " " << int32_t(std::get<1>(unpacked).y) << std::endl;
+            // std::cout << int32_t(std::get<2>(unpacked).x) << " " << int32_t(std::get<2>(unpacked).y) << std::endl;
+            // std::cout << std::get<3>(unpacked) << std::endl;
+        }
+
+        {
+            // test with negative numbers
+            auto a = glm::ivec2(-4095, 0);
+            auto c = glm::ivec2(0, -4095);
+            auto b = glm::ivec2(4095, -1);
+            uint32_t style = 0;
+
+            auto packed = nucleus::vector_layer::details::pack_triangle_data(a, b, c, style);
+            auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
+
+            CHECK(a == glm::ivec2(std::get<0>(unpacked)));
+            CHECK(b == glm::ivec2(std::get<1>(unpacked)));
+            CHECK(c == glm::ivec2(std::get<2>(unpacked)));
+            CHECK(style == std::get<3>(unpacked));
+
+            // std::cout << packed << std::endl;
+            // std::cout << a.x << " " << a.y << std::endl;
+            // std::cout << b.x << " " << b.y << std::endl;
+            // std::cout << c.x << " " << c.y << std::endl;
+            // std::cout << std::get<3>(unpacked) << std::endl;
+            // std::cout << int32_t(std::get<0>(unpacked).x) << " " << int32_t(std::get<0>(unpacked).y) << std::endl;
+            // std::cout << int32_t(std::get<1>(unpacked).x) << " " << int32_t(std::get<1>(unpacked).y) << std::endl;
+            // std::cout << int32_t(std::get<2>(unpacked).x) << " " << int32_t(std::get<2>(unpacked).y) << std::endl;
+            // std::cout << std::get<3>(unpacked) << std::endl;
+        }
+
+        {
+            // test with negative numbers
+            auto a = glm::ivec2(0b110101010100 * -1, 0b111101110100);
+            auto b = glm::ivec2(0b001111000101, 0b001111101101 * -1);
+            auto c = glm::ivec2(0b010110011011 * -1, 0b100111001110 * -1);
+            uint32_t style = 0b11000111000101;
+
+            auto packed = nucleus::vector_layer::details::pack_triangle_data(a, b, c, style);
+            auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
+
+            CHECK(a == glm::ivec2(std::get<0>(unpacked)));
+            CHECK(b == glm::ivec2(std::get<1>(unpacked)));
+            CHECK(c == glm::ivec2(std::get<2>(unpacked)));
+            CHECK(style == std::get<3>(unpacked));
+
+            // std::cout << packed << std::endl;
+            // std::cout << a.x << " " << a.y << std::endl;
+            // std::cout << b.x << " " << b.y << std::endl;
+            // std::cout << c.x << " " << c.y << std::endl;
+            // std::cout << std::get<3>(unpacked) << std::endl;
+            // std::cout << int32_t(std::get<0>(unpacked).x) << " " << int32_t(std::get<0>(unpacked).y) << std::endl;
+            // std::cout << int32_t(std::get<1>(unpacked).x) << " " << int32_t(std::get<1>(unpacked).y) << std::endl;
+            // std::cout << int32_t(std::get<2>(unpacked).x) << " " << int32_t(std::get<2>(unpacked).y) << std::endl;
+            // std::cout << std::get<3>(unpacked) << std::endl;
         }
     }
 }

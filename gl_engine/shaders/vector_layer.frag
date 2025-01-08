@@ -22,6 +22,7 @@
 #include "camera_config.glsl"
 #include "encoder.glsl"
 #include "tile_id.glsl"
+#include "vector_layer.glsl"
 
 #include "hashing.glsl" // DEBUG
 
@@ -48,6 +49,7 @@ flat in lowp vec3 vertex_color;
 
 const int grid_size = 16;
 const uint data_size = 7u;
+const float tile_extent = 4096.0;
 
 highp float calculate_falloff(highp float dist, highp float from, highp float to) {
     return clamp(1.0 - (dist - from) / (to - from), 0.0, 1.0);
@@ -185,19 +187,32 @@ void main() {
                 {
                     highp uint triangle_index = texelFetch(triangle_index_sampler, ivec3(to_dict_pixel_512(i), texture_layer_f), 0).r * data_size;
 
+                    highp uint d0 = texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+0u), texture_layer_f), 0).r;
+                    highp uint d1 = texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+1u), texture_layer_f), 0).r;
+                    highp uint d2 = texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+2u), texture_layer_f), 0).r;
+
+                    VectorLayerData triangle_data = unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+
                     highp vec2 v0;
-                    v0.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+0u), texture_layer_f), 0).r) / float(grid_size);
-                    v0.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+1u), texture_layer_f), 0).r) / float(grid_size);
+                    v0.x = triangle_data.a.x / tile_extent;
+                    v0.y = triangle_data.a.y / tile_extent;
+                    // v0.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+0u), texture_layer_f), 0).r) / float(grid_size);
+                    // v0.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+1u), texture_layer_f), 0).r) / float(grid_size);
 
                     highp vec2 v1;
-                    v1.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+2u), texture_layer_f), 0).r) / float(grid_size);
-                    v1.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+3u), texture_layer_f), 0).r) / float(grid_size);
+                    v1.x = triangle_data.b.x / tile_extent;
+                    v1.y = triangle_data.b.y / tile_extent;
+                    // v1.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+2u), texture_layer_f), 0).r) / float(grid_size);
+                    // v1.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+3u), texture_layer_f), 0).r) / float(grid_size);
 
                     highp vec2 v2;
-                    v2.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+4u), texture_layer_f), 0).r) / float(grid_size);
-                    v2.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+5u), texture_layer_f), 0).r) / float(grid_size);
+                    v2.x = triangle_data.b.x / tile_extent;
+                    v2.y = triangle_data.b.y / tile_extent;
+                    // v2.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+4u), texture_layer_f), 0).r) / float(grid_size);
+                    // v2.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+5u), texture_layer_f), 0).r) / float(grid_size);
 
-                    highp uint style_index = texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+6u), texture_layer_f), 0).r;
+                    // highp uint style_index = texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+6u), texture_layer_f), 0).r;
+                    highp uint style_index = triangle_data.style_index;
 
                     // highp float c1 = 1.0 - step(0.0, circle(uv, v0, 0.5) - 0.0);
                     float thickness = 0.0;
