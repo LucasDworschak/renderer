@@ -169,15 +169,14 @@ TEST_CASE("nucleus/vector_preprocess")
         CHECK(bridge_data[5] == -1u);
         CHECK(bridge_data[nucleus::vector_layer::constants::data_size * 1.5] == -1u);
 
-
         auto data = tile.triangle_vertex_buffer->buffer();
         REQUIRE(data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
-        CHECK(data[0] == 15728960);
-        CHECK(data[1] == 5244800);
-        CHECK(data[2] == 26217616);
-        CHECK(data[3] == 2621760);
-        CHECK(data[4] == 13107840);
-        CHECK(data[5] == 2622416);
+        CHECK(data[0] == 3237347648);
+        CHECK(data[1] == 3226863488);
+        CHECK(data[2] == 3247836304);
+        CHECK(data[3] == 3224240448);
+        CHECK(data[4] == 3234726528);
+        CHECK(data[5] == 3224241104);
         // the rest should be undefined -> -1u
         CHECK(data[6] == -1u);
         CHECK(data[7] == -1u);
@@ -193,7 +192,7 @@ TEST_CASE("nucleus/vector_preprocess")
         // }
 
         // // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
-        // image.save(QString("vector_layer_grid_triangles.png"));
+        image.save(QString("vector_layer_grid_triangles.png"));
     }
 
     SECTION("Triangle to Grid (outside vertices)")
@@ -233,12 +232,12 @@ TEST_CASE("nucleus/vector_preprocess")
 
         auto data = tile.triangle_vertex_buffer->buffer();
         REQUIRE(data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
-        CHECK(data[0] == 15728960);
-        CHECK(data[1] == 4289726336);
-        CHECK(data[2] == 26219536);
-        CHECK(data[3] == 3145408);
-        CHECK(data[4] == 47186560);
-        CHECK(data[5] == 2622416);
+        CHECK(data[0] == 3237347648);
+        CHECK(data[1] == 3216377728);
+        CHECK(data[2] == 3247838224);
+        CHECK(data[3] == 3224239808);
+        CHECK(data[4] == 3268805248);
+        CHECK(data[5] == 3224241104);
         // the rest should be undefined -> -1u
         CHECK(data[6] == -1u);
         CHECK(data[7] == -1u);
@@ -288,22 +287,22 @@ TEST_CASE("nucleus/vector_preprocess")
     //     Style style("");
 
     //     // auto processed = nucleus::vector_layer::preprocess(id, byte_data, style);
-    //     auto polygons = nucleus::vector_layer::details::parse_tile(id, byte_data, style);
+    //     auto tile_data = nucleus::vector_layer::details::parse_tile(id, byte_data, style);
 
     //     // constexpr float point_scale = 1.0f / 64.0f;
 
     //     // const std::vector<glm::vec2> triangle_left_hypo
     //     //     = { glm::vec2(10 * point_scale, 30 * point_scale), glm::vec2(30 * point_scale, 5 * point_scale), glm::vec2(50 * point_scale, 50 * point_scale) };
     //     // const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5 * point_scale, 5 * point_scale), glm::vec2(25 * point_scale, 10 * point_scale), glm::vec2(5 * point_scale, 15 *
-    //     point_scale)
+    //     // point_scale)
     //     // };
 
     //     // const std::vector<std::vector<glm::vec2>> polygons = { triangle_left_hypo, triangle_right_hypo };
 
     //     size_t data_offset = 1;
 
-    //     for (size_t i = 0; i < polygons.size(); ++i) {
-    //         std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygons[i].vertices, polygons[i].edges, true);
+    //     for (size_t i = 0; i < tile_data.polygons.size(); ++i) {
+    //         std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(tile_data.polygons[i].vertices, tile_data.polygons[i].edges, true);
 
     //         std::cout << "o Water" << i << std::endl;
     //         for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
@@ -454,9 +453,9 @@ TEST_CASE("nucleus/vector_preprocess")
 
         {
             // test with negative numbers
-            auto a = glm::ivec2(-4095, 0);
-            auto c = glm::ivec2(0, -4095);
-            auto b = glm::ivec2(4095, -1);
+            auto a = glm::ivec2(-nucleus::vector_layer::constants::tile_extent / 3.0, 0);
+            auto c = glm::ivec2(0, -nucleus::vector_layer::constants::tile_extent / 4.0);
+            auto b = glm::ivec2(nucleus::vector_layer::constants::tile_extent + -nucleus::vector_layer::constants::tile_extent / 5.0, -1);
             uint32_t style = 0;
 
             auto packed = nucleus::vector_layer::details::pack_triangle_data(a, b, c, style);
@@ -480,9 +479,9 @@ TEST_CASE("nucleus/vector_preprocess")
 
         {
             // test with negative numbers
-            auto a = glm::ivec2(0b110101010100 * -1, 0b111101110100);
+            auto a = glm::ivec2(0b010101010100 * -1, 0b011101110100);
             auto b = glm::ivec2(0b001111000101, 0b001111101101 * -1);
-            auto c = glm::ivec2(0b010110011011 * -1, 0b100111001110 * -1);
+            auto c = glm::ivec2(0b010110011011 * -1, 0b010111001110 * -1);
             uint32_t style = 0b11000111000101;
 
             auto packed = nucleus::vector_layer::details::pack_triangle_data(a, b, c, style);

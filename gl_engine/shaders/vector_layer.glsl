@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+const float tile_extent = 4096.0;
+
 struct VectorLayerData{
     highp ivec2 a;
     highp ivec2 b;
@@ -30,6 +32,11 @@ highp uvec3 pack_vectorlayer_data(VectorLayerData data) {
     const highp uint bitmask_12 = (1u << 12) - 1u;
     const highp uint bitmask_6 = (1u << 6) - 1u;
     const highp uint bitmask_2 = (1u << 2) - 1u;
+
+    // move the values by half extent
+    data.a = data.a - highp ivec2(tile_extent / 2.0);
+    data.b = data.b - highp ivec2(tile_extent / 2.0);
+    data.c = data.c - highp ivec2(tile_extent / 2.0);
 
     packed_data.x = highp uint(data.a.x) << (32u - 13u);
     packed_data.x = packed_data.x | (highp uint(data.a.x) & sign_mask);
@@ -79,6 +86,11 @@ VectorLayerData unpack_vectorlayer_data(highp uvec3 data) {
     unpacked_data.style_index = (data.x & ((1u << 6) - 1u)) << (14u - 6u);
     unpacked_data.style_index = unpacked_data.style_index | (data.y & (1u << 6) - 1u) << (14u - 12u);
     unpacked_data.style_index = unpacked_data.style_index | ((data.z & (((1u << 2) - 1u) << 4u)) >> 4u);
+
+    // move the values back to the correct coordinates
+    unpacked_data.a = unpacked_data.a + highp ivec2(tile_extent / 2.0);
+    unpacked_data.b = unpacked_data.b + highp ivec2(tile_extent / 2.0);
+    unpacked_data.c = unpacked_data.c + highp ivec2(tile_extent / 2.0);
 
     return unpacked_data;
 }

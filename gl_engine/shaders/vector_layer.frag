@@ -26,12 +26,12 @@
 
 #include "hashing.glsl" // DEBUG
 
-uniform highp usampler2DArray grid_sampler;
-uniform highp usampler2D grid_index_sampler;
+uniform highp usampler2DArray triangle_acceleration_grid_sampler;
+uniform highp usampler2D array_index_sampler;
 uniform highp usampler2D vector_map_tile_id_sampler;
 
-uniform highp usampler2DArray triangle_index_sampler;
-uniform highp usampler2DArray triangle_data_sampler;
+uniform highp usampler2DArray triangle_index_buffer_sampler;
+uniform highp usampler2DArray triangle_vertex_buffer_sampler;
 
 layout (location = 0) out lowp vec3 texout_albedo;
 layout (location = 1) out highp vec4 texout_position;
@@ -47,9 +47,8 @@ in lowp float is_curtain;
 #endif
 flat in lowp vec3 vertex_color;
 
-const int grid_size = 16;
-const uint data_size = 7u;
-const float tile_extent = 4096.0;
+const int grid_size = 64;
+const uint data_size = 3u; // how many texels are needed to store the data for one triangle
 
 highp float calculate_falloff(highp float dist, highp float from, highp float to) {
     return clamp(1.0 - (dist - from) / (to - from), 0.0, 1.0);
@@ -164,12 +163,11 @@ void main() {
     if (find_tile(tile_id, dict_px, uv)) {
 
 
-        highp float texture_layer_f = float(texelFetch(grid_index_sampler, dict_px, 0).x);
+        highp float texture_layer_f = float(texelFetch(array_index_sampler, dict_px, 0).x);
         if(texture_layer_f != highp uint(-1)) // check for valid data
         {
-            // grid_sampler contains the offset and the number of triangles of the current grid cell
-            // offset_size = to_offset_size(texture(grid_sampler, vec3(uv, texture_layer_f)).r); // TODO is texture correct here and not texelfetch???
-            offset_size = to_offset_size(texelFetch(grid_sampler, ivec3(uv*vec2(grid_size,grid_size), texture_layer_f),0).r); // TODO is texture correct here and not texelfetch???
+            // triangle_acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
+            offset_size = to_offset_size(texelFetch(triangle_acceleration_grid_sampler, ivec3(uv*vec2(grid_size,grid_size), texture_layer_f),0).r); // TODO is texture correct here and not texelfetch???
 
             // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
             if(offset_size.y != uint(0)) // only if we have data here
@@ -183,35 +181,21 @@ void main() {
                 vec3 triangle_out = vec3(0.0f, 0.0, 0.0f);
                 float alpha = 0.0;
 
+
+
                 for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
                 {
-                    highp uint triangle_index = texelFetch(triangle_index_sampler, ivec3(to_dict_pixel_512(i), texture_layer_f), 0).r * data_size;
+                    highp uint triangle_index = texelFetch(triangle_index_buffer_sampler, ivec3(to_dict_pixel_512(i), texture_layer_f), 0).r * data_size;
 
-                    highp uint d0 = texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+0u), texture_layer_f), 0).r;
-                    highp uint d1 = texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+1u), texture_layer_f), 0).r;
-                    highp uint d2 = texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+2u), texture_layer_f), 0).r;
+                    highp uint d0 = texelFetch(triangle_vertex_buffer_sampler, ivec3(to_dict_pixel_512(triangle_index+0u), texture_layer_f), 0).r;
+                    highp uint d1 = texelFetch(triangle_vertex_buffer_sampler, ivec3(to_dict_pixel_512(triangle_index+1u), texture_layer_f), 0).r;
+                    highp uint d2 = texelFetch(triangle_vertex_buffer_sampler, ivec3(to_dict_pixel_512(triangle_index+2u), texture_layer_f), 0).r;
 
                     VectorLayerData triangle_data = unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
 
-                    highp vec2 v0;
-                    v0.x = triangle_data.a.x / tile_extent;
-                    v0.y = triangle_data.a.y / tile_extent;
-                    // v0.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+0u), texture_layer_f), 0).r) / float(grid_size);
-                    // v0.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+1u), texture_layer_f), 0).r) / float(grid_size);
-
-                    highp vec2 v1;
-                    v1.x = triangle_data.b.x / tile_extent;
-                    v1.y = triangle_data.b.y / tile_extent;
-                    // v1.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+2u), texture_layer_f), 0).r) / float(grid_size);
-                    // v1.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+3u), texture_layer_f), 0).r) / float(grid_size);
-
-                    highp vec2 v2;
-                    v2.x = triangle_data.b.x / tile_extent;
-                    v2.y = triangle_data.b.y / tile_extent;
-                    // v2.x = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+4u), texture_layer_f), 0).r) / float(grid_size);
-                    // v2.y = uintBitsToFloat(texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+5u), texture_layer_f), 0).r) / float(grid_size);
-
-                    // highp uint style_index = texelFetch(triangle_data_sampler, ivec3(to_dict_pixel_512(triangle_index+6u), texture_layer_f), 0).r;
+                    highp vec2 v0 = triangle_data.a / vec2(tile_extent);
+                    highp vec2 v1 = triangle_data.b / vec2(tile_extent);
+                    highp vec2 v2 = triangle_data.c / vec2(tile_extent);
                     highp uint style_index = triangle_data.style_index;
 
                     // highp float c1 = 1.0 - step(0.0, circle(uv, v0, 0.5) - 0.0);
@@ -251,8 +235,20 @@ void main() {
                 // texout_albedo = mix(texout_albedo, triangle_lines_out, 0.9);// DEBUG
 
                 // texout_albedo = mix(raw_grid, triangle_out, 0.5);// DEBUG
+                // texout_albedo = raw_grid;// DEBUG
+                // texout_albedo = vec3(alpha);// DEBUG
 
             }
+            else
+            {
+                // we aren't processing anything
+                texout_albedo = vec3(0.0, 0.0, 0.0);// DEBUG
+            }
+
+            // float min_size = 50;
+            // float max_size = 160;
+            // texout_albedo = vec3(((clamp(offset_size.y, min_size, max_size) - min_size) / (max_size-min_size)) / 2.0 + (0.5 * ((offset_size.y > min_size)? 1.0 : 0.0)), 0.0 ,0.0);
+
         }
     }
 

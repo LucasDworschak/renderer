@@ -46,8 +46,6 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
     if (vector_tile_data.isEmpty())
         return {};
 
-    // std::cout << id << ": ";
-
     // DEBUG polygons
     // const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5 / 64.0 * constants::grid_size, 30.5 / 64.0 * constants::grid_size),
     //     glm::vec2(30.5 / 64.0 * constants::grid_size, 10.5 / 64.0 * constants::grid_size),
@@ -57,6 +55,8 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
     auto tile_data = details::parse_tile(id, vector_tile_data, style);
 
     // // TODO somehow parse the data to lines and triangles
+
+    // qDebug() << id.coords.x << ", " << id.coords.y << " z: " << id.zoom_level;
 
     auto processed_triangles = details::preprocess_triangles(tile_data);
 
@@ -75,11 +75,23 @@ TempDataHolder parse_tile(tile::Id, const QByteArray& vector_tile_data, const St
     const mapbox::vector_tile::buffer tile(d);
 
     bool first_layer = true;
+    float scale = 1.0;
 
     TempDataHolder data;
 
     for (const auto& layer_name : tile.layerNames()) {
         // std::cout << layer_name << std::endl;
+
+        const mapbox::vector_tile::layer layer = tile.getLayer(layer_name);
+        std::size_t feature_count = layer.featureCount();
+
+        if (first_layer) // TODO extent should be the same along all layers -> verify this
+        {
+            first_layer = false;
+            data.extent = constants::tile_extent;
+
+            scale = float(constants::tile_extent) / layer.getExtent();
+        }
 
         // if (layer_name != "NUTZUNG_L15_12")
         if (layer_name != "GEWAESSER_F_GEWF")
@@ -90,15 +102,6 @@ TempDataHolder parse_tile(tile::Id, const QByteArray& vector_tile_data, const St
         // if (style_index == -1ul) // no style found -> we do not visualize it
         //     continue;
 
-        const mapbox::vector_tile::layer layer = tile.getLayer(layer_name);
-        std::size_t feature_count = layer.featureCount();
-
-        if (first_layer) // TODO extent should be the same along all layers -> verify this
-        {
-            first_layer = false;
-            data.extent = layer.getExtent();
-        }
-
         for (std::size_t i = 0; i < feature_count; ++i) {
             const auto feature = mapbox::vector_tile::feature(layer.getFeature(i), layer);
             auto props = feature.getProperties();
@@ -106,7 +109,7 @@ TempDataHolder parse_tile(tile::Id, const QByteArray& vector_tile_data, const St
             // TODO style_index
 
             if (feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
-                PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(1.0);
+                PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
 
                 // for (size_t j = 0; j < geom.size(); ++j) {
                 //     if (geom[j][0] == geom[j][geom[j].size() - 1]) {
@@ -151,6 +154,14 @@ glm::uvec3 pack_triangle_data(glm::vec2 a, glm::vec2 b, glm::vec2 c, uint32_t st
     constexpr uint32_t bitmask_12 = (1u << 12) - 1u;
     constexpr uint32_t bitmask_6 = (1u << 6) - 1u;
     constexpr uint32_t bitmask_2 = (1u << 2) - 1u;
+
+    // the extent from the tile gives us e.g. 4096
+    // in reality the coordinates can be a little over and a little under the extent -> something like [-128, 4096+128]
+    // solution: move all coordinates by half the extent for storing, and move them back when retrieving
+    // this way we are using only necessary the necessary bits
+    a -= constants::tile_extent / 2.0;
+    b -= constants::tile_extent / 2.0;
+    c -= constants::tile_extent / 2.0;
 
     out.x = uint32_t(a.x) << (32u - 13u);
     out.x = out.x | (uint32_t(a.x) & sign_mask);
@@ -211,6 +222,11 @@ std::tuple<glm::vec2, glm::vec2, glm::vec2, uint32_t> unpack_triangle_data(glm::
     style_index = style_index | (packed.y & bitmask_6) << (14u - 12u);
     style_index = style_index | ((packed.z & (bitmask_2 << 4u)) >> 4u);
 
+    // move the values back to the correct coordinates
+    a += constants::tile_extent / 2.0;
+    b += constants::tile_extent / 2.0;
+    c += constants::tile_extent / 2.0;
+
     return { a, b, c, style_index };
 }
 
@@ -225,8 +241,6 @@ VectorLayerCollection preprocess_triangles(const TempDataHolder data)
     float thickness = 0.0f;
 
     size_t data_offset = 0;
-
-    qDebug() << "extent: " << data.extent;
 
     // create the triangles from polygons
     for (size_t i = 0; i < data.polygons.size(); ++i) {
@@ -253,7 +267,7 @@ VectorLayerCollection preprocess_triangles(const TempDataHolder data)
                 triangle_collection.cell_to_temp[int(pos.x) + constants::grid_size * int(pos.y)].insert(data_index + data_offset);
         };
 
-        nucleus::utils::rasterizer::rasterize_triangle(cell_writer, triangle_points, thickness, float(constants::grid_size) / data.extent);
+        nucleus::utils::rasterizer::rasterize_triangle(cell_writer, triangle_points, thickness, float(constants::grid_size) / float(data.extent));
 
         // add to the data offset for the next polygon
         data_offset += triangle_points.size() / 3;
@@ -329,6 +343,8 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
 
     uint32_t start_offset = 0;
 
+    // size_t max = 0;
+
     // TODO performance: early exit if not a single thing was written -> currently grid is all 0
 
     for (size_t i = 0; i < triangle_collection.cell_to_temp.size(); ++i) {
@@ -341,6 +357,11 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
                 grid.push_back(unique_entries[triangle_collection.cell_to_temp[i]]);
             } else {
                 // we have to add a new element
+                // if (triangle_collection.cell_to_temp[i].size() > max)
+                //     max = triangle_collection.cell_to_temp[i].size();
+
+                // TODO enable assert again
+                // assert(triangle_collection.cell_to_temp[i].size() < 256); // make sure that we are not removing indices we want to draw
                 const auto offset_size = nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(triangle_collection.cell_to_temp[i].size()));
                 unique_entries[triangle_collection.cell_to_temp[i]] = offset_size;
 
@@ -358,6 +379,9 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
             }
         }
     }
+
+    // qDebug() << "max: " << max;
+
     // std::cout << "inds: " << index_bridge.size() << std::endl;
     assert(index_bridge.size() <= constants::data_size * constants::data_size);
     index_bridge.resize(constants::data_size * constants::data_size, -1u);

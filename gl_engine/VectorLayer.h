@@ -58,9 +58,9 @@ private:
 
     std::shared_ptr<ShaderProgram> m_shader;
 
-    std::unique_ptr<Texture> m_grid_texture;
-    std::unique_ptr<Texture> m_triangle_index_texture;
-    std::unique_ptr<Texture> m_triangle_data_texture;
+    std::unique_ptr<Texture> m_triangle_acceleration_grid_texture;
+    std::unique_ptr<Texture> m_triangle_index_buffer_texture;
+    std::unique_ptr<Texture> m_triangle_vertex_buffer_texture;
 
     std::unique_ptr<Texture> m_tile_id_texture;
     // converts tile_id hash to texture array layer index
