@@ -373,7 +373,7 @@ TEST_CASE("glsl tile functions")
             { glm::ivec2(3193, -210), glm::ivec2(4159, 1941), glm::ivec2(3662, 3806), 2182 },
         };
 
-        for (const auto d : data) {
+        for (const auto& d : data) {
             vectorlayer_packing_cpp_same_as_glsl(d);
         }
     }

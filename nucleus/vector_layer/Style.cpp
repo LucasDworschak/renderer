@@ -117,8 +117,8 @@ void Style::load()
         // and get the index of the style we want to use
         if (fill) {
             if (!style_to_fill_index.contains(s)) {
-                style_to_fill_index[s] = fill_style_values.size();
-                style_index = fill_style_values.size();
+                style_index = fill_style_values.size() / constants::style_data_size;
+                style_to_fill_index[s] = style_index;
 
                 // add the style to the raster
                 fill_style_values.push_back(s.fill_color);
@@ -130,8 +130,8 @@ void Style::load()
             }
         } else {
             if (!style_to_line_index.contains(s)) {
-                style_to_line_index[s] = line_style_values.size();
-                style_index = line_style_values.size();
+                style_index = line_style_values.size() / constants::style_data_size;
+                style_to_line_index[s] = style_index;
 
                 // add the style to the raster
                 line_style_values.push_back(s.fill_color);
@@ -156,13 +156,13 @@ void Style::load()
     }
 
     // make sure that the style values are within the buffer size; resize them to this size and create the raster images
-    assert(fill_style_values.size() <= constants::style_data_size * constants::style_data_size);
-    assert(line_style_values.size() <= constants::style_data_size * constants::style_data_size);
-    fill_style_values.resize(constants::style_data_size * constants::style_data_size, -1u);
-    line_style_values.resize(constants::style_data_size * constants::style_data_size, -1u);
+    assert(fill_style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
+    assert(line_style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
+    fill_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, -1u);
+    line_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, -1u);
 
-    m_styles.fill_styles = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::style_data_size, std::move(fill_style_values)));
-    m_styles.line_styles = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::style_data_size, std::move(line_style_values)));
+    m_styles.fill_styles = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::style_buffer_size, std::move(fill_style_values)));
+    m_styles.line_styles = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::style_buffer_size, std::move(line_style_values)));
 
     emit load_finished();
 }

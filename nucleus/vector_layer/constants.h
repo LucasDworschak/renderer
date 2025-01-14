@@ -23,7 +23,8 @@ namespace nucleus::vector_layer::constants {
 // if values here change -> you also need to change them in the shader
 constexpr auto grid_size = 64; // 64
 constexpr auto data_size = 512;
-constexpr auto style_data_size = 64;
 constexpr auto tile_extent = 4096;
+constexpr auto style_buffer_size = 64;
+constexpr auto style_data_size = 4;
 
 } // namespace nucleus::vector_layer::constants

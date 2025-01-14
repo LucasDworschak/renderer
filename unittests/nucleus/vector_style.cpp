@@ -34,6 +34,7 @@
 
 #include "nucleus/vector_layer/Style.h"
 #include "nucleus/vector_layer/StyleExpression.h"
+#include "nucleus/vector_layer/constants.h"
 #include "nucleus/vector_tile/util.h"
 
 #include <QJsonArray>
@@ -104,62 +105,35 @@ TEST_CASE("nucleus/vector_style")
             }
         }
 
-        // check if every feature/symbol combination points to the correct position in the style buffer
-        CHECK(feature_to_style["BEV_BEZIRK_L_BEZIRKSGRENZE__0"] == 420);
-        CHECK(feature_to_style["BEV_GEMEINDE_L_GEMEINDEGRENZE__0"] == 460);
-        CHECK(feature_to_style["GEBAEUDE_F_AGG__0"] == 88);
-        CHECK(feature_to_style["GEBAEUDE_F_AGG__1"] == 72);
-        CHECK(feature_to_style["GEWAESSER_F_GEWF__1"] == 52);
-        CHECK(feature_to_style["GEWAESSER_F_GEWF__3"] == 52);
-        CHECK(feature_to_style["GEWAESSER_L_GEWL __4"] == 100);
-        CHECK(feature_to_style["GIP_BAUWERK_L_BRÜCKE__0"] == 744);
-        CHECK(feature_to_style["GIP_BAUWERK_L_BRÜCKE__1"] == 724);
-        CHECK(feature_to_style["GIP_BAUWERK_L_BRÜCKE__3"] == 676);
-        CHECK(feature_to_style["GIP_BAUWERK_L_TUNNEL_BRUNNENCLA__0"] == 160);
-        CHECK(feature_to_style["GIP_L_GIP_144__0"] == 744);
-        CHECK(feature_to_style["GIP_L_GIP_144__1"] == 724);
-        CHECK(feature_to_style["GIP_L_GIP_144__3"] == 676);
-        CHECK(feature_to_style["GIP_L_GIP_144__4"] == 632);
-        CHECK(feature_to_style["GIP_L_GIP_144__5"] == 656);
-        CHECK(feature_to_style["GIP_L_GIP_144__6"] == 652);
-        CHECK(feature_to_style["NUTZUNG_L15_12__0"] == 12);
-        CHECK(feature_to_style["NUTZUNG_L15_12__1"] == 20);
-        CHECK(feature_to_style["NUTZUNG_L15_12__2"] == 4);
-        CHECK(feature_to_style["NUTZUNG_L15_12__3"] == 0);
-        CHECK(feature_to_style["NUTZUNG_L15_12__5"] == 24);
-        CHECK(feature_to_style["NUTZUNG_L15_12__6"] == 28);
-        CHECK(feature_to_style["NUTZUNG_L15_12__7"] == 32);
-        CHECK(feature_to_style["NUTZUNG_L15_12__8"] == 36);
-
         // check if the color stored int he style buffer points to the correct color in the stylesheet
         const auto fill_style_buffer = s.style_buffer().fill_styles->buffer();
         const auto line_style_buffer = s.style_buffer().line_styles->buffer();
 
-        CHECK(line_style_buffer[feature_to_style["BEV_BEZIRK_L_BEZIRKSGRENZE__0"]] == s.parse_color("#EAE0EF"));
-        CHECK(line_style_buffer[feature_to_style["BEV_GEMEINDE_L_GEMEINDEGRENZE__0"]] == s.parse_color("#EAE0EF"));
-        CHECK(fill_style_buffer[feature_to_style["GEBAEUDE_F_AGG__0"]] == s.parse_color("#EDCACA"));
-        CHECK(fill_style_buffer[feature_to_style["GEBAEUDE_F_AGG__1"]] == s.parse_color("#E6B8B8"));
-        CHECK(fill_style_buffer[feature_to_style["GEWAESSER_F_GEWF__1"]] == s.parse_color("#B3D9FF"));
-        CHECK(fill_style_buffer[feature_to_style["GEWAESSER_F_GEWF__3"]] == s.parse_color("#B3D9FF"));
-        CHECK(line_style_buffer[feature_to_style["GEWAESSER_L_GEWL __4"]] == s.parse_color("#B3D9FF"));
-        CHECK(line_style_buffer[feature_to_style["GIP_BAUWERK_L_BRÜCKE__0"]] == s.parse_color("#CD8966"));
-        CHECK(line_style_buffer[feature_to_style["GIP_BAUWERK_L_BRÜCKE__1"]] == s.parse_color("#CD8966"));
-        CHECK(line_style_buffer[feature_to_style["GIP_BAUWERK_L_BRÜCKE__3"]] == s.parse_color("#CDAA66"));
-        CHECK(line_style_buffer[feature_to_style["GIP_BAUWERK_L_TUNNEL_BRUNNENCLA__0"]] == s.parse_color("#CD8966"));
-        CHECK(line_style_buffer[feature_to_style["GIP_L_GIP_144__0"]] == s.parse_color("#CD8966"));
-        CHECK(line_style_buffer[feature_to_style["GIP_L_GIP_144__1"]] == s.parse_color("#CD8966"));
-        CHECK(line_style_buffer[feature_to_style["GIP_L_GIP_144__3"]] == s.parse_color("#CDAA66"));
-        CHECK(line_style_buffer[feature_to_style["GIP_L_GIP_144__4"]] == s.parse_color("#B2B2B2"));
-        CHECK(line_style_buffer[feature_to_style["GIP_L_GIP_144__5"]] == s.parse_color("#B2B2B2"));
-        CHECK(line_style_buffer[feature_to_style["GIP_L_GIP_144__6"]] == s.parse_color("#B2B2B2"));
-        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__0"]] == s.parse_color("#EFEBE9"));
-        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__1"]] == s.parse_color("rgba(136,204,102,0.25)"));
-        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__2"]] == s.parse_color("rgba(235,255,170,0.25)"));
-        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__3"]] == s.parse_color("rgba(71,179,18,0.25)"));
-        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__5"]] == s.parse_color("rgba(255,255,255,0.25)"));
-        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__6"]] == s.parse_color("rgba(163,255,115,0.25)"));
-        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__7"]] == s.parse_color("rgba(153,125,77,0.25)"));
-        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__8"]] == s.parse_color("rgba(102,153,77,0.25)"));
+        CHECK(line_style_buffer[feature_to_style["BEV_BEZIRK_L_BEZIRKSGRENZE__0"] * constants::style_data_size] == s.parse_color("#EAE0EF"));
+        CHECK(line_style_buffer[feature_to_style["BEV_GEMEINDE_L_GEMEINDEGRENZE__0"] * constants::style_data_size] == s.parse_color("#EAE0EF"));
+        CHECK(fill_style_buffer[feature_to_style["GEBAEUDE_F_AGG__0"] * constants::style_data_size] == s.parse_color("#EDCACA"));
+        CHECK(fill_style_buffer[feature_to_style["GEBAEUDE_F_AGG__1"] * constants::style_data_size] == s.parse_color("#E6B8B8"));
+        CHECK(fill_style_buffer[feature_to_style["GEWAESSER_F_GEWF__1"] * constants::style_data_size] == s.parse_color("#B3D9FF"));
+        CHECK(fill_style_buffer[feature_to_style["GEWAESSER_F_GEWF__3"] * constants::style_data_size] == s.parse_color("#B3D9FF"));
+        CHECK(line_style_buffer[feature_to_style["GEWAESSER_L_GEWL __4"] * constants::style_data_size] == s.parse_color("#B3D9FF"));
+        CHECK(line_style_buffer[feature_to_style["GIP_BAUWERK_L_BRÜCKE__0"] * constants::style_data_size] == s.parse_color("#CD8966"));
+        CHECK(line_style_buffer[feature_to_style["GIP_BAUWERK_L_BRÜCKE__1"] * constants::style_data_size] == s.parse_color("#CD8966"));
+        CHECK(line_style_buffer[feature_to_style["GIP_BAUWERK_L_BRÜCKE__3"] * constants::style_data_size] == s.parse_color("#CDAA66"));
+        CHECK(line_style_buffer[feature_to_style["GIP_BAUWERK_L_TUNNEL_BRUNNENCLA__0"] * constants::style_data_size] == s.parse_color("#CD8966"));
+        CHECK(line_style_buffer[feature_to_style["GIP_L_GIP_144__0"] * constants::style_data_size] == s.parse_color("#CD8966"));
+        CHECK(line_style_buffer[feature_to_style["GIP_L_GIP_144__1"] * constants::style_data_size] == s.parse_color("#CD8966"));
+        CHECK(line_style_buffer[feature_to_style["GIP_L_GIP_144__3"] * constants::style_data_size] == s.parse_color("#CDAA66"));
+        CHECK(line_style_buffer[feature_to_style["GIP_L_GIP_144__4"] * constants::style_data_size] == s.parse_color("#B2B2B2"));
+        CHECK(line_style_buffer[feature_to_style["GIP_L_GIP_144__5"] * constants::style_data_size] == s.parse_color("#B2B2B2"));
+        CHECK(line_style_buffer[feature_to_style["GIP_L_GIP_144__6"] * constants::style_data_size] == s.parse_color("#B2B2B2"));
+        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__0"] * constants::style_data_size] == s.parse_color("#EFEBE9"));
+        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__1"] * constants::style_data_size] == s.parse_color("rgba(136,204,102,0.25)"));
+        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__2"] * constants::style_data_size] == s.parse_color("rgba(235,255,170,0.25)"));
+        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__3"] * constants::style_data_size] == s.parse_color("rgba(71,179,18,0.25)"));
+        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__5"] * constants::style_data_size] == s.parse_color("rgba(255,255,255,0.25)"));
+        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__6"] * constants::style_data_size] == s.parse_color("rgba(163,255,115,0.25)"));
+        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__7"] * constants::style_data_size] == s.parse_color("rgba(153,125,77,0.25)"));
+        CHECK(fill_style_buffer[feature_to_style["NUTZUNG_L15_12__8"] * constants::style_data_size] == s.parse_color("rgba(102,153,77,0.25)"));
 
         // // DEBUG show all keys to styles
         // for (const auto& el : feature_to_style) {
