@@ -272,6 +272,7 @@ void gl_engine::Texture::upload(const nucleus::Raster<T>& texture)
     if (m_min_filter == Filter::MipMapLinear)
         f->glGenerateMipmap(GLenum(m_target));
 }
+
 template void gl_engine::Texture::upload<uint16_t>(const nucleus::Raster<uint16_t>&);
 template void gl_engine::Texture::upload<uint32_t>(const nucleus::Raster<uint32_t>&);
 template void gl_engine::Texture::upload<glm::vec<2, uint32_t>>(const nucleus::Raster<glm::vec<2, uint32_t>>&);
@@ -282,31 +283,6 @@ template void gl_engine::Texture::upload<glm::vec<4, uint8_t>>(const nucleus::Ra
 template void gl_engine::Texture::upload<uint32_t>(const nucleus::Raster<uint32_t>&, unsigned int);
 template void gl_engine::Texture::upload<glm::vec<2, uint32_t>>(const nucleus::Raster<glm::vec<2, uint32_t>>&, unsigned int);
 template void gl_engine::Texture::upload<glm::vec<3, uint32_t>>(const nucleus::Raster<glm::vec<3, uint32_t>>&, unsigned int);
-
-/*
- * after a texture has been uploaded once, you can use this method to change data of the texture faster
- * possible improvements: it is also possible to only update small parts of the image (by allowing to submit offsets and custom sizes)
- * https://stackoverflow.com/a/2405813
- */
-template <typename T> void gl_engine::Texture::reupload(const nucleus::Raster<T>& texture)
-{
-    assert(m_target == Target::_2d);
-
-    const auto p = gl_tex_params(m_format);
-    assert(m_format != Format::CompressedRGBA8);
-    assert(m_format != Format::Invalid);
-    assert(sizeof(T) == p.n_bytes_per_element * p.n_elements);
-
-    QOpenGLExtraFunctions* f = QOpenGLContext::currentContext()->extraFunctions();
-    f->glBindTexture(GLenum(m_target), m_id);
-    f->glTexSubImage2D(GLenum(m_target), 0, 0, 0, GLsizei(texture.width()), GLsizei(texture.height()), p.format, p.type, texture.bytes());
-}
-
-template void gl_engine::Texture::reupload<uint16_t>(const nucleus::Raster<uint16_t>&);
-template void gl_engine::Texture::reupload<uint32_t>(const nucleus::Raster<uint32_t>&);
-template void gl_engine::Texture::reupload<glm::vec<2, uint32_t>>(const nucleus::Raster<glm::vec<2, uint32_t>>&);
-template void gl_engine::Texture::reupload<glm::vec<2, uint8_t>>(const nucleus::Raster<glm::vec<2, uint8_t>>&);
-template void gl_engine::Texture::reupload<glm::vec<4, uint8_t>>(const nucleus::Raster<glm::vec<4, uint8_t>>&);
 
 GLenum gl_engine::Texture::compressed_texture_format()
 {
