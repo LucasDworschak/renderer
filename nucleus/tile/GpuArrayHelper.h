@@ -1,6 +1,7 @@
 /*****************************************************************************
  * AlpineMaps.org
  * Copyright (C) 2024 Adam Celarek
+ * Copyright (C) 2025 Lucas Dworschak
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,12 +28,12 @@ class GpuArrayHelper {
 public:
     struct Dictionary {
         nucleus::Raster<glm::u32vec2> packed_ids;
-        nucleus::Raster<uint16_t> layers;
+        nucleus::Raster<uint16_t> array_layers;
     };
     GpuArrayHelper();
 
     /// returns index in texture array
-    unsigned add_tile(const tile::Id& tile_id);
+    uint16_t add_tile(const tile::Id& tile_id, bool add_to_array = true, uint16_t additonal_info = 0);
     void remove_tile(const tile::Id& tile_id);
     bool contains_tile(const tile::Id& tile_id);
     void set_quad_limit(unsigned new_limit);
@@ -41,7 +42,7 @@ public:
 
 private:
     std::vector<tile::Id> m_array;
-    tile::IdMap<unsigned> m_id_to_layer;
+    tile::IdMap<uint16_t> m_id_to_array_layer;
 };
 
 } // namespace nucleus::tile

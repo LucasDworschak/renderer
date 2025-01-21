@@ -147,7 +147,7 @@ TEST_CASE("nucleus/vector_preprocess")
 
         auto processed = nucleus::vector_layer::details::preprocess_triangles(tile_data);
 
-        auto raster = visualize_grid(processed.cell_to_temp, nucleus::vector_layer::constants::grid_size);
+        auto raster = visualize_grid(processed.acceleration_grid, nucleus::vector_layer::constants::grid_size);
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
         auto test_image = example_grid_data_triangles();
@@ -159,7 +159,7 @@ TEST_CASE("nucleus/vector_preprocess")
 
         // we provide two triangles that overlap at one point -> we expect four entries [1], [0], ([1], [0])
         auto bridge_data = tile.triangle_index_buffer->buffer();
-        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
+        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info]);
         CHECK(bridge_data[0] == 1);
         CHECK(bridge_data[1] == 0);
         CHECK(bridge_data[2] == 1);
@@ -167,10 +167,10 @@ TEST_CASE("nucleus/vector_preprocess")
         // the rest should be undefined -> -1u
         CHECK(bridge_data[4] == -1u);
         CHECK(bridge_data[5] == -1u);
-        CHECK(bridge_data[nucleus::vector_layer::constants::data_size * 1.5] == -1u);
+        CHECK(bridge_data[nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * 1.5] == -1u);
 
         auto data = tile.triangle_vertex_buffer->buffer();
-        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
+        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info]);
         CHECK(data[0] == 3237347648);
         CHECK(data[1] == 3226863488);
         CHECK(data[2] == 3247836304);
@@ -180,7 +180,7 @@ TEST_CASE("nucleus/vector_preprocess")
         // the rest should be undefined -> -1u
         CHECK(data[6] == -1u);
         CHECK(data[7] == -1u);
-        CHECK(data[nucleus::vector_layer::constants::data_size * 1.7] == -1u);
+        CHECK(data[nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * 1.7] == -1u);
 
         // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
         //     std::cout << bridge_data[i] << std::endl;
@@ -211,7 +211,7 @@ TEST_CASE("nucleus/vector_preprocess")
 
         auto processed = nucleus::vector_layer::details::preprocess_triangles(tile_data);
 
-        auto raster = visualize_grid(processed.cell_to_temp, nucleus::vector_layer::constants::grid_size);
+        auto raster = visualize_grid(processed.acceleration_grid, nucleus::vector_layer::constants::grid_size);
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
         auto tile = nucleus::vector_layer::details::create_gpu_tile(processed, processed);
@@ -220,7 +220,7 @@ TEST_CASE("nucleus/vector_preprocess")
 
         // we provide two triangles that overlap at one point -> we expect four entries [1], ([1], [0]), [1]
         auto bridge_data = tile.triangle_index_buffer->buffer();
-        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
+        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info]);
         CHECK(bridge_data[0] == 1);
         CHECK(bridge_data[1] == 1);
         CHECK(bridge_data[2] == 0);
@@ -228,10 +228,10 @@ TEST_CASE("nucleus/vector_preprocess")
         // the rest should be undefined -> -1u
         CHECK(bridge_data[4] == -1u);
         CHECK(bridge_data[5] == -1u);
-        CHECK(bridge_data[nucleus::vector_layer::constants::data_size * 1.5] == -1u);
+        CHECK(bridge_data[nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * 1.5] == -1u);
 
         auto data = tile.triangle_vertex_buffer->buffer();
-        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size * nucleus::vector_layer::constants::data_size);
+        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info]);
         CHECK(data[0] == 3237347648);
         CHECK(data[1] == 3216377728);
         CHECK(data[2] == 3247838224);
@@ -242,7 +242,7 @@ TEST_CASE("nucleus/vector_preprocess")
         CHECK(data[6] == -1u);
         CHECK(data[7] == -1u);
 
-        CHECK(data[nucleus::vector_layer::constants::data_size * 1.7] == -1u);
+        CHECK(data[nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * 1.7] == -1u);
 
         // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
         //     std::cout << bridge_data[i] << std::endl;
@@ -263,7 +263,8 @@ TEST_CASE("nucleus/vector_preprocess")
     //     // TODO test vectortile_neusiedlersee.pbf and see what is wrong with the rasterization of the lake
     //     // const auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 4477 * 2, 2850 * 2 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap };
     //     // const auto id = nucleus::tile::Id { .zoom_level = 13, .coords = { 4477, 2850 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-    //     const auto id = nucleus::tile::Id { .zoom_level = 15, .coords = { (4477 * 2 + 1) * 2, (2850 * 2 + 1) * 2 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+    //     // const auto id = nucleus::tile::Id { .zoom_level = 15, .coords = { (4477 * 2 + 1) * 2, (2850 * 2 + 1) * 2 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+    //     const auto id = nucleus::tile::Id { .zoom_level = 9, .coords = { 268, 178 }, .scheme = nucleus::tile::Scheme::SlippyMap }; // bodensee
 
     //     QByteArray byte_data;
 

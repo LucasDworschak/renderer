@@ -229,7 +229,7 @@ uint32_t Style::parse_color(std::string value)
         else if (value.length() == 9)
             return std::stoul(value.substr(1), nullptr, 16);
         else {
-            qDebug() << "cannot parse color: " << value; // TODO change to qdebug (or similar)
+            qDebug() << "cannot parse color: " << value;
             return 0ul;
         }
     } else if (value.starts_with("rgb")) {

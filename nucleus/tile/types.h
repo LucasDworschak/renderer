@@ -125,6 +125,9 @@ struct GpuVectorLayerTile {
     std::shared_ptr<const nucleus::Raster<uint32_t>> triangle_vertex_buffer;
     // vertex 0, 1 position + style_index
     std::shared_ptr<const nucleus::Raster<uint32_t>> line_vertex_buffer;
+
+    uint8_t triangle_buffer_info;
+    uint8_t line_buffer_info;
 };
 
 static_assert(NamedTile<GpuVectorLayerTile>);

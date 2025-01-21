@@ -67,10 +67,9 @@ namespace details {
 
     struct VectorLayerCollection {
     public:
-        std::vector<uint32_t> data;
-        std::vector<uint32_t> index_bridge;
-        std::vector<uint32_t> cell_to_index_bridge;
-        VectorLayerGrid cell_to_temp;
+        std::vector<uint32_t> vertex_buffer;
+        std::vector<uint32_t> index_buffer;
+        VectorLayerGrid acceleration_grid;
     };
 
     struct TempDataHolder {

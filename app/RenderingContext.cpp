@@ -101,7 +101,6 @@ RenderingContext::RenderingContext(QObject* parent)
     m->geometry.scheduler->set_dataquerier(m->data_querier);
 
     m->vector_layer = nucleus::vector_layer::setup::scheduler("vector_layer",
-        // std::make_unique<nucleus::vector_layer::setup::TileLoadServiceMock>("https://localhost/vector_layer/", TilePattern::ZXY_yPointingSouth, ""),// TODO REMOVE DEBUG
         std::make_unique<TileLoadService>("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/tile/", TilePattern::ZYX_yPointingSouth, ".pbf"),
         m->aabb_decorator,
         m->scheduler_thread.get());

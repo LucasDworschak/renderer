@@ -41,7 +41,6 @@ namespace nucleus::vector_layer {
 // - probably improve shader so that everything is visualized correctly
 
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
-// GpuVectorLayerTile preprocess(tile::Id, const QByteArray& vector_tile_data, const Style&)
 {
     if (vector_tile_data.isEmpty())
         return {};
@@ -53,8 +52,6 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
     const std::vector<unsigned int> style_indices = { 1 };
 
     auto tile_data = details::parse_tile(id, vector_tile_data, style);
-
-    // // TODO somehow parse the data to lines and triangles
 
     // qDebug() << id.coords.x << ", " << id.coords.y << " z: " << id.zoom_level;
 
@@ -85,8 +82,7 @@ TempDataHolder parse_tile(tile::Id, const QByteArray& vector_tile_data, const St
         const mapbox::vector_tile::layer layer = tile.getLayer(layer_name);
         std::size_t feature_count = layer.featureCount();
 
-        if (first_layer) // TODO extent should be the same along all layers -> verify this
-        {
+        if (first_layer) {
             first_layer = false;
             data.extent = constants::tile_extent;
 
@@ -236,7 +232,7 @@ std::tuple<glm::vec2, glm::vec2, glm::vec2, uint32_t> unpack_triangle_data(glm::
 VectorLayerCollection preprocess_triangles(const TempDataHolder data)
 {
     VectorLayerCollection triangle_collection;
-    triangle_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(constants::grid_size * constants::grid_size, std::unordered_set<uint32_t>());
+    triangle_collection.acceleration_grid = std::vector<std::unordered_set<uint32_t>>(constants::grid_size * constants::grid_size, std::unordered_set<uint32_t>());
 
     float thickness = 0.0f;
 
@@ -245,7 +241,7 @@ VectorLayerCollection preprocess_triangles(const TempDataHolder data)
     // create the triangles from polygons
     for (size_t i = 0; i < data.polygons.size(); ++i) {
 
-        // TODO i think triangulize repeats points
+        // TODO performance i think triangulize repeats points
         // -> we may be able to reduce the data array, if we increase the index array (if neccessary)
 
         // polygon to ordered triangles
@@ -253,18 +249,17 @@ VectorLayerCollection preprocess_triangles(const TempDataHolder data)
 
         // add ordered triangles to collection
         for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
-            // TODO reduce the bits needed for the triangle data
             auto packed = pack_triangle_data(triangle_points[j * 3 + 0], triangle_points[j * 3 + 1], triangle_points[j * 3 + 2], 1);
 
-            triangle_collection.data.push_back(packed.x);
-            triangle_collection.data.push_back(packed.y);
-            triangle_collection.data.push_back(packed.z);
+            triangle_collection.vertex_buffer.push_back(packed.x);
+            triangle_collection.vertex_buffer.push_back(packed.y);
+            triangle_collection.vertex_buffer.push_back(packed.z);
         }
 
         const auto cell_writer = [&triangle_collection, data_offset](glm::vec2 pos, int data_index) {
             // if in grid_size bounds than add data_index to vector
             if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(constants::grid_size), pos)))
-                triangle_collection.cell_to_temp[int(pos.x) + constants::grid_size * int(pos.y)].insert(data_index + data_offset);
+                triangle_collection.acceleration_grid[int(pos.x) + constants::grid_size * int(pos.y)].insert(data_index + data_offset);
         };
 
         nucleus::utils::rasterizer::rasterize_triangle(cell_writer, triangle_points, thickness, float(constants::grid_size) / float(data.extent));
@@ -283,7 +278,7 @@ VectorLayerCollection preprocess_lines(const TempDataHolder)
 // VectorLayerCollection preprocess_lines(const std::vector<PolygonData> lines, const std::vector<unsigned int> style_indices)
 {
     VectorLayerCollection line_collection;
-    line_collection.cell_to_temp = std::vector<std::unordered_set<uint32_t>>(constants::grid_size * constants::grid_size, std::unordered_set<uint32_t>());
+    line_collection.acceleration_grid = std::vector<std::unordered_set<uint32_t>>(constants::grid_size * constants::grid_size, std::unordered_set<uint32_t>());
 
     // float thickness = 5.0f;
 
@@ -309,7 +304,7 @@ VectorLayerCollection preprocess_lines(const TempDataHolder)
 
     //     const auto cell_writer = [&line_collection, data_offset](glm::vec2 pos, int data_index) {
     //         if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(constants::grid_size), pos)))
-    //             line_collection.cell_to_temp[int(pos.x) + constants::grid_size * int(pos.y)].insert(data_index + data_offset);
+    //             line_collection.acceleration_grid[int(pos.x) + constants::grid_size * int(pos.y)].insert(data_index + data_offset);
     //     };
 
     //     nucleus::utils::rasterizer::rasterize_line(cell_writer, lines[i], thickness);
@@ -337,9 +332,9 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
     GpuVectorLayerTile tile;
 
     std::unordered_map<std::unordered_set<uint32_t>, uint32_t, Hasher> unique_entries;
-    std::vector<uint32_t> grid;
-    std::vector<uint32_t> index_bridge;
-    std::vector<uint32_t> data_triangle = triangle_collection.data;
+    std::vector<uint32_t> acceleration_grid;
+    std::vector<uint32_t> index_buffer;
+    std::vector<uint32_t> data_triangle = triangle_collection.vertex_buffer;
 
     uint32_t start_offset = 0;
 
@@ -347,25 +342,25 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
 
     // TODO performance: early exit if not a single thing was written -> currently grid is all 0
 
-    for (size_t i = 0; i < triangle_collection.cell_to_temp.size(); ++i) {
+    for (size_t i = 0; i < triangle_collection.acceleration_grid.size(); ++i) {
         // go through every cell
-        if (triangle_collection.cell_to_temp[i].size() == 0) {
-            grid.push_back(0); // no data -> only add an emtpy cell
+        if (triangle_collection.acceleration_grid[i].size() == 0) {
+            acceleration_grid.push_back(0); // no data -> only add an emtpy cell
         } else {
-            if (unique_entries.contains(triangle_collection.cell_to_temp[i])) {
+            if (unique_entries.contains(triangle_collection.acceleration_grid[i])) {
                 // we already have such an entry -> get the offset_size from there
-                grid.push_back(unique_entries[triangle_collection.cell_to_temp[i]]);
+                acceleration_grid.push_back(unique_entries[triangle_collection.acceleration_grid[i]]);
             } else {
                 // we have to add a new element
-                // if (triangle_collection.cell_to_temp[i].size() > max)
-                //     max = triangle_collection.cell_to_temp[i].size();
+                // if (triangle_collection.acceleration_grid[i].size() > max)
+                //     max = triangle_collection.acceleration_grid[i].size();
 
                 // TODO enable assert again
-                // assert(triangle_collection.cell_to_temp[i].size() < 256); // make sure that we are not removing indices we want to draw
-                const auto offset_size = nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(triangle_collection.cell_to_temp[i].size()));
-                unique_entries[triangle_collection.cell_to_temp[i]] = offset_size;
+                // assert(triangle_collection.acceleration_grid[i].size() < 256); // make sure that we are not removing indices we want to draw
+                const auto offset_size = nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(triangle_collection.acceleration_grid[i].size()));
+                unique_entries[triangle_collection.acceleration_grid[i]] = offset_size;
 
-                grid.push_back(offset_size);
+                acceleration_grid.push_back(offset_size);
 
                 // TODO possible performance
                 // R32UI 32 bit / index
@@ -373,24 +368,42 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
                 // offset_size of grid could also save 2 bits for where in the rg32ui it should start to pack them tightly
 
                 // add the indices to the bridge
-                index_bridge.insert(index_bridge.end(), triangle_collection.cell_to_temp[i].begin(), triangle_collection.cell_to_temp[i].end());
+                index_buffer.insert(index_buffer.end(), triangle_collection.acceleration_grid[i].begin(), triangle_collection.acceleration_grid[i].end());
 
-                start_offset += triangle_collection.cell_to_temp[i].size();
+                start_offset += triangle_collection.acceleration_grid[i].size();
             }
         }
     }
 
-    // qDebug() << "max: " << max;
 
-    // std::cout << "inds: " << index_bridge.size() << std::endl;
-    assert(index_bridge.size() <= constants::data_size * constants::data_size);
-    index_bridge.resize(constants::data_size * constants::data_size, -1u);
-    assert(triangle_collection.data.size() <= constants::data_size * constants::data_size);
-    data_triangle.resize(constants::data_size * constants::data_size, -1u);
+    // find fitting cascades for the index and vertex data
+    // both index and vertex buffer are set to the same size, as this makes things easier in the GpuMultiArrayHelper
+    // TODO performance: check how much index and vertex buffer sizes differ from each other if they differ much you might want to use different cascade levels
+    // -> but this causes another possible bottleneck by having to add more GpuArrayHelpers, so that we can accurately
+    //      distinguish between index and vertex buffer in GpuMultiArrayHelper::generate_dictionary()
+    uint8_t fitting_cascade_index = uint8_t(-1u);
+    for (uint8_t i = 0; i < constants::data_size.size(); i++) {
+        const auto data_size_sq = constants::data_size[i] * constants::data_size[i];
+        if (index_buffer.size() <= data_size_sq && data_triangle.size() <= data_size_sq) {
+            fitting_cascade_index = i;
+            break;
+        }
+    }
 
-    tile.triangle_acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size, std::move(grid)));
-    tile.triangle_index_buffer = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size, std::move(index_bridge)));
-    tile.triangle_vertex_buffer = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size, std::move(data_triangle)));
+    qDebug() << "index: " << start_offset << fitting_cascade_index;
+
+    // if assert is triggered -> consider adding a value to constants::data_size
+    assert(fitting_cascade_index < constants::data_size.size());
+
+    // resize data to buffer size
+    index_buffer.resize(constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index], -1u);
+    data_triangle.resize(constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index], -1u);
+
+    tile.triangle_acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size, std::move(acceleration_grid)));
+    tile.triangle_index_buffer = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size[fitting_cascade_index], std::move(index_buffer)));
+    tile.triangle_vertex_buffer = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size[fitting_cascade_index], std::move(data_triangle)));
+
+    tile.triangle_buffer_info = fitting_cascade_index;
 
     // TODO do the same for lines
 

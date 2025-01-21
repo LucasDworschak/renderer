@@ -30,8 +30,14 @@ uniform highp usampler2DArray triangle_acceleration_grid_sampler;
 uniform highp usampler2D array_index_sampler;
 uniform highp usampler2D vector_map_tile_id_sampler;
 
-uniform highp usampler2DArray triangle_index_buffer_sampler;
-uniform highp usampler2DArray triangle_vertex_buffer_sampler;
+uniform highp usampler2DArray triangle_index_buffer_sampler_0;
+uniform highp usampler2DArray triangle_index_buffer_sampler_1;
+uniform highp usampler2DArray triangle_index_buffer_sampler_2;
+uniform highp usampler2DArray triangle_index_buffer_sampler_3;
+uniform highp usampler2DArray triangle_vertex_buffer_sampler_0;
+uniform highp usampler2DArray triangle_vertex_buffer_sampler_1;
+uniform highp usampler2DArray triangle_vertex_buffer_sampler_2;
+uniform highp usampler2DArray triangle_vertex_buffer_sampler_3;
 
 layout (location = 0) out lowp vec3 texout_albedo;
 layout (location = 1) out highp vec4 texout_position;
@@ -47,8 +53,18 @@ in lowp float is_curtain;
 #endif
 flat in lowp vec3 vertex_color;
 
-const int grid_size = 64;
-const uint data_size = 3u; // how many texels are needed to store the data for one triangle
+
+///////////////////////////////////////////////
+// CONSTANTS
+
+const lowp int grid_size = 64;
+const lowp uint data_size = 3u; // how many texels are needed to store the data for one triangle
+
+const lowp uint sampler_offset = 16u - 2u; // used to calculate how many bits are used to determine the sampler index, and how many are used for the layer
+const highp uint layer_mask = ((1u << sampler_offset) - 1u);
+
+///////////////////////////////////////////////
+
 
 highp float calculate_falloff(highp float dist, highp float from, highp float to) {
     return clamp(1.0 - (dist - from) / (to - from), 0.0, 1.0);
@@ -61,7 +77,7 @@ highp vec3 normal_by_fragment_position_interpolation() {
 }
 
 // https://iquilezles.org/articles/distfunctions2d/
-float circle(vec2 uv, vec2 pos, float r)
+float circle(vec2 uv, vec2 pos, float r) // DEBUG
 {
     return distance(uv, pos) - r;
 }
@@ -85,16 +101,82 @@ highp uvec2 to_offset_size(highp uint combined) {
     return uvec2(uint(combined >> 8), uint(combined & 255u));
 }
 
+
+mediump ivec2 to_dict_pixel_128(mediump uint hash) {
+    return ivec2(int(hash & 127u), int(hash >> 7u));
+}
+mediump ivec2 to_dict_pixel_256(mediump uint hash) {
+    return ivec2(int(hash & 255u), int(hash >> 8u));
+}
+mediump ivec2 to_dict_pixel_512(mediump uint hash) {
+    return ivec2(int(hash & 511u), int(hash >> 9u));
+}
+mediump ivec2 to_dict_pixel_1024(mediump uint hash) {
+    return ivec2(int(hash & 1023u), int(hash >> 10u));
+}
 mediump ivec2 to_dict_pixel_2048(mediump uint hash) {
     return ivec2(int(hash & 2047u), int(hash >> 11u));
 }
 
-mediump ivec2 to_dict_pixel_512(mediump uint hash) {
-    return ivec2(int(hash & 511u), int(hash >> 9u));
-}
-
 lowp ivec2 to_dict_pixel(mediump uint hash) {
     return ivec2(int(hash & 255u), int(hash >> 8u));
+}
+
+highp uint triangle_index_sample(lowp uint sampler_index, highp uint pixel_index, highp uint texture_layer)
+{
+    if(sampler_index == 0u)
+    {
+        return texelFetch(triangle_index_buffer_sampler_0, ivec3(to_dict_pixel_128(pixel_index), texture_layer), 0).r * data_size;
+    }
+    else if(sampler_index == 1u)
+    {
+        return texelFetch(triangle_index_buffer_sampler_1, ivec3(to_dict_pixel_256(pixel_index), texture_layer), 0).r * data_size;
+    }
+    else if(sampler_index == 2u)
+    {
+        return texelFetch(triangle_index_buffer_sampler_2, ivec3(to_dict_pixel_512(pixel_index), texture_layer), 0).r * data_size;
+    }
+    else
+    {
+        return texelFetch(triangle_index_buffer_sampler_3, ivec3(to_dict_pixel_1024(pixel_index), texture_layer), 0).r * data_size;
+    }
+}
+
+VectorLayerData triangle_vertex_sample(lowp uint sampler_index, highp uint triangle_index, highp uint texture_layer)
+{
+
+    if(sampler_index == 0u)
+    {
+        highp uint d0 = texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_128(triangle_index+0u), texture_layer), 0).r;
+        highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_128(triangle_index+1u), texture_layer), 0).r;
+        highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_128(triangle_index+2u), texture_layer), 0).r;
+
+        return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+    }
+    else if(sampler_index == 1u)
+    {
+        highp uint d0 = texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_256(triangle_index+0u), texture_layer), 0).r;
+        highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_256(triangle_index+1u), texture_layer), 0).r;
+        highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_256(triangle_index+2u), texture_layer), 0).r;
+
+        return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+    }
+    else if(sampler_index == 2u)
+    {
+        highp uint d0 = texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_512(triangle_index+0u), texture_layer), 0).r;
+        highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_512(triangle_index+1u), texture_layer), 0).r;
+        highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_512(triangle_index+2u), texture_layer), 0).r;
+
+        return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+    }
+    else
+    {
+        highp uint d0 = texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_1024(triangle_index+0u), texture_layer), 0).r;
+        highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_1024(triangle_index+1u), texture_layer), 0).r;
+        highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_1024(triangle_index+2u), texture_layer), 0).r;
+
+        return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+    }
 }
 
 bool find_tile(inout highp uvec3 tile_id, out lowp ivec2 dict_px, inout highp vec2 uv) {
@@ -154,7 +236,7 @@ void main() {
 
     // get grid acceleration structure data
     highp uvec3 tile_id = var_tile_id;
-    highp vec2 uv = var_uv; // TODO here -> uv doesnt change for some specific zoom levels???
+    highp vec2 uv = var_uv;
 
     lowp ivec2 dict_px;
     highp uvec2 offset_size = uvec2(0u);
@@ -163,11 +245,11 @@ void main() {
     if (find_tile(tile_id, dict_px, uv)) {
 
 
-        highp float texture_layer_f = float(texelFetch(array_index_sampler, dict_px, 0).x);
-        if(texture_layer_f != highp uint(-1)) // check for valid data
+        highp uvec2 texture_layer = texelFetch(array_index_sampler, dict_px, 0).xy;
+        if(texture_layer.x != highp uint(-1) && texture_layer.y != highp uint(-1)) // check for valid data
         {
             // triangle_acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
-            offset_size = to_offset_size(texelFetch(triangle_acceleration_grid_sampler, ivec3(uv*vec2(grid_size,grid_size), texture_layer_f),0).r); // TODO is texture correct here and not texelfetch???
+            offset_size = to_offset_size(texelFetch(triangle_acceleration_grid_sampler, ivec3(uv*vec2(grid_size,grid_size), texture_layer.x & layer_mask),0).r);
 
             // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
             if(offset_size.y != uint(0)) // only if we have data here
@@ -181,24 +263,35 @@ void main() {
                 vec3 triangle_out = vec3(0.0f, 0.0, 0.0f);
                 float alpha = 0.0;
 
+                // get the buffer index and extract the correct texture_layer.y
+                lowp uint sampler_buffer_index = (texture_layer.y & ((highp uint(-1u) << sampler_offset))) >> sampler_offset;
+                texture_layer.y = texture_layer.y & layer_mask;
 
+                lowp vec3 layer_debug = vec3(0,0,0);// DEBUG
+                if(sampler_buffer_index == 0u)
+                    layer_debug = vec3(1,0,0);
+                else if(sampler_buffer_index == 1u)
+                    layer_debug = vec3(0,1,0);
+                else if(sampler_buffer_index == 2u)
+                    layer_debug = vec3(1,1,0);
+                else if(sampler_buffer_index == 3u)
+                    layer_debug = vec3(0,0,1);
+                else
+                    layer_debug = vec3(1,1,1);
 
                 for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
-                {
-                    highp uint triangle_index = texelFetch(triangle_index_buffer_sampler, ivec3(to_dict_pixel_512(i), texture_layer_f), 0).r * data_size;
+                {                    
+                    highp uint triangle_index = triangle_index_sample(sampler_buffer_index, i, texture_layer.y);
 
-                    highp uint d0 = texelFetch(triangle_vertex_buffer_sampler, ivec3(to_dict_pixel_512(triangle_index+0u), texture_layer_f), 0).r;
-                    highp uint d1 = texelFetch(triangle_vertex_buffer_sampler, ivec3(to_dict_pixel_512(triangle_index+1u), texture_layer_f), 0).r;
-                    highp uint d2 = texelFetch(triangle_vertex_buffer_sampler, ivec3(to_dict_pixel_512(triangle_index+2u), texture_layer_f), 0).r;
-
-                    VectorLayerData triangle_data = unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+                    VectorLayerData triangle_data = triangle_vertex_sample(sampler_buffer_index, triangle_index, texture_layer.y);
 
                     highp vec2 v0 = triangle_data.a / vec2(tile_extent);
                     highp vec2 v1 = triangle_data.b / vec2(tile_extent);
                     highp vec2 v2 = triangle_data.c / vec2(tile_extent);
                     highp uint style_index = triangle_data.style_index;
 
-                    // highp float c1 = 1.0 - step(0.0, circle(uv, v0, 0.5) - 0.0);
+                    // float c1 = 1.0 - step(0.0, circle(uv, v0, 0.5) - 0.0);
+
                     float thickness = 0.0;
                     float d = sdTriangle(uv, v0, v1, v2) - thickness;
                     // highp float c1 = 1.0 - smoothstep(0.0,1.0, d/(depth*0.000004));
@@ -237,6 +330,7 @@ void main() {
                 // texout_albedo = mix(raw_grid, triangle_out, 0.5);// DEBUG
                 // texout_albedo = raw_grid;// DEBUG
                 // texout_albedo = vec3(alpha);// DEBUG
+                // texout_albedo = layer_debug;// DEBUG
 
             }
             else

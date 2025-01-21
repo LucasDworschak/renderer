@@ -43,6 +43,7 @@ alp_add_unittest(unittests_nucleus
     bits_and_pieces.cpp
     vector_preprocess.cpp
     vector_style.cpp
+    gpu_array_helper.cpp
 )
 
 if (ALP_ENABLE_AVLANCHE_WARNING_LAYER)

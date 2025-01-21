@@ -124,6 +124,7 @@ qt_add_library(nucleus STATIC
     vector_layer/constants.h
     vector_layer/StyleFilter.h vector_layer/StyleFilter.cpp
     vector_layer/StyleExpression.h vector_layer/StyleExpression.cpp
+    vector_layer/GpuMultiArrayHelper.h vector_layer/GpuMultiArrayHelper.cpp
     utils/rasterizer.h utils/rasterizer.cpp
 
 )
