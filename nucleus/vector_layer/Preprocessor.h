@@ -67,7 +67,7 @@ namespace details {
 
     struct VectorLayerCollection {
     public:
-        std::vector<uint32_t> vertex_buffer;
+        std::vector<glm::u32vec3> vertex_buffer;
         std::vector<uint32_t> index_buffer;
         VectorLayerGrid acceleration_grid;
     };

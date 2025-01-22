@@ -61,7 +61,7 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
         m_triangle_index_buffer_texture[i]->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
         m_triangle_index_buffer_texture[i]->allocate_array(constants::data_size[i], constants::data_size[i], layer_amount);
 
-        m_triangle_vertex_buffer_texture[i] = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
+        m_triangle_vertex_buffer_texture[i] = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::RGB32UI);
         m_triangle_vertex_buffer_texture[i]->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
         m_triangle_vertex_buffer_texture[i]->allocate_array(constants::data_size[i], constants::data_size[i], layer_amount);
     }

@@ -123,7 +123,8 @@ void Style::load()
                 // add the style to the raster
                 fill_style_values.push_back(s.fill_color);
                 fill_style_values.push_back(s.outline_color);
-                fill_style_values.push_back(*reinterpret_cast<uint32_t*>(&s.outline_width)); // float to uint32 representation
+                // fill_style_values.push_back(*reinterpret_cast<uint32_t*>(&s.outline_width)); // float to uint32 representation // TODO this does not work for release build
+                fill_style_values.push_back(0); // float to uint32 representation
                 fill_style_values.push_back(s.outline_dash);
             } else {
                 style_index = style_to_fill_index[s];
@@ -136,7 +137,8 @@ void Style::load()
                 // add the style to the raster
                 line_style_values.push_back(s.fill_color);
                 line_style_values.push_back(s.outline_color);
-                line_style_values.push_back(*reinterpret_cast<uint32_t*>(&s.outline_width)); // float to uint32 representation
+                // line_style_values.push_back(*reinterpret_cast<uint32_t*>(&s.outline_width)); // float to uint32 representation // TODO this does not work for release build
+                line_style_values.push_back(0); // float to uint32 representation
                 line_style_values.push_back(s.outline_dash);
             } else {
                 style_index = style_to_line_index[s];

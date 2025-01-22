@@ -58,7 +58,7 @@ flat in lowp vec3 vertex_color;
 // CONSTANTS
 
 const lowp int grid_size = 64;
-const lowp uint data_size = 3u; // how many texels are needed to store the data for one triangle
+const lowp uint data_size = 1u; // how many texels are needed to store the data for one triangle
 
 const lowp uint sampler_offset = 16u - 2u; // used to calculate how many bits are used to determine the sampler index, and how many are used for the layer
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
@@ -147,35 +147,35 @@ VectorLayerData triangle_vertex_sample(lowp uint sampler_index, highp uint trian
 
     if(sampler_index == 0u)
     {
-        highp uint d0 = texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_128(triangle_index+0u), texture_layer), 0).r;
-        highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_128(triangle_index+1u), texture_layer), 0).r;
-        highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_128(triangle_index+2u), texture_layer), 0).r;
+        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_128(triangle_index), texture_layer), 0).rgb);
+        // highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_128(triangle_index+1u), texture_layer), 0).r;
+        // highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_128(triangle_index+2u), texture_layer), 0).r;
 
-        return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+        // return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
     }
     else if(sampler_index == 1u)
     {
-        highp uint d0 = texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_256(triangle_index+0u), texture_layer), 0).r;
-        highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_256(triangle_index+1u), texture_layer), 0).r;
-        highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_256(triangle_index+2u), texture_layer), 0).r;
+        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_256(triangle_index), texture_layer), 0).rgb);
+        // highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_256(triangle_index+1u), texture_layer), 0).r;
+        // highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_256(triangle_index+2u), texture_layer), 0).r;
 
-        return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+        // return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
     }
     else if(sampler_index == 2u)
     {
-        highp uint d0 = texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_512(triangle_index+0u), texture_layer), 0).r;
-        highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_512(triangle_index+1u), texture_layer), 0).r;
-        highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_512(triangle_index+2u), texture_layer), 0).r;
+        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_512(triangle_index), texture_layer), 0).rgb);
+        // highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_512(triangle_index+1u), texture_layer), 0).r;
+        // highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_512(triangle_index+2u), texture_layer), 0).r;
 
-        return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+        // return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
     }
     else
     {
-        highp uint d0 = texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_1024(triangle_index+0u), texture_layer), 0).r;
-        highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_1024(triangle_index+1u), texture_layer), 0).r;
-        highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_1024(triangle_index+2u), texture_layer), 0).r;
+        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_1024(triangle_index), texture_layer), 0).rgb);
+        // highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_1024(triangle_index+1u), texture_layer), 0).r;
+        // highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_1024(triangle_index+2u), texture_layer), 0).r;
 
-        return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+        // return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
     }
 }
 
@@ -267,17 +267,19 @@ void main() {
                 lowp uint sampler_buffer_index = (texture_layer.y & ((highp uint(-1u) << sampler_offset))) >> sampler_offset;
                 texture_layer.y = texture_layer.y & layer_mask;
 
-                lowp vec3 layer_debug = vec3(0,0,0);// DEBUG
-                if(sampler_buffer_index == 0u)
-                    layer_debug = vec3(1,0,0);
-                else if(sampler_buffer_index == 1u)
-                    layer_debug = vec3(0,1,0);
-                else if(sampler_buffer_index == 2u)
-                    layer_debug = vec3(1,1,0);
-                else if(sampler_buffer_index == 3u)
-                    layer_debug = vec3(0,0,1);
-                else
-                    layer_debug = vec3(1,1,1);
+                lowp vec3 layer_debug = vec3(0,0,0);// DEBUG -> which cascade is being used
+                {
+                    if(sampler_buffer_index == 0u)
+                    layer_debug = vec3(0,1,0); // green
+                    else if(sampler_buffer_index == 1u)
+                        layer_debug = vec3(1,1,0); // yellow
+                    else if(sampler_buffer_index == 2u)
+                        layer_debug = vec3(1,0.5,0); // orange
+                    else if(sampler_buffer_index == 3u)
+                        layer_debug = vec3(1,0,0); // red
+                    else
+                        layer_debug = vec3(1,0,1); // purple -> should never happen -> unrecognized index
+                }
 
                 for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
                 {                    
