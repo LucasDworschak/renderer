@@ -90,8 +90,9 @@ TempDataHolder parse_tile(tile::Id, const QByteArray& vector_tile_data, const St
         }
 
         // if (layer_name != "NUTZUNG_L15_12")
-        if (layer_name != "GEWAESSER_F_GEWF")
-            continue; // DEBUG
+        // if (layer_name != "GEWAESSER_F_GEWF")
+        // if (layer_name != "water")
+        //     continue; // DEBUG
 
         // TODO enable again
         // size_t style_index = style.layer_style_index(layer_name, id.zoom_level);
@@ -136,6 +137,8 @@ TempDataHolder parse_tile(tile::Id, const QByteArray& vector_tile_data, const St
             }
         }
     }
+
+    qDebug();
 
     return data;
 }
@@ -229,7 +232,7 @@ std::tuple<glm::vec2, glm::vec2, glm::vec2, uint32_t> unpack_triangle_data(glm::
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-VectorLayerCollection preprocess_triangles(const TempDataHolder data)
+VectorLayerCollection preprocess_triangles(const TempDataHolder& data)
 {
     VectorLayerCollection triangle_collection;
     triangle_collection.acceleration_grid = std::vector<std::unordered_set<uint32_t>>(constants::grid_size * constants::grid_size, std::unordered_set<uint32_t>());
@@ -272,7 +275,7 @@ VectorLayerCollection preprocess_triangles(const TempDataHolder data)
 }
 
 // TODO
-VectorLayerCollection preprocess_lines(const TempDataHolder)
+VectorLayerCollection preprocess_lines(const TempDataHolder&)
 // VectorLayerCollection preprocess_lines(const std::vector<PolygonData> lines, const std::vector<unsigned int> style_indices)
 {
     VectorLayerCollection line_collection;
@@ -355,7 +358,11 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
 
                 // TODO enable assert again
                 // assert(triangle_collection.acceleration_grid[i].size() < 256); // make sure that we are not removing indices we want to draw
-                const auto offset_size = nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(triangle_collection.acceleration_grid[i].size()));
+                size_t index_buffer_size = triangle_collection.acceleration_grid[i].size();
+                if (index_buffer_size > 255)
+                    index_buffer_size = 255; // just cap it to 255 as we currently cant go any higher
+
+                const auto offset_size = nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(index_buffer_size));
                 unique_entries[triangle_collection.acceleration_grid[i]] = offset_size;
 
                 acceleration_grid.push_back(offset_size);

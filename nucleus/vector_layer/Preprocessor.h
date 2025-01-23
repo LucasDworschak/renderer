@@ -80,8 +80,8 @@ namespace details {
         std::vector<size_t> line_styles;
     };
 
-    VectorLayerCollection preprocess_triangles(const TempDataHolder data);
-    VectorLayerCollection preprocess_lines(const TempDataHolder data);
+    VectorLayerCollection preprocess_triangles(const TempDataHolder& data);
+    VectorLayerCollection preprocess_lines(const TempDataHolder& data);
 
     GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collection, const VectorLayerCollection& line_collection);
 

@@ -101,7 +101,9 @@ highp uvec2 to_offset_size(highp uint combined) {
     return uvec2(uint(combined >> 8), uint(combined & 255u));
 }
 
-
+mediump ivec2 to_dict_pixel_64(mediump uint hash) {
+    return ivec2(int(hash & 63u), int(hash >> 6u));
+}
 mediump ivec2 to_dict_pixel_128(mediump uint hash) {
     return ivec2(int(hash & 127u), int(hash >> 7u));
 }
@@ -126,19 +128,19 @@ highp uint triangle_index_sample(lowp uint sampler_index, highp uint pixel_index
 {
     if(sampler_index == 0u)
     {
-        return texelFetch(triangle_index_buffer_sampler_0, ivec3(to_dict_pixel_128(pixel_index), texture_layer), 0).r * data_size;
+        return texelFetch(triangle_index_buffer_sampler_0, ivec3(to_dict_pixel_64(pixel_index), texture_layer), 0).r * data_size;
     }
     else if(sampler_index == 1u)
     {
-        return texelFetch(triangle_index_buffer_sampler_1, ivec3(to_dict_pixel_256(pixel_index), texture_layer), 0).r * data_size;
+        return texelFetch(triangle_index_buffer_sampler_1, ivec3(to_dict_pixel_128(pixel_index), texture_layer), 0).r * data_size;
     }
     else if(sampler_index == 2u)
     {
-        return texelFetch(triangle_index_buffer_sampler_2, ivec3(to_dict_pixel_512(pixel_index), texture_layer), 0).r * data_size;
+        return texelFetch(triangle_index_buffer_sampler_2, ivec3(to_dict_pixel_256(pixel_index), texture_layer), 0).r * data_size;
     }
     else
     {
-        return texelFetch(triangle_index_buffer_sampler_3, ivec3(to_dict_pixel_1024(pixel_index), texture_layer), 0).r * data_size;
+        return texelFetch(triangle_index_buffer_sampler_3, ivec3(to_dict_pixel_512(pixel_index), texture_layer), 0).r * data_size;
     }
 }
 
@@ -147,35 +149,19 @@ VectorLayerData triangle_vertex_sample(lowp uint sampler_index, highp uint trian
 
     if(sampler_index == 0u)
     {
-        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_128(triangle_index), texture_layer), 0).rgb);
-        // highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_128(triangle_index+1u), texture_layer), 0).r;
-        // highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_128(triangle_index+2u), texture_layer), 0).r;
-
-        // return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_64(triangle_index), texture_layer), 0).rgb);
     }
     else if(sampler_index == 1u)
     {
-        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_256(triangle_index), texture_layer), 0).rgb);
-        // highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_256(triangle_index+1u), texture_layer), 0).r;
-        // highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_256(triangle_index+2u), texture_layer), 0).r;
-
-        // return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_128(triangle_index), texture_layer), 0).rgb);
     }
     else if(sampler_index == 2u)
     {
-        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_512(triangle_index), texture_layer), 0).rgb);
-        // highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_512(triangle_index+1u), texture_layer), 0).r;
-        // highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_512(triangle_index+2u), texture_layer), 0).r;
-
-        // return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_256(triangle_index), texture_layer), 0).rgb);
     }
     else
     {
-        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_1024(triangle_index), texture_layer), 0).rgb);
-        // highp uint d1 = texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_1024(triangle_index+1u), texture_layer), 0).r;
-        // highp uint d2 = texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_1024(triangle_index+2u), texture_layer), 0).r;
-
-        // return unpack_vectorlayer_data(highp uvec3(d0,d1,d2));
+        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_512(triangle_index), texture_layer), 0).rgb);
     }
 }
 
@@ -270,7 +256,7 @@ void main() {
                 lowp vec3 layer_debug = vec3(0,0,0);// DEBUG -> which cascade is being used
                 {
                     if(sampler_buffer_index == 0u)
-                    layer_debug = vec3(0,1,0); // green
+                        layer_debug = vec3(0,1,0); // green
                     else if(sampler_buffer_index == 1u)
                         layer_debug = vec3(1,1,0); // yellow
                     else if(sampler_buffer_index == 2u)
@@ -279,6 +265,19 @@ void main() {
                         layer_debug = vec3(1,0,0); // red
                     else
                         layer_debug = vec3(1,0,1); // purple -> should never happen -> unrecognized index
+                }
+                lowp vec3 cell_debug = vec3(0,0,0);// DEBUG -> how many triangles per cell
+                {
+                    if(offset_size.y < 32u)
+                        cell_debug = vec3(0,1,0); // green
+                    else if(offset_size.y  < 64u)
+                        cell_debug = vec3(1,1,0); // yellow
+                    else if(offset_size.y  < 128u)
+                        cell_debug = vec3(1,0.5,0); // orange
+                    else if(offset_size.y  < 255u)
+                        cell_debug = vec3(1,0,0); // red
+                    else
+                        cell_debug = vec3(1,0,1); // purple -> should never happen -> unrecognized index
                 }
 
                 for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
@@ -333,6 +332,7 @@ void main() {
                 // texout_albedo = raw_grid;// DEBUG
                 // texout_albedo = vec3(alpha);// DEBUG
                 // texout_albedo = layer_debug;// DEBUG
+                // texout_albedo = cell_debug;// DEBUG
 
             }
             else

@@ -39,11 +39,8 @@ glm::u16vec2 GpuMultiArrayHelper::add_tile(const tile::Id& id, uint8_t buffer_in
     std::array<bool, 3> active_helpers = { true, false, false };
     active_helpers[buffer_to_helper(buffer_info)] = true;
 
-    // encode the buffer info at the first few bits as additional info
-    const uint16_t additional_info = buffer_info << buffer_offset;
-
     for (uint8_t i = 0; i < buffer_amount(); i++) {
-        layers[i] = helpers[i].add_tile(id, active_helpers[i], additional_info);
+        layers[i] = helpers[i].add_tile(id, active_helpers[i], buffer_info, buffer_offset);
     }
 
     return { layers[0], layers[buffer_to_helper(buffer_info)] };
