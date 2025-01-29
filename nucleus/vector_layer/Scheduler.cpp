@@ -26,7 +26,8 @@ namespace nucleus::vector_layer {
 
 Scheduler::Scheduler(std::string name, QObject* parent)
     : nucleus::tile::Scheduler(std::move(name), 256, parent)
-    , m_style("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/resources/styles/")
+    // , m_style(":/vectorlayerstyles/basemap.json")
+    , m_style(":/vectorlayerstyles/openstreetmap.json")
 {
     connect(&m_style, &Style::load_finished, this, &Scheduler::style_loaded);
 }
@@ -62,7 +63,7 @@ void Scheduler::load_style() { m_style.load(); }
 
 void Scheduler::style_loaded()
 {
-    std::cout << "style loaded" << std::endl;
+    qDebug() << "vectorlayer style loaded";
     set_enabled(true);
 }
 

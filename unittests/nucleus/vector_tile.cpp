@@ -58,7 +58,7 @@ TEST_CASE("nucleus/vector_tiles")
 
     SECTION("Tile parsing")
     {
-        QString filepath = QString("%1%2").arg(ALP_TEST_DATA_DIR, "vectortile.mvt");
+        QString filepath = QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile.mvt");
         QFile file(filepath);
         file.open(QIODevice::ReadOnly | QIODevice::Unbuffered);
         QByteArray data = file.readAll();

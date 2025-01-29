@@ -281,7 +281,7 @@ TEST_CASE("nucleus/vector_preprocess")
     //         byte_data = *tile.data;
     //     }
 
-    //     // auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vectortile_neusiedlersee.pbf"));
+    //     // auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_neusiedlersee.pbf"));
     //     // file.open(QFile::ReadOnly);
     //     // const auto byte_data = file.readAll();
 

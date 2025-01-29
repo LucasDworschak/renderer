@@ -38,77 +38,77 @@ namespace detail {
 
     class CompareVisitor {
     public:
-        bool operator()(std::vector<mapbox::feature::value>, QString, QString) const { return false; }
-        bool operator()(std::unordered_map<std::string, mapbox::feature::value>, QString, QString) const { return false; }
-        bool operator()(mapbox::feature::null_value_t, QString, QString) const { return false; }
-        bool operator()(std::nullptr_t, QString, QString) const { return false; }
-        bool operator()(uint64_t val, QString compare, QString comparator) const
+        bool operator()(std::vector<mapbox::feature::value>, std::string, std::string) const { return false; }
+        bool operator()(std::unordered_map<std::string, mapbox::feature::value>, std::string, std::string) const { return false; }
+        bool operator()(mapbox::feature::null_value_t, std::string, std::string) const { return false; }
+        bool operator()(std::nullptr_t, std::string, std::string) const { return false; }
+        bool operator()(uint64_t val, std::string compare, std::string comparator) const
         {
             // qDebug() << "compare uint: " << val << comparator << compare.toULongLong();
             if (comparator == "==")
-                return val == compare.toULongLong();
+                return val == std::stoull(compare);
             else if (comparator == "!=")
-                return val != compare.toULongLong();
+                return val != std::stoull(compare);
             else if (comparator == "<")
-                return val < compare.toULongLong();
+                return val < std::stoull(compare);
             else if (comparator == "<=")
-                return val <= compare.toULongLong();
+                return val <= std::stoull(compare);
             else if (comparator == ">")
-                return val > compare.toULongLong();
+                return val > std::stoull(compare);
             else if (comparator == ">=")
-                return val >= compare.toULongLong();
+                return val >= std::stoull(compare);
             return false;
         }
-        bool operator()(int64_t val, QString compare, QString comparator) const
+        bool operator()(int64_t val, std::string compare, std::string comparator) const
         {
             // qDebug() << "compare int: " << val << comparator << compare.toLongLong();
             if (comparator == "==")
-                return val == compare.toLongLong();
+                return val == std::stoll(compare);
             else if (comparator == "!=")
-                return val != compare.toLongLong();
+                return val != std::stoll(compare);
             else if (comparator == "<")
-                return val < compare.toLongLong();
+                return val < std::stoll(compare);
             else if (comparator == "<=")
-                return val <= compare.toLongLong();
+                return val <= std::stoll(compare);
             else if (comparator == ">")
-                return val > compare.toLongLong();
+                return val > std::stoll(compare);
             else if (comparator == ">=")
-                return val >= compare.toLongLong();
+                return val >= std::stoll(compare);
             return false;
         }
-        bool operator()(double val, QString compare, QString comparator) const
+        bool operator()(double val, std::string compare, std::string comparator) const
         {
             // qDebug() << "compare double: " << val << comparator << compare.toDouble();
             if (comparator == "==")
-                return val == compare.toDouble();
+                return val == std::stod(compare);
             else if (comparator == "!=")
-                return val != compare.toDouble();
+                return val != std::stod(compare);
             else if (comparator == "<")
-                return val < compare.toDouble();
+                return val < std::stod(compare);
             else if (comparator == "<=")
-                return val <= compare.toDouble();
+                return val <= std::stod(compare);
             else if (comparator == ">")
-                return val > compare.toDouble();
+                return val > std::stod(compare);
             else if (comparator == ">=")
-                return val >= compare.toDouble();
+                return val >= std::stod(compare);
             return false;
         }
-        bool operator()(std::string const& val, QString compare, QString comparator) const
+        bool operator()(std::string const& val, std::string compare, std::string comparator) const
         {
             // qDebug() << "compare string: " << val << comparator << compare.toStdString();
             if (comparator == "==")
-                return val == compare.toStdString();
+                return val == compare;
             else if (comparator == "!=")
-                return val != compare.toStdString();
+                return val != compare;
             return false;
         }
-        bool operator()(bool val, QString compare, QString comparator) const
+        bool operator()(bool val, std::string compare, std::string comparator) const
         {
             // qDebug() << "compare bool: " << val << comparator << compare.toStdString();
             if (comparator == "==")
-                return val == (compare.toLower() == "true") ? true : false;
+                return val == (compare == "true") ? true : false;
             else if (comparator == "!=")
-                return val != (compare.toLower() == "true") ? true : false;
+                return val != (compare == "true") ? true : false;
 
             return false;
         }

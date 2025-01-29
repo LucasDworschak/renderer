@@ -295,15 +295,10 @@ void main() {
 
                     float thickness = 0.0;
                     float d = sdTriangle(uv, v0, v1, v2) - thickness;
-                    // highp float c1 = 1.0 - smoothstep(0.0,1.0, d/(depth*0.000004));
-                    // highp float c1 = 1.0 - smoothstep(0.0,1.0, d/0.0003);
-                    // highp float c1 = 1.0 - smoothstep(0.0,d, 0.00003);
-
-
 
                     { // DEBUG -> triangle lines
                         highp float t_line = 0.0;
-                        if(d <= -0.0001 && d >= -0.0005)
+                        if(d <= 0.0001 && d >= -0.0001)
                             t_line = 0.2;
                         triangle_lines_out += vec3(0.0f, t_line, 0.0f);
                     }
@@ -311,12 +306,17 @@ void main() {
 
                     highp float c1 = 1.0 - step(0.0, d);
 
+                    if(c1 <= 0.0)
+                        continue;
+
                     alpha += c1;
                     if(alpha > 1.0)
                         c1 = alpha - 1.0;
 
-                    vec3 river_blue = vec3(179.0f/255.0f,217.0f/255.0f,255.0f/255.0f);
-                    triangle_out = mix(triangle_out, river_blue * c1 , c1);
+                    vec3 layer_color = color_from_id_hash(style_index);
+
+                    // vec3 layer_color = vec3(179.0f/255.0f,217.0f/255.0f,255.0f/255.0f);
+                    triangle_out = mix(triangle_out, layer_color * c1 , c1);
 
                     if(alpha >= 1.0)
                         break; // early exit if alpha is 1;
@@ -331,6 +331,7 @@ void main() {
                 // texout_albedo = mix(raw_grid, triangle_out, 0.5);// DEBUG
                 // texout_albedo = raw_grid;// DEBUG
                 // texout_albedo = vec3(alpha);// DEBUG
+                // texout_albedo = triangle_lines_out;// DEBUG
                 // texout_albedo = layer_debug;// DEBUG
                 // texout_albedo = cell_debug;// DEBUG
 

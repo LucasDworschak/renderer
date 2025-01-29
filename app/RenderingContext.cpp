@@ -85,8 +85,11 @@ RenderingContext::RenderingContext(QObject* parent)
     //                                           ".jpeg",
     //                                           {"", "1", "2", "3", "4"}));
     m->aabb_decorator = nucleus::tile::setup::aabb_decorator();
-    m->geometry = nucleus::tile::setup::geometry_scheduler(
-        "geometry", std::make_unique<TileLoadService>("https://alpinemaps.cg.tuwien.ac.at/tiles/alpine_png/", TilePattern::ZXY, ".png"), m->aabb_decorator, m->scheduler_thread.get());
+    m->geometry = nucleus::tile::setup::geometry_scheduler("geometry",
+        std::make_unique<TileLoadService>("https://alpinemaps.cg.tuwien.ac.at/tiles/at_dtm_alpinemaps/", TilePattern::ZXY, ".png"),
+        m->aabb_decorator,
+        m->scheduler_thread.get()); // TODO currently hardcoded change to dtm model, but probably need to change this dynamically
+    // "geometry", std::make_unique<TileLoadService>("https://alpinemaps.cg.tuwien.ac.at/tiles/alpine_png/", TilePattern::ZXY, ".png"), m->aabb_decorator, m->scheduler_thread.get());
     m->data_querier = std::make_shared<DataQuerier>(&m->geometry.scheduler->ram_cache());
 
     m->ortho_texture = nucleus::tile::setup::texture_scheduler(
@@ -101,7 +104,7 @@ RenderingContext::RenderingContext(QObject* parent)
     m->geometry.scheduler->set_dataquerier(m->data_querier);
 
     m->vector_layer = nucleus::vector_layer::setup::scheduler("vector_layer",
-        std::make_unique<TileLoadService>("http://localhost:8090/tiles/", TilePattern::ZXY_yPointingSouth, ".pbf"),
+        std::make_unique<TileLoadService>("http://localhost:8080/data/openmaptiles/", TilePattern::ZXY_yPointingSouth, ".pbf"),
         // std::make_unique<TileLoadService>("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/tile/", TilePattern::ZYX_yPointingSouth, ".pbf"),
         m->aabb_decorator,
         m->scheduler_thread.get());
@@ -179,8 +182,8 @@ void RenderingContext::initialise()
         m->ortho_texture.scheduler->set_enabled(true);
     });
     // vector layer must first load the style before enabling the scheduler (enabling scheduler happens internally after load_style)
-    // nucleus::utils::thread::async_call(m->vector_layer.scheduler.get(), [this]() { m->vector_layer.scheduler->load_style(); });
-    nucleus::utils::thread::async_call(m->vector_layer.scheduler.get(), [this]() { m->vector_layer.scheduler->set_enabled(true); }); // TODO change to load style again
+    nucleus::utils::thread::async_call(m->vector_layer.scheduler.get(), [this]() { m->vector_layer.scheduler->load_style(); });
+    // nucleus::utils::thread::async_call(m->vector_layer.scheduler.get(), [this]() { m->vector_layer.scheduler->set_enabled(true); }); // TODO change to load style again
 
     // labels
     m->engine_context->set_map_label_manager(std::make_unique<gl_engine::MapLabels>(m->aabb_decorator));

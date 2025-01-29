@@ -65,8 +65,7 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
 } // namespace nucleus::vector_layer
 namespace nucleus::vector_layer::details {
 
-// PointCollectionVec2 parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
-TempDataHolder parse_tile(tile::Id, const QByteArray& vector_tile_data, const Style&)
+TempDataHolder parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
 {
     const auto d = vector_tile_data.toStdString();
     const mapbox::vector_tile::buffer tile(d);
@@ -77,7 +76,7 @@ TempDataHolder parse_tile(tile::Id, const QByteArray& vector_tile_data, const St
     TempDataHolder data;
 
     for (const auto& layer_name : tile.layerNames()) {
-        // std::cout << layer_name << std::endl;
+        // qDebug() << layer_name << id.zoom_level;
 
         const mapbox::vector_tile::layer layer = tile.getLayer(layer_name);
         std::size_t feature_count = layer.featureCount();
@@ -94,26 +93,17 @@ TempDataHolder parse_tile(tile::Id, const QByteArray& vector_tile_data, const St
         // if (layer_name != "water")
         //     continue; // DEBUG
 
-        // TODO enable again
-        // size_t style_index = style.layer_style_index(layer_name, id.zoom_level);
-        // if (style_index == -1ul) // no style found -> we do not visualize it
-        //     continue;
-
         for (std::size_t i = 0; i < feature_count; ++i) {
             const auto feature = mapbox::vector_tile::feature(layer.getFeature(i), layer);
             auto props = feature.getProperties();
 
-            // TODO style_index
+            const auto type = (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) ? "line" : "fill";
+            const auto style_index = style.layer_style_index(layer_name, type, id.zoom_level, feature);
+            if (style_index == -1u) // no style found -> we do not visualize it
+                continue;
 
             if (feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
                 PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
-
-                // for (size_t j = 0; j < geom.size(); ++j) {
-                //     if (geom[j][0] == geom[j][geom[j].size() - 1]) {
-                //         // duplicate vertex detected -> has to be removed
-                //         geom[j].pop_back();
-                //     }
-                // }
 
                 // construct edges from the current polygon and move them to the collection
                 PolygonData p;
@@ -123,6 +113,7 @@ TempDataHolder parse_tile(tile::Id, const QByteArray& vector_tile_data, const St
                     p.vertices.insert(p.vertices.end(), geom[j].begin(), geom[j].end());
                 }
                 data.polygons.push_back(p);
+                data.polygon_styles.push_back(style_index);
 
                 // concat
                 // polygons.reserve(polygons.size() + geom.size()); // calling reserve here significantly impacts performance -> see if it is possible to call it outside of the loop
@@ -252,7 +243,7 @@ VectorLayerCollection preprocess_triangles(const TempDataHolder& data)
 
         // add ordered triangles to collection
         for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
-            auto packed = pack_triangle_data(triangle_points[j * 3 + 0], triangle_points[j * 3 + 1], triangle_points[j * 3 + 2], 1);
+            auto packed = pack_triangle_data(triangle_points[j * 3 + 0], triangle_points[j * 3 + 1], triangle_points[j * 3 + 2], data.polygon_styles[i]);
 
             triangle_collection.vertex_buffer.push_back(packed);
         }

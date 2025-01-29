@@ -33,19 +33,21 @@ std::unique_ptr<StyleExpressionBase> StyleExpressionBase::create_filter_expressi
 
         if (data.size() > 2 || data[0].toString() == "!") // we have a collection
             return std::make_unique<StyleExpressionCollection>(data);
-        else // it says it is an expression, but in reality it only contains one element to evaluate
-            if (data[2].isArray())
-                return create_filter_expression(data[2].toArray());
+        else if (data.size() == 2) {
+            // it says it is an expression, but in reality it only contains one element to evaluate
+            if (data[1].isArray())
+                return create_filter_expression(data[1].toArray());
             else {
-                qDebug() << data[2] << " is not an array";
+                qDebug() << data[1] << " is not an array";
                 // assert(false); // shouldnt happen -> sub expression is not an array
             }
+        }
     } else if (StyleExpression::valid(data[0].toString())) {
         // we have an expression
         return std::make_unique<StyleExpression>(data);
     }
 
-    qDebug() << data[0].toString() << " is not a valid operator";
+    qDebug() << data[0].toString() << " is not a valid operator ...";
 
     // assert(false);
     return {};
@@ -54,24 +56,31 @@ std::unique_ptr<StyleExpressionBase> StyleExpressionBase::create_filter_expressi
 StyleExpression::StyleExpression(QJsonArray data)
     : StyleExpressionBase()
 {
-    m_comparator = data[0].toString();
+    m_comparator = data[0].toString().toStdString();
 
     // key
     if (data[1].isArray()) {
         if (data[1].toArray().size() == 1) {
-            m_key = data[1].toArray()[0].toString();
+            m_key = data[1].toArray()[0].toString().toStdString();
         } else {
             qDebug() << "single expression with array that is not correctly sized: " << data[1];
         }
+
     } else {
-        m_key = data[1].toString();
+        m_key = data[1].toString().toStdString();
     }
 
     // values
-    if (m_comparator == "in") {
+    if (m_comparator == "in" || m_comparator == "!in") {
         // multiple values
         for (qsizetype i = 2; i < data.size(); ++i) {
-            m_values.push_back(data[i].toString());
+            m_values.push_back(data[i].toString().toStdString());
+        }
+    } else if (m_comparator == "has" || m_comparator == "!has") {
+        // no values for has expressions -> we only check if key is present
+        if (data.size() > 2) {
+            qDebug() << "\"has\" expression with too many arguments:" << data.size();
+            assert(false);
         }
     } else {
         // only one more value in data that contains the value to compare to.
@@ -79,62 +88,66 @@ StyleExpression::StyleExpression(QJsonArray data)
         // but we want to make sure for now that our stylesheet doesnt contain this (maybe add later if needed)
         if (data.size() != 3) {
             qDebug() << "data size too large: " << data.size();
+            qDebug() << data[0] << data[1];
             assert(data.size() == 3);
         }
 
         // even if the value is a number -> convert it into a string -> we are converting back later if needed
         // maybe not too ideal, but probably better if the json stores "long long" as a string and we wonder later why jsonValue.toInt returns 0 for long long numbers
-        m_values.push_back(data[2].toVariant().toString());
+        m_values.push_back(data[2].toVariant().toString().toStdString());
     }
 }
 
 bool compare_equal(std::string) { return true; }
 bool compare_equal(int64_t) { return true; }
 
-bool StyleExpression::matches(const mapbox::vector_tile::feature& feature)
+bool StyleExpression::matches(const mapbox::vector_tile::GeomType& type, const mapbox::feature::properties_type& properties)
 {
-    mapbox::feature::value value = extract_value(feature);
+    mapbox::feature::value value = extract_value(type, properties);
     // qDebug() << "match: " << m_key;
 
-    if (m_comparator == "in") {
-        auto string_value = std::visit(vector_tile::util::string_print_visitor, value); // we are only using the value to see if it is in a list -> string is sufficient
+    if (m_comparator == "in" || m_comparator == "!in") {
+        const auto string_value = std::visit(vector_tile::util::string_print_visitor, value).toStdString(); // we are only using the value to see if it is in a list -> string is sufficient
+        const bool find_in = !m_comparator.starts_with("!"); // if the comparator is "!in" we want to negate the values
 
         for (const auto& v : m_values) {
             if (v == string_value) {
-                return true;
+                return find_in;
             }
         }
-        return false; // string wasnt in the list of acceptable values
-    } else {
+        return !find_in; // string wasnt in the list of acceptable values
 
+    } else if (m_comparator == "has" || m_comparator == "!has") {
+        // if the value is a null value -> the value was not in the list
+        bool has_not_value = std::visit([](auto&& v) { return std::is_same_v<decltype(v), mapbox::feature::null_value_t>; }, value);
+        return m_comparator.starts_with("!") ? has_not_value : !has_not_value;
+    } else {
         return std::visit([this](auto&& v) { return vector_tile::util::compare_visitor(v, m_values[0], m_comparator); }, value);
     }
 }
 
-mapbox::feature::value StyleExpression::extract_value(const mapbox::vector_tile::feature& feature)
+mapbox::feature::value StyleExpression::extract_value(const mapbox::vector_tile::GeomType& type, const mapbox::feature::properties_type& properties)
 {
     if (m_key == "geometry-type" || m_key == "$type") {
-        if (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING)
+        if (type == mapbox::vector_tile::GeomType::LINESTRING)
             return "LineString";
-        else if (feature.getType() == mapbox::vector_tile::GeomType::POINT)
+        else if (type == mapbox::vector_tile::GeomType::POINT)
             return "Point";
-        else if (feature.getType() == mapbox::vector_tile::GeomType::POINT)
+        else if (type == mapbox::vector_tile::GeomType::POINT)
             return "Polygon";
         else
             return "UNKNOWN";
     }
 
-    // TODO class and subclass have to be supplied by the vectortile server as simple properties
-    // alternatively we have to redo the stylesheet to use values our vector tile server can easily serve (there should be utilities to try to convert the style)
-    if (feature.getProperties().contains(m_key.toStdString()))
-        return feature.getProperties()[m_key.toStdString()];
+    if (properties.contains(m_key))
+        return properties.at(m_key);
 
     return mapbox::feature::null_value; // could not determine what to extract (or feature does not contain key)
 }
 
 bool StyleExpression::valid(QString value)
 {
-    if (value == "==" || value == "!=" || value == "<" || value == ">" || value == "<=" || value == ">=" || value == "in")
+    if (value == "==" || value == "!=" || value == "<" || value == ">" || value == "<=" || value == ">=" || value == "in" || value == "!in" || value == "has" || value == "!has")
         return true;
     return false;
 }
@@ -155,15 +168,15 @@ StyleExpressionCollection::StyleExpressionCollection(QJsonArray data)
     }
 }
 
-bool StyleExpressionCollection::matches(const mapbox::vector_tile::feature& feature)
+bool StyleExpressionCollection::matches(const mapbox::vector_tile::GeomType& type, const mapbox::feature::properties_type& properties)
 {
     if (m_negate) {
         // negate should only handle one subfilter -> get the match and negate it
-        return !m_subFilters[0]->matches(feature);
+        return !m_subFilters[0]->matches(type, properties);
     }
 
     for (size_t i = 0; i < m_subFilters.size(); ++i) {
-        bool result = m_subFilters[i]->matches(feature);
+        bool result = m_subFilters[i]->matches(type, properties);
         if (m_all && !result) {
             return false; // the current match was false but all had to be true
         } else if (!m_all && result) {

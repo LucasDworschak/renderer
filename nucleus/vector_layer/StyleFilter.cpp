@@ -39,10 +39,13 @@ uint32_t StyleFilter::style_index(unsigned zoom, const mapbox::vector_tile::feat
         return -1u; // not found
     }
 
+    const auto type = feature.getType();
+    const auto properties = feature.getProperties();
+
     for (const auto& pair : m_filter.at(zoom)) {
         if (pair.second == nullptr)
             return pair.first; // no filter is here -> we assume that every feature with layername and zoom is valid
-        if (pair.second->matches(feature)) {
+        if (pair.second->matches(type, properties)) {
             return pair.first; // first filter that matches returns the style index
         }
     }

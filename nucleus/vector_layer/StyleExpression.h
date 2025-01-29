@@ -24,11 +24,13 @@
 
 namespace mapbox { // forward declare mapbox classes
 namespace vector_tile {
-    class feature;
+    enum GeomType : std::uint8_t;
 }
 
 namespace feature {
     class value;
+    // class properties_type;
+    using properties_type = std::unordered_map<std::string, value>;
 }
 } // namespace mapbox
 
@@ -42,7 +44,7 @@ public:
     /**
      * checks if the supplied feature matches the expression that was initialized
      */
-    virtual bool matches(const mapbox::vector_tile::feature& feature) = 0;
+    virtual bool matches(const mapbox::vector_tile::GeomType& type, const mapbox::feature::properties_type& properties) = 0;
 
     static std::unique_ptr<StyleExpressionBase> create_filter_expression(QJsonArray data);
 };
@@ -54,7 +56,7 @@ public:
     /**
      * checks if the supplied feature matches the expression that was initialized
      */
-    bool matches(const mapbox::vector_tile::feature& feature) override;
+    bool matches(const mapbox::vector_tile::GeomType& type, const mapbox::feature::properties_type& properties) override;
 
     /**
      * checks if the supplied argument is in a list of valid arguments
@@ -63,11 +65,11 @@ public:
     static bool valid(QString value);
 
 private:
-    QString m_key;
-    QString m_comparator;
-    std::vector<QString> m_values;
+    std::string m_key;
+    std::string m_comparator;
+    std::vector<std::string> m_values;
 
-    mapbox::feature::value extract_value(const mapbox::vector_tile::feature& feature);
+    mapbox::feature::value extract_value(const mapbox::vector_tile::GeomType& type, const mapbox::feature::properties_type& properties);
 };
 
 class StyleExpressionCollection : public StyleExpressionBase {
@@ -77,7 +79,7 @@ public:
     /**
      * checks if the supplied feature matches the expression of all/any of the expression it holds
      */
-    bool matches(const mapbox::vector_tile::feature& feature) override;
+    bool matches(const mapbox::vector_tile::GeomType& type, const mapbox::feature::properties_type& properties) override;
 
     /**
      * checks if the supplied argument is in a list of valid arguments
