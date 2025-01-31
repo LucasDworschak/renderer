@@ -380,6 +380,7 @@ TEST_CASE("gl texture")
     SECTION("rgba8ui") { test_unsigned_texture_with<4, unsigned char>({ 1, 2, 255, 140 }, gl_engine::Texture::Format::RGBA8UI); }
     SECTION("rg32ui") { test_unsigned_texture_with<2, uint32_t>({ 3000111222, 4000111222 }, gl_engine::Texture::Format::RG32UI); }
     SECTION("rgb32ui") { test_unsigned_texture_with<3, uint32_t>({ 3000111222, 4000111222, 2500111222 }, gl_engine::Texture::Format::RGB32UI); }
+    SECTION("rgba32ui") { test_unsigned_texture_with<4, uint32_t>({ 3000111222, 4000111222, 2500111222, 1393855846 }, gl_engine::Texture::Format::RGBA32UI); }
     SECTION("red16ui") { test_unsigned_texture_with<1, uint16_t, uint16_t>(uint16_t(60123), gl_engine::Texture::Format::R16UI); }
     SECTION("rg16ui") { test_unsigned_texture_with<2, uint16_t>(glm::u16vec2 { 44169, 53820 }, gl_engine::Texture::Format::RG16UI); }
     SECTION("red32ui") { test_unsigned_texture_with<1, uint32_t, uint32_t>(uint32_t(4000111222), gl_engine::Texture::Format::R32UI); }
@@ -389,6 +390,11 @@ TEST_CASE("gl texture")
     SECTION("rgb32ui_array")
     {
         test_unsigned_texture_array_with<3, uint32_t>({ glm::uvec3 { 3000111222, 4000111222, 2500111222 }, glm::uvec3 { 3000114422, 4000114422, 2500114422 } }, gl_engine::Texture::Format::RGB32UI);
+    }
+    SECTION("rgba32ui_array")
+    {
+        test_unsigned_texture_array_with<4, uint32_t>(
+            { glm::uvec4 { 3000111222, 4000111222, 2500111222, 1393855846 }, glm::uvec4 { 3000114422, 4000114422, 2500114422, 1444253543 } }, gl_engine::Texture::Format::RGBA32UI);
     }
 
     SECTION("rgba array (compressed and uncompressed, mipmapped and not)")

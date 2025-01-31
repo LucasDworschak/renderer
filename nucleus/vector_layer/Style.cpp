@@ -49,14 +49,14 @@ void Style::load()
         return;
     }
 
-    std::vector<uint32_t> fill_style_values;
-    std::vector<uint32_t> line_style_values;
+    std::vector<glm::u32vec4> fill_style_values;
+    std::vector<glm::u32vec4> line_style_values;
 
     std::unordered_map<LayerStyle, uint32_t, Hasher> style_to_fill_index;
     std::unordered_map<LayerStyle, uint32_t, Hasher> style_to_line_index;
 
     QJsonDocument doc = QJsonDocument::fromJson(data);
-    QJsonArray layers = doc.object().value("layers").toArray();
+    QJsonArray layers = expand(doc.object().value("layers").toArray());
 
     for (const QJsonValue& obj : layers) {
 
@@ -127,29 +127,23 @@ void Style::load()
         // and get the index of the style we want to use
         if (fill) {
             if (!style_to_fill_index.contains(s)) {
-                style_index = fill_style_values.size() / constants::style_data_size;
+                style_index = fill_style_values.size();
                 style_to_fill_index[s] = style_index;
 
                 // add the style to the raster
-                fill_style_values.push_back(s.fill_color);
-                fill_style_values.push_back(s.outline_color);
-                // fill_style_values.push_back(*reinterpret_cast<uint32_t*>(&s.outline_width)); // float to uint32 representation // TODO this does not work for release build
-                fill_style_values.push_back(0); // float to uint32 representation
-                fill_style_values.push_back(s.outline_dash);
+                // *reinterpret_cast<uint32_t*>(&s.outline_width); // float to uint32 representation // TODO this does not work for release build
+                fill_style_values.push_back({ s.fill_color, s.outline_color, 0, s.outline_dash });
             } else {
                 style_index = style_to_fill_index[s];
             }
         } else {
             if (!style_to_line_index.contains(s)) {
-                style_index = line_style_values.size() / constants::style_data_size;
+                style_index = line_style_values.size();
                 style_to_line_index[s] = style_index;
 
                 // add the style to the raster
-                line_style_values.push_back(s.fill_color);
-                line_style_values.push_back(s.outline_color);
-                // line_style_values.push_back(*reinterpret_cast<uint32_t*>(&s.outline_width)); // float to uint32 representation // TODO this does not work for release build
-                line_style_values.push_back(0); // float to uint32 representation
-                line_style_values.push_back(s.outline_dash);
+                // *reinterpret_cast<uint32_t*>(&s.outline_width); // float to uint32 representation // TODO this does not work for release build
+                line_style_values.push_back({ s.fill_color, s.outline_color, 0, s.outline_dash });
             } else {
                 style_index = style_to_line_index[s];
             }
@@ -170,13 +164,126 @@ void Style::load()
     // make sure that the style values are within the buffer size; resize them to this size and create the raster images
     assert(fill_style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
     assert(line_style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
-    fill_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, -1u);
-    line_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, -1u);
+    fill_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec4(-1u));
+    line_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec4(-1u));
 
-    m_styles.fill_styles = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::style_buffer_size, std::move(fill_style_values)));
-    m_styles.line_styles = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::style_buffer_size, std::move(line_style_values)));
+    m_styles.fill_styles = std::make_shared<const nucleus::Raster<glm::u32vec4>>(nucleus::Raster<glm::u32vec4>(constants::style_buffer_size, std::move(fill_style_values)));
+    m_styles.line_styles = std::make_shared<const nucleus::Raster<glm::u32vec4>>(nucleus::Raster<glm::u32vec4>(constants::style_buffer_size, std::move(line_style_values)));
 
-    emit load_finished();
+    emit load_finished(m_styles.fill_styles, m_styles.line_styles);
+}
+
+bool Style::sub_is_array(QJsonObject obj, QString sub_key)
+{
+    if (!obj.contains(sub_key))
+        return false; // sub_key not present
+    return obj[sub_key].isArray();
+}
+
+QJsonValue Style::get_match_value(QJsonArray match_array, QString match_key)
+{
+    if (match_array.contains(match_key)) {
+        // look at every second value and find the key that matches
+        for (qsizetype i = 2; i < match_array.size() - 1; i += 2) {
+            if (match_array[i].isString()) {
+                auto el = match_array[i].toString();
+                if (el == match_key) {
+                    // we found the key -> return the next value
+                    return match_array[i + 1];
+                }
+            }
+        }
+    }
+
+    // key not found -> return default value
+    return match_array.last();
+}
+
+std::unordered_map<QString, QJsonArray> Style::get_sub_layer(QJsonArray filter)
+{
+    std::unordered_map<QString, QJsonArray> sub_layer;
+
+    if (!filter.contains("all")) {
+        assert(false); // currently only works if in expression is within an all expression -> you have to adapt the code to make this work
+        return sub_layer;
+    }
+
+    // find index of "in" expression
+    qsizetype in_filter_index = -1;
+    for (qsizetype i = 1; i < filter.size(); i++) {
+        if (filter[i].isArray() && filter[i].toArray().contains("in")) {
+            in_filter_index = i;
+            break;
+        }
+    }
+
+    const auto in_expression = filter[in_filter_index].toArray();
+    const auto criterium = in_expression[1].toString();
+
+    std::vector<QJsonArray> new_filter;
+
+    // get all layers that are stated in the in expression
+    for (qsizetype i = 2; i < in_expression.size(); i++) {
+        const auto layer_name = in_expression[i].toString();
+
+        // replace the "in" filter with an "==" filter
+        QJsonArray new_filter = QJsonArray(filter);
+        new_filter[in_filter_index] = QJsonArray { "==", criterium, layer_name };
+
+        sub_layer[layer_name] = new_filter;
+    }
+
+    return sub_layer;
+}
+
+QJsonArray Style::expand(const QJsonArray& layers)
+{
+    QJsonArray out_layer;
+
+    for (const auto& layer : layers) {
+
+        const auto paint = layer.toObject().value("paint").toObject();
+
+        // if any of the following values is true we will epxand the layer to individual ones
+        // else we will simply copy the existing layer
+        bool fill_color_match = sub_is_array(paint, "fill-color");
+        bool fill_opacity_match = sub_is_array(paint, "fill-opacity");
+        bool line_color_match = sub_is_array(paint, "line-color");
+        bool line_width_match = sub_is_array(paint, "line-width");
+        bool line_opacity_match = sub_is_array(paint, "line-opacity");
+
+        bool needs_to_expand = fill_color_match || fill_opacity_match || line_color_match || line_width_match || line_opacity_match;
+
+        if (!needs_to_expand) {
+            out_layer.append(layer);
+            continue;
+        }
+
+        // we need to expand the layer
+        const auto sublayer = get_sub_layer(layer.toObject().value("filter").toArray());
+
+        for (const auto& [layer_name, new_filter] : sublayer) {
+            QJsonObject new_paint;
+            for (const auto& key : paint.keys()) {
+                if (paint[key].isArray() && paint[key].toArray()[0] == "match") {
+                    // choose the value that matches and use it for the paint option
+                    new_paint[key] = QJsonValue(get_match_value(paint[key].toArray(), layer_name));
+                } else {
+                    // write the previous value
+                    new_paint[key] = paint[key];
+                }
+            }
+
+            // copy layer so that we can change values specific for one sublayer
+            QJsonObject new_layer = QJsonObject(layer.toObject());
+            new_layer["filter"] = new_filter;
+            new_layer["paint"] = new_paint;
+
+            out_layer.append(new_layer);
+        }
+    }
+
+    return out_layer;
 }
 
 uint32_t Style::layer_style_index(
@@ -251,16 +358,11 @@ uint32_t Style::parse_color(QJsonValue value)
         colorValue = value.toString().toStdString();
     } else if (value.isObject() && value.toObject().contains("stops")) {
         colorValue = onlyLastStopValue(value).toString().toStdString();
-    } else if (value.isArray() && value.toArray().first() == "match") {
-        // TODO implement somehow
-        return 0ul;
     } else {
         qDebug() << "cannot parse color value: " << value;
         assert(false);
         return 0ul;
     }
-
-    //
 
     if (colorValue.starts_with("#")) {
         if (colorValue.length() == 4) // transform #9CF to #99CCFF

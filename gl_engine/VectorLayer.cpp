@@ -66,6 +66,9 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
         m_triangle_vertex_buffer_texture[i]->allocate_array(constants::data_size[i], constants::data_size[i], layer_amount);
     }
 
+    m_fill_styles_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RGBA32UI);
+    m_fill_styles_texture->setParams(gl_engine::Texture::Filter::Nearest, gl_engine::Texture::Filter::Nearest);
+
     update_gpu_id_map();
 }
 
@@ -81,9 +84,12 @@ void VectorLayer::draw(
     m_shader->set_uniform("vector_map_tile_id_sampler", 6);
     m_tile_id_texture->bind(6);
 
+    m_shader->set_uniform("fill_styles_sampler", 7);
+    m_fill_styles_texture->bind(7);
+
     // upload all index and vertex buffer
     // binds the buffers to "...buffer_sampler_[0-max]"
-    constexpr uint8_t triangle_index_buffer_start = 7;
+    constexpr uint8_t triangle_index_buffer_start = 8;
     constexpr uint8_t triangle_vertex_buffer_start = triangle_index_buffer_start + constants::array_layer_quad_amount.size();
     for (uint8_t i = 0; i < constants::array_layer_quad_amount.size(); i++) {
         m_shader->set_uniform("triangle_index_buffer_sampler_" + std::to_string(i), triangle_index_buffer_start + i);
@@ -137,6 +143,13 @@ void VectorLayer::update_gpu_id_map()
     auto [packed_ids, layers] = m_gpu_multi_array_helper.generate_dictionary();
     m_array_index_texture->upload(layers);
     m_tile_id_texture->upload(packed_ids);
+}
+
+void VectorLayer::update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> fill_styles, std::shared_ptr<const nucleus::Raster<glm::u32vec4>>)
+{
+    // upload the styles to the texture
+    m_fill_styles_texture->upload(*fill_styles);
+    // todo line style
 }
 
 } // namespace gl_engine

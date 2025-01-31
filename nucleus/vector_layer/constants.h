@@ -32,6 +32,5 @@ constexpr auto data_size = std::array<uint32_t, 4> { 64u, 128u, 256u, 512u }; //
 constexpr auto array_layer_quad_amount = std::array<uint32_t, 4> { -1u, -1u, 256u, 32u };
 constexpr auto tile_extent = 4096;
 constexpr auto style_buffer_size = 64;
-constexpr auto style_data_size = 4;
 
 } // namespace nucleus::vector_layer::constants

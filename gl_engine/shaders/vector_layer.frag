@@ -30,6 +30,8 @@ uniform highp usampler2DArray triangle_acceleration_grid_sampler;
 uniform highp usampler2D array_index_sampler;
 uniform highp usampler2D vector_map_tile_id_sampler;
 
+uniform highp usampler2D fill_styles_sampler;
+
 uniform highp usampler2DArray triangle_index_buffer_sampler_0;
 uniform highp usampler2DArray triangle_index_buffer_sampler_1;
 uniform highp usampler2DArray triangle_index_buffer_sampler_2;
@@ -226,7 +228,7 @@ void main() {
 
     lowp ivec2 dict_px;
     highp uvec2 offset_size = uvec2(0u);
-    texout_albedo = vec3(0.0);
+    texout_albedo = vec3(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f);
 
     if (find_tile(tile_id, dict_px, uv)) {
 
@@ -291,8 +293,6 @@ void main() {
                     highp vec2 v2 = triangle_data.c / vec2(tile_extent);
                     highp uint style_index = triangle_data.style_index;
 
-                    // float c1 = 1.0 - step(0.0, circle(uv, v0, 0.5) - 0.0);
-
                     float thickness = 0.0;
                     float d = sdTriangle(uv, v0, v1, v2) - thickness;
 
@@ -304,19 +304,25 @@ void main() {
                     }
 
 
-                    highp float c1 = 1.0 - step(0.0, d);
+                    highp float triangle_influence = 1.0 - step(0.0, d);
 
-                    if(c1 <= 0.0)
+                    if(triangle_influence <= 0.0)
                         continue;
 
-                    alpha += c1;
+                    alpha += triangle_influence;
                     if(alpha > 1.0)
-                        c1 = alpha - 1.0;
+                        triangle_influence = alpha - 1.0;
 
-                    vec3 layer_color = color_from_id_hash(style_index);
+                    highp uvec4 style_data = texelFetch(fill_styles_sampler, ivec2(to_dict_pixel_64(style_index)), 0);
+                    vec4 layer_color = vec4((style_data.r & 4278190080u) >> 24, (style_data.r & 16711680u) >> 16, (style_data.r & 65280u) >> 8, style_data.r & 255u) / vec4(255.0f);
+                    // vec4 layer_color = vec4(style_data.r,255,0,255) / vec4(255.0f);
+                    // vec3 layer_color = color_from_id_hash(style_index); // DEBUG style to color hash
 
                     // vec3 layer_color = vec3(179.0f/255.0f,217.0f/255.0f,255.0f/255.0f);
-                    triangle_out = mix(triangle_out, layer_color * c1 , c1);
+                    triangle_out = mix(triangle_out, layer_color.rgb * triangle_influence , triangle_influence);
+
+
+
 
                     if(alpha >= 1.0)
                         break; // early exit if alpha is 1;
@@ -339,7 +345,7 @@ void main() {
             else
             {
                 // we aren't processing anything
-                texout_albedo = vec3(0.0, 0.0, 0.0);// DEBUG
+                // texout_albedo = vec3(0.0, 0.0, 0.0);// DEBUG
             }
 
             // float min_size = 50;

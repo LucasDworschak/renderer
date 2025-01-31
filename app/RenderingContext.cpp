@@ -104,7 +104,8 @@ RenderingContext::RenderingContext(QObject* parent)
     m->geometry.scheduler->set_dataquerier(m->data_querier);
 
     m->vector_layer = nucleus::vector_layer::setup::scheduler("vector_layer",
-        std::make_unique<TileLoadService>("http://localhost:8080/data/openmaptiles/", TilePattern::ZXY_yPointingSouth, ".pbf"),
+        std::make_unique<TileLoadService>("http://localhost:3000/getmvt/", TilePattern::ZXY_yPointingSouth, ""),
+        // std::make_unique<TileLoadService>("http://localhost:8080/data/openmaptiles/", TilePattern::ZXY_yPointingSouth, ".pbf"),
         // std::make_unique<TileLoadService>("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/tile/", TilePattern::ZYX_yPointingSouth, ".pbf"),
         m->aabb_decorator,
         m->scheduler_thread.get());
@@ -175,6 +176,7 @@ void RenderingContext::initialise()
     connect(m->geometry.scheduler.get(), &nucleus::tile::GeometryScheduler::gpu_quads_updated, m->engine_context->tile_geometry(), &gl_engine::TileGeometry::update_gpu_quads);
     connect(m->ortho_texture.scheduler.get(), &nucleus::tile::TextureScheduler::gpu_quads_updated, m->engine_context->ortho_layer(), &gl_engine::TextureLayer::update_gpu_quads);
     connect(m->vector_layer.scheduler.get(), &nucleus::vector_layer::Scheduler::gpu_quads_updated, m->engine_context->vector_layer(), &gl_engine::VectorLayer::update_gpu_quads);
+    connect(m->vector_layer.scheduler.get(), &nucleus::vector_layer::Scheduler::style_updated, m->engine_context->vector_layer(), &gl_engine::VectorLayer::update_style);
     nucleus::utils::thread::async_call(m->geometry.scheduler.get(), [this]() { m->geometry.scheduler->set_enabled(true); });
     const auto texture_compression = gl_engine::Texture::compression_algorithm();
     nucleus::utils::thread::async_call(m->ortho_texture.scheduler.get(), [this, texture_compression]() {

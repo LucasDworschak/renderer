@@ -29,7 +29,7 @@ Scheduler::Scheduler(std::string name, QObject* parent)
     // , m_style(":/vectorlayerstyles/basemap.json")
     , m_style(":/vectorlayerstyles/openstreetmap.json")
 {
-    connect(&m_style, &Style::load_finished, this, &Scheduler::style_loaded);
+    connect(&m_style, &Style::load_finished, this, &Scheduler::enable_scheduler);
 }
 Scheduler::~Scheduler() = default;
 
@@ -61,10 +61,12 @@ void Scheduler::transform_and_emit(const std::vector<tile::DataQuad>& new_quads,
 // especially with changing vector layer source this would definitely cause problems
 void Scheduler::load_style() { m_style.load(); }
 
-void Scheduler::style_loaded()
+void Scheduler::enable_scheduler(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> fill_styles, std::shared_ptr<const nucleus::Raster<glm::u32vec4>> line_styles)
 {
     qDebug() << "vectorlayer style loaded";
+
     set_enabled(true);
+    emit style_updated(fill_styles, line_styles);
 }
 
 bool Scheduler::is_ready_to_ship(const nucleus::tile::DataQuad& quad) const

@@ -54,8 +54,8 @@ struct Hasher {
 };
 
 struct StyleBufferHolder {
-    std::shared_ptr<const nucleus::Raster<uint32_t>> fill_styles;
-    std::shared_ptr<const nucleus::Raster<uint32_t>> line_styles;
+    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> fill_styles;
+    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> line_styles;
 };
 
 class Style : public QObject {
@@ -70,16 +70,22 @@ public:
 
     StyleBufferHolder style_buffer() const;
 
+    static QJsonArray expand(const QJsonArray& layers);
+
 public slots:
     void load();
 
 signals:
-    void load_finished();
+    void load_finished(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> fill_styles, std::shared_ptr<const nucleus::Raster<glm::u32vec4>> line_styles);
 
 private:
     StyleBufferHolder m_styles;
 
     QJsonValue onlyLastStopValue(QJsonValue value);
+
+    static bool sub_is_array(QJsonObject obj, QString sub_key);
+    static QJsonValue get_match_value(QJsonArray match_array, QString match_key);
+    static std::unordered_map<QString, QJsonArray> get_sub_layer(QJsonArray filter);
 
     // std::unordered_map<std::tuple<std::string, unsigned>, size_t, radix::hasher::for_tuple<std::string, unsigned>> m_layer_zoom_to_style;
     std::unordered_map<std::string, StyleFilter> m_layer_to_style;
