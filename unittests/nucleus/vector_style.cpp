@@ -69,21 +69,23 @@ std::map<std::string, uint32_t> parse_tile(
                 continue; // we are only interested in polygon and line strings
 
             const std::string type = (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) ? "line" : "fill";
-
-            const auto style = s.layer_style_index(layer_name, type, zoom, feature);
-
             const auto key = type + "__" + key_generator(layer_name, feature);
+
+            const auto style = s.indices(layer_name, type, zoom, feature);
+
+            if (check_valid_style)
+                CHECK(style.first != -1u); // make sure that every style is available in the stylesheet
+
+            if (style.first == -1u)
+                continue;
 
             if (feature_to_style.contains(key)) // make sure that all features with the same key share the style (if not we have to expand how we generate the key)
             {
-                if (feature_to_style[key] != style)
+                if (feature_to_style[key] != style.first)
                     qDebug() << "key does already exist with diferent value: " << key;
-                CHECK(feature_to_style[key] == style);
+                CHECK(feature_to_style[key] == style.first);
             } else
-                feature_to_style[key] = style; // add the style to the map
-
-            if (check_valid_style)
-                CHECK(style != -1u); // make sure that every style is available in the stylesheet
+                feature_to_style[key] = style.first; // add the style to the map
         }
     }
 
@@ -127,7 +129,7 @@ TEST_CASE("nucleus/vector_style")
         CHECK(layers.size() == 208); // makes sure that the input file is still the same
         CHECK(expanded_layers.size() == 312);
 
-        // DEBUG view what is written in expanded layers
+        // // DEBUG view what is written in expanded layers
         // QFile out_file("expanded.style.json");
         // out_file.open(QFile::WriteOnly);
         // QJsonDocument out = QJsonDocument(expanded_layers);
@@ -196,8 +198,8 @@ TEST_CASE("nucleus/vector_style")
         CHECK(fill_style_buffer[feature_to_style["fill__water__pond__null__1"]].x == s.parse_color("rgba(172, 218, 251, 1)"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__paved__-1__tunnel"]].x == s.parse_color("#fff"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__tunnel__-1"]].x == s.parse_color("#fff"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__tertiary__null"]].x == s.parse_color("#fff"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__tertiary__null__paved"]].x == s.parse_color("#fff"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__tertiary__null"]].x == s.parse_color("#8f8f8f"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__tertiary__null__paved"]].x == s.parse_color("#8f8f8f"));
         CHECK(fill_style_buffer[feature_to_style["fill__building__null__null"]].x == s.parse_color("#d9d0c9"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__service__null"]].x == s.parse_color("#bbbbbb"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__service__null__1__alley"]].x == s.parse_color("#bbbbbb"));
@@ -216,19 +218,19 @@ TEST_CASE("nucleus/vector_style")
         CHECK(line_style_buffer[feature_to_style["line__transportation__track__null__unpaved__1__no__yes__no"]].x == s.parse_color("#bbbbbb"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__primary__null__paved__1__1"]].x == s.parse_color("#a06b00"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__raceway__null__unpaved"]].x == s.parse_color("rgba(254, 190, 200, 1)"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null"]].x == s.parse_color("rgba(255, 255, 255, 1)"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__1"]].x == s.parse_color("rgba(255, 255, 255, 1)"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__1__paved"]].x == s.parse_color("rgba(255, 255, 255, 1)"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__no__paved__no__1"]].x == s.parse_color("rgba(255, 255, 255, 1)"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__paved"]].x == s.parse_color("rgba(255, 255, 255, 1)"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__paved__yes__no"]].x == s.parse_color("rgba(255, 255, 255, 1)"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__unpaved"]].x == s.parse_color("rgba(255, 255, 255, 1)"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__yes__paved"]].x == s.parse_color("rgba(255, 255, 255, 1)"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__yes__paved__yes"]].x == s.parse_color("rgba(255, 255, 255, 1)"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__yes__paved__yes__ford"]].x == s.parse_color("rgba(255, 255, 255, 1)"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__yes__yes"]].x == s.parse_color("rgba(255, 255, 255, 1)"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__secondary__null__1__paved"]].x == s.parse_color("#f7fabf"));
-        CHECK(line_style_buffer[feature_to_style["line__transportation__secondary__null__paved"]].x == s.parse_color("#f7fabf"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null"]].x == s.parse_color("#bbbbbb"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__1"]].x == s.parse_color("#bbbbbb"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__1__paved"]].x == s.parse_color("#bbbbbb"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__no__paved__no__1"]].x == s.parse_color("#bbbbbb"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__paved"]].x == s.parse_color("#bbbbbb"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__paved__yes__no"]].x == s.parse_color("#bbbbbb"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__unpaved"]].x == s.parse_color("#bbbbbb"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__yes__paved"]].x == s.parse_color("#bbbbbb"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__yes__paved__yes"]].x == s.parse_color("#bbbbbb"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__yes__paved__yes__ford"]].x == s.parse_color("#bbbbbb"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__yes__yes"]].x == s.parse_color("#bbbbbb"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__secondary__null__1__paved"]].x == s.parse_color("#707d05"));
+        CHECK(line_style_buffer[feature_to_style["line__transportation__secondary__null__paved"]].x == s.parse_color("#707d05"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__primary__null__bridge__1"]].x == s.parse_color("#000000"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__primary__null__paved__1__bridge"]].x == s.parse_color("#000000"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__secondary__null__paved__1__bridge"]].x == s.parse_color("#000000"));

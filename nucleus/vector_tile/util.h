@@ -40,7 +40,12 @@ namespace detail {
     public:
         bool operator()(std::vector<mapbox::feature::value>, std::string, std::string) const { return false; }
         bool operator()(std::unordered_map<std::string, mapbox::feature::value>, std::string, std::string) const { return false; }
-        bool operator()(mapbox::feature::null_value_t, std::string, std::string) const { return false; }
+        bool operator()(mapbox::feature::null_value_t, std::string, std::string comparator) const
+        {
+            if (comparator == "!=") // if the value we become is null and we want to compare that something is not a certain value
+                return true;
+            return false;
+        }
         bool operator()(std::nullptr_t, std::string, std::string) const { return false; }
         bool operator()(uint64_t val, std::string compare, std::string comparator) const
         {

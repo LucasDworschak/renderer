@@ -34,11 +34,8 @@
 
 namespace nucleus::vector_layer {
 
-// TODO here:
-// - integrate style buffer into gl engine / shader
-// - write style index to buffer per triangle
-// - open the floodgates and visualize other polygons
-// - probably improve shader so that everything is visualized correctly
+// TODOs
+// - line visualization
 
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
 {
@@ -75,6 +72,8 @@ TempDataHolder parse_tile(tile::Id id, const QByteArray& vector_tile_data, const
 
     TempDataHolder data;
 
+    std::map<uint32_t, std::vector<std::pair<uint32_t, PolygonData>>> polygon_data;
+
     for (const auto& layer_name : tile.layerNames()) {
         // qDebug() << layer_name << id.zoom_level;
 
@@ -95,12 +94,17 @@ TempDataHolder parse_tile(tile::Id id, const QByteArray& vector_tile_data, const
 
         for (std::size_t i = 0; i < feature_count; ++i) {
             const auto feature = mapbox::vector_tile::feature(layer.getFeature(i), layer);
-            auto props = feature.getProperties();
 
             const auto type = (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) ? "line" : "fill";
-            const auto style_index = style.layer_style_index(layer_name, type, id.zoom_level, feature);
+            uint32_t style_index;
+            uint32_t layer_index;
+            std::tie(style_index, layer_index) = style.indices(layer_name, type, id.zoom_level, feature);
+
             if (style_index == -1u) // no style found -> we do not visualize it
                 continue;
+
+            if (!polygon_data.contains(layer_index))
+                polygon_data[layer_index] = std::vector<std::pair<uint32_t, PolygonData>>();
 
             if (feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
                 PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
@@ -112,12 +116,8 @@ TempDataHolder parse_tile(tile::Id id, const QByteArray& vector_tile_data, const
                     p.edges.insert(p.edges.end(), edges.begin(), edges.end());
                     p.vertices.insert(p.vertices.end(), geom[j].begin(), geom[j].end());
                 }
-                data.polygons.push_back(p);
-                data.polygon_styles.push_back(style_index);
 
-                // concat
-                // polygons.reserve(polygons.size() + geom.size()); // calling reserve here significantly impacts performance -> see if it is possible to call it outside of the loop
-                // polygons.insert(polygons.end(), geom.begin(), geom.end());
+                polygon_data[layer_index].push_back(std::make_pair(style_index, p));
 
             } else if (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) {
                 PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(1.0);
@@ -129,7 +129,14 @@ TempDataHolder parse_tile(tile::Id id, const QByteArray& vector_tile_data, const
         }
     }
 
-    qDebug();
+    // resolve polygon_data map to data.polygons and data.polygon_styles, by reversing over the keys and inserting them into the respective vectors
+    // reverse since we want to insert them in top down drawing order (the first polygon it encounters will likely be drawn and it can early exit)
+    for (auto it = polygon_data.crbegin(); it != polygon_data.crend(); ++it) {
+        for (size_t i = 0; i < it->second.size(); i++) {
+            data.polygon_styles.push_back(it->second[i].first);
+            data.polygons.push_back(it->second[i].second);
+        }
+    }
 
     return data;
 }
@@ -226,7 +233,7 @@ std::tuple<glm::vec2, glm::vec2, glm::vec2, uint32_t> unpack_triangle_data(glm::
 VectorLayerCollection preprocess_triangles(const TempDataHolder& data)
 {
     VectorLayerCollection triangle_collection;
-    triangle_collection.acceleration_grid = std::vector<std::unordered_set<uint32_t>>(constants::grid_size * constants::grid_size, std::unordered_set<uint32_t>());
+    triangle_collection.acceleration_grid = std::vector<std::vector<uint32_t>>(constants::grid_size * constants::grid_size, std::vector<uint32_t>());
 
     float thickness = 0.0f;
 
@@ -251,7 +258,7 @@ VectorLayerCollection preprocess_triangles(const TempDataHolder& data)
         const auto cell_writer = [&triangle_collection, data_offset](glm::vec2 pos, int data_index) {
             // if in grid_size bounds than add data_index to vector
             if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(constants::grid_size), pos)))
-                triangle_collection.acceleration_grid[int(pos.x) + constants::grid_size * int(pos.y)].insert(data_index + data_offset);
+                triangle_collection.acceleration_grid[int(pos.x) + constants::grid_size * int(pos.y)].push_back(data_index + data_offset);
         };
 
         nucleus::utils::rasterizer::rasterize_triangle(cell_writer, triangle_points, thickness, float(constants::grid_size) / float(data.extent));
@@ -270,7 +277,7 @@ VectorLayerCollection preprocess_lines(const TempDataHolder&)
 // VectorLayerCollection preprocess_lines(const std::vector<PolygonData> lines, const std::vector<unsigned int> style_indices)
 {
     VectorLayerCollection line_collection;
-    line_collection.acceleration_grid = std::vector<std::unordered_set<uint32_t>>(constants::grid_size * constants::grid_size, std::unordered_set<uint32_t>());
+    line_collection.acceleration_grid = std::vector<std::vector<uint32_t>>(constants::grid_size * constants::grid_size, std::vector<uint32_t>());
 
     // float thickness = 5.0f;
 
@@ -323,7 +330,7 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collect
 {
     GpuVectorLayerTile tile;
 
-    std::unordered_map<std::unordered_set<uint32_t>, uint32_t, Hasher> unique_entries;
+    std::unordered_map<std::vector<uint32_t>, uint32_t, Hasher> unique_entries;
     std::vector<uint32_t> acceleration_grid;
     std::vector<uint32_t> index_buffer;
     std::vector<glm::u32vec3> data_triangle = triangle_collection.vertex_buffer;

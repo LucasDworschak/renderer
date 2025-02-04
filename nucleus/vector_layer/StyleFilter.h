@@ -36,13 +36,13 @@ class StyleFilter {
 public:
     StyleFilter() { }
 
-    void add_filter(uint32_t style_index, std::shared_ptr<StyleExpressionBase> filter, glm::uvec2 zoom_range);
+    void add_filter(uint32_t style_index, uint32_t layer_index, std::shared_ptr<StyleExpressionBase> filter, glm::uvec2 zoom_range);
 
-    uint32_t style_index(unsigned zoom, const mapbox::vector_tile::feature& feature) const;
+    std::pair<uint32_t, uint32_t> indices(unsigned zoom, const mapbox::vector_tile::feature& feature) const;
 
 private:
     // zoom level -> vector<style_index,StyleExpression>
-    std::unordered_map<unsigned, std::vector<std::pair<uint32_t, std::shared_ptr<StyleExpressionBase>>>> m_filter;
+    std::unordered_map<unsigned, std::vector<std::tuple<uint32_t, uint32_t, std::shared_ptr<StyleExpressionBase>>>> m_filter;
 };
 
 } // namespace nucleus::vector_layer

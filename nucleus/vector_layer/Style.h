@@ -66,7 +66,7 @@ public:
     uint32_t parse_color(QJsonValue value);
     uint32_t parse_dasharray(QJsonArray dash_values);
 
-    uint32_t layer_style_index(std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
+    std::pair<uint32_t, uint32_t> indices(std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
 
     StyleBufferHolder style_buffer() const;
 

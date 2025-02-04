@@ -22,36 +22,39 @@
 
 namespace nucleus::vector_layer {
 
-void StyleFilter::add_filter(uint32_t style_index, std::shared_ptr<StyleExpressionBase> filter, glm::uvec2 zoom_range)
+void StyleFilter::add_filter(uint32_t style_index, uint32_t layer_index, std::shared_ptr<StyleExpressionBase> filter, glm::uvec2 zoom_range)
 {
     for (unsigned i = zoom_range.x; i < zoom_range.y; i++) {
         if (!m_filter.contains(i)) {
-            m_filter[i] = std::vector<std::pair<uint32_t, std::shared_ptr<StyleExpressionBase>>>();
+            m_filter[i] = std::vector<std::tuple<uint32_t, uint32_t, std::shared_ptr<StyleExpressionBase>>>();
         }
-        m_filter[i].push_back(std::make_pair(style_index, filter));
+        m_filter[i].push_back(std::make_tuple(style_index, layer_index, filter));
     }
 }
 
-uint32_t StyleFilter::style_index(unsigned zoom, const mapbox::vector_tile::feature& feature) const
+std::pair<uint32_t, uint32_t> StyleFilter::indices(unsigned zoom, const mapbox::vector_tile::feature& feature) const
 {
     if (!m_filter.contains(zoom)) {
         // qDebug() << "filter at zoom not found ";
-        return -1u; // not found
+        return std::make_pair(-1u, -1u); // not found
     }
 
     const auto type = feature.getType();
     const auto properties = feature.getProperties();
 
-    for (const auto& pair : m_filter.at(zoom)) {
-        if (pair.second == nullptr)
-            return pair.first; // no filter is here -> we assume that every feature with layername and zoom is valid
-        if (pair.second->matches(type, properties)) {
-            return pair.first; // first filter that matches returns the style index
+    for (const auto& values : m_filter.at(zoom)) {
+        if (std::get<2>(values) == nullptr) // no filter is here -> we assume that every feature with layername and zoom is valid
+        {
+            assert(m_filter.at(zoom).size() == 1); // if there is no filter -> there should only be one valid value
+            return std::make_pair(std::get<0>(values), std::get<1>(values));
+        }
+        if (std::get<2>(values)->matches(type, properties)) {
+            return std::make_pair(std::get<0>(values), std::get<1>(values)); // first filter that matches returns the indices
         }
     }
 
     // qDebug() << "filter and zoom exist but no match found";
-    return -1u; // not found
+    return std::make_pair(-1u, -1u); // not found
 }
 
 } // namespace nucleus::vector_layer

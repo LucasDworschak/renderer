@@ -283,6 +283,7 @@ void main() {
                 }
 
                 for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
+                // for(highp uint i = offset_size.x+ offset_size.y; i --> offset_size.x ; ) // reverse traversal
                 {                    
                     highp uint triangle_index = triangle_index_sample(sampler_buffer_index, i, texture_layer.y);
 
@@ -309,20 +310,19 @@ void main() {
                     if(triangle_influence <= 0.0)
                         continue;
 
-                    alpha += triangle_influence;
+                    highp uvec4 style_data = texelFetch(fill_styles_sampler, ivec2(to_dict_pixel_64(style_index)), 0);
+                    vec4 layer_color = vec4((style_data.r & 4278190080u) >> 24, (style_data.r & 16711680u) >> 16, (style_data.r & 65280u) >> 8, style_data.r & 255u) / vec4(255.0f);
+
+                    alpha += triangle_influence * layer_color.a;
                     if(alpha > 1.0)
                         triangle_influence = alpha - 1.0;
 
-                    highp uvec4 style_data = texelFetch(fill_styles_sampler, ivec2(to_dict_pixel_64(style_index)), 0);
-                    vec4 layer_color = vec4((style_data.r & 4278190080u) >> 24, (style_data.r & 16711680u) >> 16, (style_data.r & 65280u) >> 8, style_data.r & 255u) / vec4(255.0f);
+
                     // vec4 layer_color = vec4(style_data.r,255,0,255) / vec4(255.0f);
-                    // vec3 layer_color = color_from_id_hash(style_index); // DEBUG style to color hash
+                    // vec3 layer_triangle_outcolor = color_from_id_hash(style_index); // DEBUG style to color hash
 
-                    // vec3 layer_color = vec3(179.0f/255.0f,217.0f/255.0f,255.0f/255.0f);
-                    triangle_out = mix(triangle_out, layer_color.rgb * triangle_influence , triangle_influence);
-
-
-
+                    // triangle_out = mix(triangle_out, layer_color.rgb , triangle_influence);
+                    triangle_out = layer_color.rgb;//mix(triangle_out, layer_color.rgb * triangle_influence , triangle_influence);
 
                     if(alpha >= 1.0)
                         break; // early exit if alpha is 1;
@@ -330,10 +330,16 @@ void main() {
                 }
 
                 texout_albedo = mix(texout_albedo, triangle_out, alpha);
+                // texout_albedo = triangle_out;
 
                 // texout_albedo = mix(cells, triangle_out, 0.9);// DEBUG
-                // texout_albedo = mix(texout_albedo, triangle_lines_out, 0.9);// DEBUG
+                // texout_albedo = mix(texout_albedo, triangle_lines_out, 0.5);// DEBUG
 
+                // vec3 grid_start = color_from_id_hash(offset_size.x);
+                // vec3 grid_start = color_from_id_hash(offset_size.y);
+                // texout_albedo = grid_start;
+
+                // texout_albedo = mix(grid_start, triangle_out, 0.5);// DEBUG
                 // texout_albedo = mix(raw_grid, triangle_out, 0.5);// DEBUG
                 // texout_albedo = raw_grid;// DEBUG
                 // texout_albedo = vec3(alpha);// DEBUG

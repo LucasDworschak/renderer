@@ -47,7 +47,7 @@ namespace details {
     template <class T> inline void hash_combine(std::size_t& seed, T const& v) { seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2); }
 
     struct Hasher {
-        size_t operator()(const std::unordered_set<uint32_t>& seq) const
+        size_t operator()(const std::vector<uint32_t>& seq) const
         {
             size_t seed = 0;
             for (const uint32_t& i : seq) {
@@ -63,7 +63,7 @@ namespace details {
         std::vector<glm::ivec2> edges;
     };
 
-    using VectorLayerGrid = std::vector<std::unordered_set<uint32_t>>;
+    using VectorLayerGrid = std::vector<std::vector<uint32_t>>;
 
     struct VectorLayerCollection {
     public:

@@ -133,7 +133,7 @@ mapbox::feature::value StyleExpression::extract_value(const mapbox::vector_tile:
             return "LineString";
         else if (type == mapbox::vector_tile::GeomType::POINT)
             return "Point";
-        else if (type == mapbox::vector_tile::GeomType::POINT)
+        else if (type == mapbox::vector_tile::GeomType::POLYGON)
             return "Polygon";
         else
             return "UNKNOWN";

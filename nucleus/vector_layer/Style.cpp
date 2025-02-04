@@ -58,6 +58,8 @@ void Style::load()
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonArray layers = expand(doc.object().value("layers").toArray());
 
+    uint32_t layer_index = 0;
+
     for (const QJsonValue& obj : layers) {
 
         bool fill = true;
@@ -88,6 +90,8 @@ void Style::load()
         LayerStyle s;
         std::shared_ptr<StyleExpressionBase> filter = StyleExpressionBase::create_filter_expression(filterData);
 
+        bool invalid = false;
+
         for (const QString& key : paintObject.keys()) {
 
             // fill-antialias ?
@@ -113,13 +117,19 @@ void Style::load()
                 s.outline_dash = parse_dasharray(paintObject.value(key).toArray());
             } else if (key == "line-offset") {
                 // might be needed
+            } else if (key == "fill-pattern") {
+                // currently not supported -> causes errors when parsed
+                invalid = true;
             } else if (key == "icon-color" || key == "circle-color" || key == "circle-radius" || key == "circle-stroke-color" || key == "circle-stroke-width" || key == "text-color"
-                || key == "text-halo-color" || key == "text-halo-width" || key == "fill-pattern" || key == "fill-antialias" || key == "line-gap-width") {
+                || key == "text-halo-color" || key == "text-halo-width" || key == "fill-antialias" || key == "line-gap-width") {
                 // not used
             } else {
                 qDebug() << "new unhandled style key detected: " << key.toStdString();
             }
         }
+
+        if (invalid)
+            continue;
 
         uint32_t style_index = -1u;
 
@@ -158,7 +168,9 @@ void Style::load()
         const auto layer_name = obj.toObject().value("source-layer").toString().toStdString() + "_" + obj.toObject().value("type").toString().toStdString();
         if (!m_layer_to_style.contains(layer_name))
             m_layer_to_style[layer_name] = StyleFilter();
-        m_layer_to_style[layer_name].add_filter(style_index, filter, zoom_range);
+        m_layer_to_style[layer_name].add_filter(style_index, layer_index, filter, zoom_range);
+
+        layer_index++;
     }
 
     // make sure that the style values are within the buffer size; resize them to this size and create the raster images
@@ -286,17 +298,17 @@ QJsonArray Style::expand(const QJsonArray& layers)
     return out_layer;
 }
 
-uint32_t Style::layer_style_index(
+std::pair<uint32_t, uint32_t> Style::indices(
     std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const // + properties // type=Polygon/Point/... // class? subclass
 {
     const auto layer = layer_name + "_" + type;
 
     if (!m_layer_to_style.contains(layer)) {
         // qDebug() << "no style for: " << layer_name;
-        return -1u;
+        return std::make_pair(-1u, -1u);
     }
 
-    return m_layer_to_style.at(layer).style_index(zoom, feature);
+    return m_layer_to_style.at(layer).indices(zoom, feature);
 }
 
 StyleBufferHolder Style::style_buffer() const { return m_styles; }
