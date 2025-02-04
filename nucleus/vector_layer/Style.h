@@ -63,8 +63,8 @@ class Style : public QObject {
 public:
     Style(const QString& filename);
 
-    uint32_t parse_color(QJsonValue value);
-    uint32_t parse_dasharray(QJsonArray dash_values);
+    uint32_t parse_color(const QJsonValue& value);
+    uint32_t parse_dasharray(const QJsonValue& dash_values);
 
     std::pair<uint32_t, uint32_t> indices(std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
 
@@ -81,13 +81,14 @@ signals:
 private:
     StyleBufferHolder m_styles;
 
-    QJsonValue onlyLastStopValue(QJsonValue value);
+    uint8_t parse_opacity(const QJsonValue& value);
+
+    QJsonValue onlyLastStopValue(const QJsonValue& value);
 
     static bool sub_is_array(QJsonObject obj, QString sub_key);
     static QJsonValue get_match_value(QJsonArray match_array, QString match_key);
     static std::unordered_map<QString, QJsonArray> get_sub_layer(QJsonArray filter);
 
-    // std::unordered_map<std::tuple<std::string, unsigned>, size_t, radix::hasher::for_tuple<std::string, unsigned>> m_layer_zoom_to_style;
     std::unordered_map<std::string, StyleFilter> m_layer_to_style;
 
     QString m_filename;

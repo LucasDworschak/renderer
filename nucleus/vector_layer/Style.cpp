@@ -92,6 +92,8 @@ void Style::load()
 
         bool invalid = false;
 
+        uint8_t opacity = 255u;
+
         for (const QString& key : paintObject.keys()) {
 
             // fill-antialias ?
@@ -99,10 +101,8 @@ void Style::load()
                 s.fill_color = parse_color(paintObject.value(key));
             } else if (key == "line-color") {
                 s.fill_color = parse_color(paintObject.value(key));
-            } else if (key == "fill-opacity") {
-                // TODO support fill-opacity
-            } else if (key == "line-opacity") {
-                // TODO support line-opacity
+            } else if (key == "fill-opacity" || key == "line-opacity") {
+                opacity = parse_opacity(paintObject.value(key));
             } else if (key == "fill-outline-color") {
                 s.outline_color = parse_color(paintObject.value(key));
             } else if (key == "fill-outline-color") {
@@ -126,6 +126,14 @@ void Style::load()
             } else {
                 qDebug() << "new unhandled style key detected: " << key.toStdString();
             }
+        }
+
+        if (opacity != 255u) {
+            s.fill_color &= 4294967040u; // bit mask that zeros out the opacity bits
+            s.fill_color |= opacity;
+
+            s.outline_color &= 4294967040u; // bit mask that zeros out the opacity bits
+            s.outline_color |= opacity;
         }
 
         if (invalid)
@@ -342,7 +350,7 @@ float stringToFloat(const std::string& value)
  * but we are also not quite clear about all the possible values
  * -> THEREFORE TODO veryfy the assumptions of this method
  */
-uint32_t Style::parse_dasharray(QJsonArray)
+uint32_t Style::parse_dasharray(const QJsonValue&)
 {
     // TODO there are also values with more than two values
     // currently only 2 values are allowed here
@@ -361,9 +369,9 @@ uint32_t Style::parse_dasharray(QJsonArray)
 // ideally we would extract everything here, and determine the actual value dynamically by calculating the zoom, but this would mean that we need to extract far more styles per zoom level, which might
 // be a bit overkill if e.g. the color only slightly changes
 // nevertheless @TODO reevaluate if we want to extract and interpolate the stops
-QJsonValue Style::onlyLastStopValue(QJsonValue value) { return value.toObject().value("stops").toArray().last().toArray().last(); }
+QJsonValue Style::onlyLastStopValue(const QJsonValue& value) { return value.toObject().value("stops").toArray().last().toArray().last(); }
 
-uint32_t Style::parse_color(QJsonValue value)
+uint32_t Style::parse_color(const QJsonValue& value)
 {
     std::string colorValue;
     if (value.isString()) {
@@ -464,6 +472,24 @@ uint32_t Style::parse_color(QJsonValue value)
         qDebug() << "cannot parse color: " << colorValue;
         return 0ul;
     }
+}
+
+uint8_t Style::parse_opacity(const QJsonValue& value)
+{
+    QJsonValue opacityValue;
+    if (value.isObject() && value.toObject().contains("stops")) {
+        opacityValue = onlyLastStopValue(value);
+    } else {
+        opacityValue = value;
+    }
+
+    if (opacityValue.isDouble() && opacityValue.toDouble() <= 1.0) {
+        return opacityValue.toDouble() * 255;
+    }
+
+    qDebug() << "unhandled opacity value" << opacityValue;
+    assert(false);
+    return 255;
 }
 
 } // namespace nucleus::vector_layer

@@ -248,8 +248,8 @@ void main() {
                 lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
                 vec3 triangle_lines_out = vec3(0.0f, 0.0, 0.0f); // DEBUG
 
-                vec3 triangle_out = vec3(0.0f, 0.0, 0.0f);
-                float alpha = 0.0;
+                vec3 polygon_color = vec3(0.0f, 0.0, 0.0f);
+                float pixel_alpha = 0.0;
 
                 // get the buffer index and extract the correct texture_layer.y
                 lowp uint sampler_buffer_index = (texture_layer.y & ((highp uint(-1u) << sampler_offset))) >> sampler_offset;
@@ -282,6 +282,10 @@ void main() {
                         cell_debug = vec3(1,0,1); // purple -> should never happen -> unrecognized index
                 }
 
+                highp uint last_style = -1u;
+                vec4 current_layer_color = vec4(0.0);
+                float layer_alpha = 0;
+
                 for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
                 // for(highp uint i = offset_size.x+ offset_size.y; i --> offset_size.x ; ) // reverse traversal
                 {                    
@@ -304,48 +308,75 @@ void main() {
                         triangle_lines_out += vec3(0.0f, t_line, 0.0f);
                     }
 
+                    highp float polygon_influence = 1.0 - step(0.0, d);
 
-                    highp float triangle_influence = 1.0 - step(0.0, d);
-
-                    if(triangle_influence <= 0.0)
+                    // polygon does not influence pixel at all -> we do not draw it
+                    if(polygon_influence <= 0.0)
                         continue;
 
-                    highp uvec4 style_data = texelFetch(fill_styles_sampler, ivec2(to_dict_pixel_64(style_index)), 0);
-                    vec4 layer_color = vec4((style_data.r & 4278190080u) >> 24, (style_data.r & 16711680u) >> 16, (style_data.r & 65280u) >> 8, style_data.r & 255u) / vec4(255.0f);
 
-                    alpha += triangle_influence * layer_color.a;
-                    if(alpha > 1.0)
-                        triangle_influence = alpha - 1.0;
+                    // we need to make sure that a layer with < 1 opacity does only fill the correct amount of opacity
+                    // we therefore fill colors per layerstyle
+                    if(last_style == style_index)
+                    {
+                        if(layer_alpha >= 1.0)
+                        {
+                            // we already fully filled the current layer -> go to the next layer
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        // we encountered a new layer
 
+                        // mix the previous layer color information with output
+                        polygon_color = mix(polygon_color, current_layer_color.rgb, layer_alpha * current_layer_color.a);
 
-                    // vec4 layer_color = vec4(style_data.r,255,0,255) / vec4(255.0f);
-                    // vec3 layer_triangle_outcolor = color_from_id_hash(style_index); // DEBUG style to color hash
+                        // get and store new style info
+                        last_style = style_index;
+                        highp uvec4 style_data = texelFetch(fill_styles_sampler, ivec2(to_dict_pixel_64(style_index)), 0);
+                        vec4 layer_color = vec4((style_data.r & 4278190080u) >> 24, (style_data.r & 16711680u) >> 16, (style_data.r & 65280u) >> 8, style_data.r & 255u) / vec4(255.0f);
 
-                    // triangle_out = mix(triangle_out, layer_color.rgb , triangle_influence);
-                    triangle_out = layer_color.rgb;//mix(triangle_out, layer_color.rgb * triangle_influence , triangle_influence);
+                        current_layer_color = layer_color;
+                        // how much alpha per layer we accumulate
+                        layer_alpha = 0.0;
+                    }
 
-                    if(alpha >= 1.0)
-                        break; // early exit if alpha is 1;
+                    pixel_alpha += polygon_influence * current_layer_color.a;
+                    if(pixel_alpha > 1.0)
+                        polygon_influence = pixel_alpha - 1.0;
+
+                    layer_alpha += polygon_influence;
+
+                    if(pixel_alpha >= 1.0)
+                        break; // early exit if alpha is >= 1;
 
                 }
 
-                texout_albedo = mix(texout_albedo, triangle_out, alpha);
-                // texout_albedo = triangle_out;
+                // mix the last layer we parsed
+                polygon_color = mix(polygon_color, current_layer_color.rgb, layer_alpha * current_layer_color.a);
 
-                // texout_albedo = mix(cells, triangle_out, 0.9);// DEBUG
+                // mix polygon color with background
+                texout_albedo = mix(texout_albedo, polygon_color, pixel_alpha);
+
+                // texout_albedo = polygon_color;
+
+                // texout_albedo = mix(cells, texout_albedo, 0.9);// DEBUG
                 // texout_albedo = mix(texout_albedo, triangle_lines_out, 0.5);// DEBUG
 
                 // vec3 grid_start = color_from_id_hash(offset_size.x);
                 // vec3 grid_start = color_from_id_hash(offset_size.y);
+
                 // texout_albedo = grid_start;
 
-                // texout_albedo = mix(grid_start, triangle_out, 0.5);// DEBUG
-                // texout_albedo = mix(raw_grid, triangle_out, 0.5);// DEBUG
+                // texout_albedo = mix(grid_start, polygon_color, 0.5);// DEBUG
+                // texout_albedo = mix(raw_grid, polygon_color, 0.5);// DEBUG
                 // texout_albedo = raw_grid;// DEBUG
-                // texout_albedo = vec3(alpha);// DEBUG
+                // texout_albedo = vec3(pixel_alpha);// DEBUG
                 // texout_albedo = triangle_lines_out;// DEBUG
                 // texout_albedo = layer_debug;// DEBUG
                 // texout_albedo = cell_debug;// DEBUG
+                 // texout_albedo = mix(texout_albedo, color_from_id_hash(texture_layer.y), 0.2);
 
             }
             else

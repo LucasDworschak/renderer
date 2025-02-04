@@ -195,7 +195,7 @@ TEST_CASE("nucleus/vector_style")
         CHECK(line_style_buffer[feature_to_style["line__transportation__path__path__no__no__no__unpaved__no"]].x == s.parse_color("#fa8072"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__path__path__no__unpaved__no"]].x == s.parse_color("#fa8072"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__path__path__no__unpaved__yes"]].x == s.parse_color("#fa8072"));
-        CHECK(fill_style_buffer[feature_to_style["fill__water__pond__null__1"]].x == s.parse_color("rgba(172, 218, 251, 1)"));
+        CHECK(fill_style_buffer[feature_to_style["fill__water__pond__null__1"]].x == s.parse_color("rgba(172, 218, 251, 0.85)"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__paved__-1__tunnel"]].x == s.parse_color("#fff"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__minor__null__tunnel__-1"]].x == s.parse_color("#fff"));
         CHECK(line_style_buffer[feature_to_style["line__transportation__tertiary__null"]].x == s.parse_color("#8f8f8f"));
