@@ -1,7 +1,6 @@
 /*****************************************************************************
  * AlpineMaps.org
- * Copyright (C) 2024 Adam Celarek
- * Copyright (C) 2025 Lucas Dworschak
+ * Copyright (C) 2024 Lucas Dworschak
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,30 +18,31 @@
 
 #pragma once
 
-#include "types.h"
-#include <nucleus/Raster.h>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 
-namespace nucleus::tile {
+#include <glm/glm.hpp>
 
-class GpuArrayHelper {
+#include "StyleExpression.h"
+
+namespace mapbox::vector_tile {
+class feature;
+}
+
+namespace nucleus::vector_layer {
+
+class StyleFilter {
 public:
-    struct Dictionary {
-        nucleus::Raster<glm::u32vec2> packed_ids;
-        nucleus::Raster<uint16_t> array_layers;
-    };
-    GpuArrayHelper();
+    StyleFilter() { }
 
-    /// returns index in texture array
-    uint16_t add_tile(const tile::Id& tile_id, bool add_to_array = true, uint8_t additonal_info = 0, uint8_t additional_info_bitshift = 16);
-    void remove_tile(const tile::Id& tile_id);
-    bool contains_tile(const tile::Id& tile_id);
-    void set_quad_limit(unsigned new_limit);
-    unsigned size() const;
-    Dictionary generate_dictionary() const;
+    void add_filter(uint32_t style_index, uint32_t layer_index, std::shared_ptr<StyleExpressionBase> filter, glm::uvec2 zoom_range);
+
+    std::pair<uint32_t, uint32_t> indices(unsigned zoom, const mapbox::vector_tile::feature& feature) const;
 
 private:
-    std::vector<tile::Id> m_array;
-    tile::IdMap<uint16_t> m_id_to_array_layer;
+    // zoom level -> vector<style_index,StyleExpression>
+    std::unordered_map<unsigned, std::vector<std::tuple<uint32_t, uint32_t, std::shared_ptr<StyleExpressionBase>>>> m_filter;
 };
 
-} // namespace nucleus::tile
+} // namespace nucleus::vector_layer

@@ -27,6 +27,7 @@ class MapLabels;
 class ShaderRegistry;
 class TileGeometry;
 class TextureLayer;
+class VectorLayer;
 
 class Context : public nucleus::EngineContext {
 private:
@@ -48,6 +49,9 @@ public:
     [[nodiscard]] TextureLayer* ortho_layer() const;
     void set_ortho_layer(std::shared_ptr<TextureLayer> new_ortho_layer);
 
+    [[nodiscard]] VectorLayer* vector_layer() const;
+    void set_vector_layer(std::shared_ptr<VectorLayer> new_vector_layer);
+
 protected:
     void internal_initialise() override;
     void internal_destroy() override;
@@ -55,6 +59,7 @@ protected:
 private:
     std::shared_ptr<TileGeometry> m_tile_geometry;
     std::shared_ptr<TextureLayer> m_ortho_layer;
+    std::shared_ptr<VectorLayer> m_vector_layer;
     std::shared_ptr<gl_engine::MapLabels> m_map_label_manager;
     std::shared_ptr<gl_engine::TrackManager> m_track_manager;
     std::shared_ptr<gl_engine::ShaderRegistry> m_shader_registry;

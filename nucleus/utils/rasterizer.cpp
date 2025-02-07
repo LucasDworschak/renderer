@@ -22,17 +22,17 @@
 
 namespace nucleus::utils::rasterizer {
 
-std::vector<glm::ivec2> generate_neighbour_edges(std::vector<glm::vec2> polygon_points, const size_t start_offset)
+std::vector<glm::ivec2> generate_neighbour_edges(size_t num_points, const size_t start_offset)
 {
     std::vector<glm::ivec2> edges;
     { // create the edges
-        edges.reserve(polygon_points.size());
-        for (size_t i = 0; i < polygon_points.size() - 1; i++) {
+        edges.reserve(num_points);
+        for (size_t i = 0; i < num_points - 1; i++) {
             edges.push_back(glm::ivec2(start_offset + int(i), start_offset + int(i + 1)));
         }
 
         // last edge between start and end vertex
-        edges.push_back(glm::ivec2(start_offset + polygon_points.size() - 1, start_offset));
+        edges.push_back(glm::ivec2(start_offset + num_points - 1, start_offset));
     }
 
     return edges;
@@ -43,10 +43,10 @@ std::vector<glm::vec2> triangulize(std::vector<glm::vec2> polygon_points, std::v
     std::vector<glm::vec2> processed_triangles;
 
     // triangulation
-    CDT::Triangulation<double> cdt;
+    CDT::Triangulation<float> cdt;
 
     if (remove_duplicate_vertices) {
-        CDT::RemoveDuplicatesAndRemapEdges<double>(
+        CDT::RemoveDuplicatesAndRemapEdges<float>(
             polygon_points,
             [](const glm::vec2& p) { return p.x; },
             [](const glm::vec2& p) { return p.y; },
@@ -61,14 +61,15 @@ std::vector<glm::vec2> triangulize(std::vector<glm::vec2> polygon_points, std::v
     cdt.insertEdges(edges.begin(), edges.end(), [](const glm::ivec2& p) { return p.x; }, [](const glm::ivec2& p) { return p.y; });
     cdt.eraseOuterTrianglesAndHoles();
 
+    processed_triangles.reserve(cdt.triangles.size() * 3);
+
     // fill our own data structures
     for (size_t i = 0; i < cdt.triangles.size(); ++i) {
         auto tri = cdt.triangles[i];
 
-        std::vector<size_t> tri_indices = { tri.vertices[0], tri.vertices[1], tri.vertices[2] };
+        const std::array<CDT::V2d<float>, 3> vertices = { cdt.vertices[tri.vertices[0]], cdt.vertices[tri.vertices[1]], cdt.vertices[tri.vertices[2]] };
 
-        int top_index = (cdt.vertices[tri.vertices[0]].y < cdt.vertices[tri.vertices[1]].y) ? ((cdt.vertices[tri.vertices[0]].y < cdt.vertices[tri.vertices[2]].y) ? 0 : 2)
-                                                                                            : ((cdt.vertices[tri.vertices[1]].y < cdt.vertices[tri.vertices[2]].y) ? 1 : 2);
+        const int top_index = (vertices[0].y < vertices[1].y) ? ((vertices[0].y < vertices[2].y) ? 0 : 2) : ((vertices[1].y < vertices[2].y) ? 1 : 2);
         // for middle and bottom index we first initialize them randomly with the values that still need to be tested
         int middle_index;
         int bottom_index;
@@ -84,7 +85,7 @@ std::vector<glm::vec2> triangulize(std::vector<glm::vec2> polygon_points, std::v
         }
 
         // and now we test if we assigned them correctly
-        if (cdt.vertices[tri.vertices[middle_index]].y > cdt.vertices[tri.vertices[bottom_index]].y) {
+        if (vertices[middle_index].y > vertices[bottom_index].y) {
             // if not we have to interchange them
             int tmp = middle_index;
             middle_index = bottom_index;
@@ -92,9 +93,9 @@ std::vector<glm::vec2> triangulize(std::vector<glm::vec2> polygon_points, std::v
         }
 
         // lastly add the vertices to the vector in the correct order
-        processed_triangles.push_back({ cdt.vertices[tri.vertices[top_index]].x, cdt.vertices[tri.vertices[top_index]].y });
-        processed_triangles.push_back({ cdt.vertices[tri.vertices[middle_index]].x, cdt.vertices[tri.vertices[middle_index]].y });
-        processed_triangles.push_back({ cdt.vertices[tri.vertices[bottom_index]].x, cdt.vertices[tri.vertices[bottom_index]].y });
+        processed_triangles.push_back({ vertices[top_index].x, vertices[top_index].y });
+        processed_triangles.push_back({ vertices[middle_index].x, vertices[middle_index].y });
+        processed_triangles.push_back({ vertices[bottom_index].x, vertices[bottom_index].y });
     }
 
     return processed_triangles;

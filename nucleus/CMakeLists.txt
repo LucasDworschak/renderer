@@ -26,7 +26,7 @@ alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMM
 alp_add_git_repository(tl_expected URL https://github.com/TartanLlama/expected.git COMMITISH v1.1.0 DO_NOT_ADD_SUBPROJECT)
 alp_add_git_repository(zppbits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.4.25 DO_NOT_ADD_SUBPROJECT)
 if(ALP_ENABLE_LABELS)
-    alp_add_git_repository(vector_tiles URL https://github.com/AlpineMapsOrg/vector-tile.git COMMITISH faba88257716c4bc01ebd44d8b8b98f711ecb78c)
+    alp_add_git_repository(vector_tiles URL https://github.com/AlpineMapsOrg/vector-tile.git COMMITISH 2c525181b8a23286cc6973168569aa3ced7554a2)
 endif()
 alp_add_git_repository(goofy_tc URL https://github.com/AlpineMapsOrgDependencies/Goofy_slim.git COMMITISH 13b228784960a6227bb6ca704ff34161bbac1b91 DO_NOT_ADD_SUBPROJECT)
 alp_add_git_repository(cdt URL https://github.com/artem-ogre/CDT.git COMMITISH 46f1ce1f495a97617d90e8c833d0d29406335fdf DO_NOT_ADD_SUBPROJECT)
@@ -117,7 +117,16 @@ qt_add_library(nucleus STATIC
     tile/GeometryScheduler.h tile/GeometryScheduler.cpp
     utils/error.h
     utils/lang.h
+    vector_layer/Preprocessor.h vector_layer/Preprocessor.cpp
+    vector_layer/setup.h
+    vector_layer/Scheduler.h vector_layer/Scheduler.cpp
+    vector_layer/Style.h vector_layer/Style.cpp
+    vector_layer/constants.h
+    vector_layer/StyleFilter.h vector_layer/StyleFilter.cpp
+    vector_layer/StyleExpression.h vector_layer/StyleExpression.cpp
+    vector_layer/GpuMultiArrayHelper.h vector_layer/GpuMultiArrayHelper.cpp
     utils/rasterizer.h utils/rasterizer.cpp
+
 )
 
 if (ALP_ENABLE_AVLANCHE_WARNING_LAYER)
@@ -175,6 +184,13 @@ qt_add_resources(nucleus "charset"
     PREFIX "/charset"
     BASE ${CMAKE_SOURCE_DIR}/app/
     FILES ${CMAKE_SOURCE_DIR}/app/charset.txt
+)
+
+qt_add_resources(nucleus "vectorlayerstyles"
+    PREFIX "/vectorlayerstyles"
+    BASE ${CMAKE_SOURCE_DIR}/app/vectorlayerstyles
+    FILES ${CMAKE_SOURCE_DIR}/app/vectorlayerstyles/basemap.json
+    FILES ${CMAKE_SOURCE_DIR}/app/vectorlayerstyles/openstreetmap.json
 )
 
 

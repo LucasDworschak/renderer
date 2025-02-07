@@ -21,8 +21,6 @@
 
 #include <glm/glm.hpp>
 
-#include <iostream>
-
 namespace nucleus::utils::rasterizer {
 /*
  * Possible future improvements:
@@ -486,7 +484,7 @@ namespace details {
  * start offset if you want to only create an edge ring list of a part of the bigger polygon you can only provide the part and an start_offset,
  * that indicates by how much the vertice index has to be offset
  */
-std::vector<glm::ivec2> generate_neighbour_edges(std::vector<glm::vec2> polygon_points, const size_t start_offset = 0);
+std::vector<glm::ivec2> generate_neighbour_edges(size_t num_points, const size_t start_offset = 0);
 
 /*
  * triangulizes polygons and orders the vertices by y position per triangle
@@ -508,10 +506,11 @@ std::vector<glm::vec2> triangulize(std::vector<glm::vec2> polygon_points, std::v
  *      const auto pixel_writer = [&output](glm::ivec2 pos) { output.pixel(pos) = 255; };
  *      nucleus::utils::rasterizer::rasterize_triangle(pixel_writer, triangle_points);
  */
-template <PixelWriterFunctionConcept PixelWriterFunction> void rasterize_triangle(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& triangles, float distance = 0.0)
+template <PixelWriterFunctionConcept PixelWriterFunction>
+void rasterize_triangle(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& triangles, float distance = 0.0, float scale = 1.0)
 {
     for (size_t i = 0; i < triangles.size() / 3; ++i) {
-        details::render_triangle(pixel_writer, { triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2] }, i, distance);
+        details::render_triangle(pixel_writer, { triangles[i * 3 + 0] * scale, triangles[i * 3 + 1] * scale, triangles[i * 3 + 2] * scale }, i, distance);
     }
 }
 
@@ -529,10 +528,11 @@ template <PixelWriterFunctionConcept PixelWriterFunction> void rasterize_triangl
  *      const auto pixel_writer = [&output](glm::ivec2 pos) { output.pixel(pos) = 255; };
  *      nucleus::utils::rasterizer::rasterize_line(pixel_writer, line);
  */
-template <PixelWriterFunctionConcept PixelWriterFunction> void rasterize_line(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& line_points, float distance = 0.0)
+template <PixelWriterFunctionConcept PixelWriterFunction>
+void rasterize_line(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& line_points, float distance = 0.0, float scale = 1.0)
 {
     for (size_t i = 0; i < line_points.size() - 1; ++i) {
-        details::render_line_preprocess(pixel_writer, { line_points[i + 0], line_points[i + 1] }, i, distance);
+        details::render_line_preprocess(pixel_writer, { line_points[i + 0] * scale, line_points[i + 1] * scale }, i, distance);
     }
 }
 
@@ -547,12 +547,13 @@ template <PixelWriterFunctionConcept PixelWriterFunction> void rasterize_line(co
  *      const auto pixel_writer = [&output](glm::ivec2 pos) { output.pixel(pos) = 255; };
  *      nucleus::utils::rasterizer::rasterize_polygon(pixel_writer, polygon_points);
  */
-template <PixelWriterFunctionConcept PixelWriterFunction> void rasterize_polygon(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& polygon_points, float distance = 0.0)
+template <PixelWriterFunctionConcept PixelWriterFunction>
+void rasterize_polygon(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& polygon_points, float distance = 0.0, float scale = 1.0)
 {
-    const auto edges = generate_neighbour_edges(polygon_points);
+    const auto edges = generate_neighbour_edges(polygon_points.size());
     const auto triangles = triangulize(polygon_points, edges);
 
-    rasterize_triangle(pixel_writer, triangles, distance);
+    rasterize_triangle(pixel_writer, triangles, distance, scale);
 }
 
 } // namespace nucleus::utils::rasterizer

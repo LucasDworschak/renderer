@@ -138,6 +138,7 @@ int main(int argc, char** argv)
     context->tile_geometry()->set_quad_limit(512);
     context->tile_geometry()->set_aabb_decorator(decorator);
     context->ortho_layer()->set_quad_limit(512);
+    // TODO @lucas -> add vector layer here
 
     Window glWindow(context);
 

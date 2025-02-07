@@ -35,8 +35,7 @@ TEST_CASE("nucleus/vector_tiles")
 
         const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
 
-        nucleus::tile::TileLoadService service(
-            "https://osm.cg.tuwien.ac.at/vector_tiles/poi_v1/", nucleus::tile::TileLoadService::UrlPattern::ZXY_yPointingSouth, "");
+        nucleus::tile::TileLoadService service("https://osm.cg.tuwien.ac.at/vector_tiles/poi_v1/", nucleus::tile::TileLoadService::UrlPattern::ZXY_yPointingSouth, "");
 
         {
             QSignalSpy spy(&service, &nucleus::tile::TileLoadService::load_finished);
@@ -56,9 +55,39 @@ TEST_CASE("nucleus/vector_tiles")
         }
     }
 
+    SECTION("Tile download - geometry")
+    {
+        // if this fails it is very likely that something on the vector tile server changed
+        // manually download the tile from the below link and check if the changes are valid and replace vectortile.mvt with this new file
+        // https://osm.cg.tuwien.ac.at/vector_tiles/poi_v1/10/548/359
+
+        const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+
+        nucleus::tile::TileLoadService service("https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/", nucleus::tile::TileLoadService::UrlPattern::ZXY_yPointingSouth, "");
+
+        {
+            QSignalSpy spy(&service, &nucleus::tile::TileLoadService::load_finished);
+            service.load(id);
+            spy.wait(10000);
+
+            REQUIRE(spy.count() == 1);
+            QList<QVariant> arguments = spy.takeFirst();
+            REQUIRE(arguments.size() == 1);
+            nucleus::tile::Data tile = arguments.at(0).value<nucleus::tile::Data>();
+            CHECK(tile.id == id);
+            CHECK(tile.network_info.status == nucleus::tile::NetworkInfo::Status::Good);
+            CHECK(nucleus::utils::time_since_epoch() - tile.network_info.timestamp < 10'000);
+
+            qDebug() << tile.data->isEmpty() << tile.data->size();
+
+            REQUIRE(tile.data->size() > 0);
+            CHECK(tile.data->size() > 2000);
+        }
+    }
+
     SECTION("Tile parsing")
     {
-        QString filepath = QString("%1%2").arg(ALP_TEST_DATA_DIR, "vectortile.mvt");
+        QString filepath = QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile.mvt");
         QFile file(filepath);
         file.open(QIODevice::ReadOnly | QIODevice::Unbuffered);
         QByteArray data = file.readAll();

@@ -56,8 +56,12 @@ GlParams gl_tex_params(gl_engine::Texture::Format format)
         return { GL_RG32UI, GL_RG_INTEGER, GL_UNSIGNED_INT, 2, 4 };
     case F::RGB32UI:
         return { GL_RGB32UI, GL_RGB_INTEGER, GL_UNSIGNED_INT, 3, 4 };
+    case F::RGBA32UI:
+        return { GL_RGBA32UI, GL_RGBA_INTEGER, GL_UNSIGNED_INT, 4, 4 };
     case F::R16UI:
         return { GL_R16UI, GL_RED_INTEGER, GL_UNSIGNED_SHORT, 1, 2 };
+    case F::RG16UI:
+        return { GL_RG16UI, GL_RG_INTEGER, GL_UNSIGNED_SHORT, 2, 2 };
     case F::R32UI:
         return { GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, 1, 4 };
     case F::Invalid:
@@ -272,16 +276,21 @@ void gl_engine::Texture::upload(const nucleus::Raster<T>& texture)
     if (m_min_filter == Filter::MipMapLinear)
         f->glGenerateMipmap(GLenum(m_target));
 }
+
 template void gl_engine::Texture::upload<uint16_t>(const nucleus::Raster<uint16_t>&);
 template void gl_engine::Texture::upload<uint32_t>(const nucleus::Raster<uint32_t>&);
+template void gl_engine::Texture::upload<glm::vec<2, uint16_t>>(const nucleus::Raster<glm::vec<2, uint16_t>>&);
 template void gl_engine::Texture::upload<glm::vec<2, uint32_t>>(const nucleus::Raster<glm::vec<2, uint32_t>>&);
 template void gl_engine::Texture::upload<glm::vec<3, uint32_t>>(const nucleus::Raster<glm::vec<3, uint32_t>>&);
+template void gl_engine::Texture::upload<glm::vec<4, uint32_t>>(const nucleus::Raster<glm::vec<4, uint32_t>>&);
 template void gl_engine::Texture::upload<glm::vec<2, uint8_t>>(const nucleus::Raster<glm::vec<2, uint8_t>>&);
 template void gl_engine::Texture::upload<glm::vec<4, uint8_t>>(const nucleus::Raster<glm::vec<4, uint8_t>>&);
 
 template void gl_engine::Texture::upload<uint32_t>(const nucleus::Raster<uint32_t>&, unsigned int);
+template void gl_engine::Texture::upload<glm::vec<2, uint16_t>>(const nucleus::Raster<glm::vec<2, uint16_t>>&, unsigned int);
 template void gl_engine::Texture::upload<glm::vec<2, uint32_t>>(const nucleus::Raster<glm::vec<2, uint32_t>>&, unsigned int);
 template void gl_engine::Texture::upload<glm::vec<3, uint32_t>>(const nucleus::Raster<glm::vec<3, uint32_t>>&, unsigned int);
+template void gl_engine::Texture::upload<glm::vec<4, uint32_t>>(const nucleus::Raster<glm::vec<4, uint32_t>>&, unsigned int);
 
 GLenum gl_engine::Texture::compressed_texture_format()
 {

@@ -52,7 +52,6 @@ struct PoiTile {
     vector_tile::PointOfInterestCollectionPtr data;
 };
 static_assert(tile::NamedTile<PoiTile>);
-
 // using PointOfInterestTileCollection = std::unordered_map<tile::Id, PointOfInterestCollectionPtr, tile::Id::Hasher>;
 
 } // namespace nucleus::vector_tile

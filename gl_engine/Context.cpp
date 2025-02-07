@@ -22,6 +22,7 @@
 #include "TextureLayer.h"
 #include "TileGeometry.h"
 #include "TrackManager.h"
+#include "VectorLayer.h"
 #include <QOpenGLContext>
 
 using namespace gl_engine;
@@ -59,6 +60,9 @@ void Context::internal_initialise()
 
     if (m_ortho_layer)
         m_ortho_layer->init(m_shader_registry.get());
+
+    if (m_vector_layer)
+        m_vector_layer->init(m_shader_registry.get());
 }
 
 void Context::internal_destroy()
@@ -69,6 +73,7 @@ void Context::internal_destroy()
     m_track_manager.reset();
     m_shader_registry.reset();
     m_map_label_manager.reset();
+    m_vector_layer.reset();
 }
 
 TextureLayer* Context::ortho_layer() const { return m_ortho_layer.get(); }
@@ -85,6 +90,14 @@ void Context::set_tile_geometry(std::shared_ptr<TileGeometry> new_tile_geometry)
 {
     assert(!is_alive()); // only set before init is called.
     m_tile_geometry = std::move(new_tile_geometry);
+}
+
+VectorLayer* Context::vector_layer() const { return m_vector_layer.get(); }
+
+void Context::set_vector_layer(std::shared_ptr<VectorLayer> new_vector_layer)
+{
+    assert(!is_alive()); // only set before init is called.
+    m_vector_layer = std::move(new_vector_layer);
 }
 
 gl_engine::MapLabels* Context::map_label_manager() const { return m_map_label_manager.get(); }

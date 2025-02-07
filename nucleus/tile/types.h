@@ -111,4 +111,25 @@ struct GpuGeometryQuad {
 };
 static_assert(NamedTile<GpuGeometryQuad>);
 
+struct GpuVectorLayerTile {
+    tile::Id id;
+    // 24 bits start_index, 8 bits size
+    std::shared_ptr<const nucleus::Raster<uint32_t>> acceleration_grid;
+    // index to triangles buffer (having this interim buffer should prevent duplication of data if it appears on multiple grid cells)
+    std::shared_ptr<const nucleus::Raster<uint32_t>> index_buffer;
+    // vertex 0, 1, 2 position + style_index
+    std::shared_ptr<const nucleus::Raster<glm::u32vec3>> vertex_buffer;
+
+    uint8_t buffer_info;
+};
+
+static_assert(NamedTile<GpuVectorLayerTile>);
+
+struct GpuVectorLayerQuad {
+    tile::Id id;
+    std::array<GpuVectorLayerTile, 4> tiles;
+};
+
+static_assert(NamedTile<GpuVectorLayerQuad>);
+
 } // namespace nucleus::tile::tile_types

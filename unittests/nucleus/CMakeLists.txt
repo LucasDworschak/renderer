@@ -41,6 +41,9 @@ alp_add_unittest(unittests_nucleus
     zppbits.cpp
     cache_queries.cpp
     bits_and_pieces.cpp
+    vector_preprocess.cpp
+    vector_style.cpp
+    gpu_array_helper.cpp
 )
 
 if (ALP_ENABLE_AVLANCHE_WARNING_LAYER)
@@ -65,12 +68,17 @@ qt_add_resources(unittests_nucleus "test_data"
     data/test-tile_ortho.jpeg
     data/test-tile.png
     data/example.gpx
-    data/vectortile.mvt
     data/eaws_0-0-0.mvt
     data/eaws_2-2-0.mvt
     data/eaws_10-236-299.mvt
     data/rasterizer_simple_triangle.png
     data/rasterizer_output_random_triangle.png
+    data/vector_layer_grid_triangles.png
+    data/vector_layer_grid_lines.png
+    data/vector_layer/vectortile.mvt
+    data/vector_layer/vectortile_neusiedlersee.pbf
+    data/vector_layer/vectortile_13_4412_2893.pbf
+    data/vector_layer/vectortile_openmaptile_13_4412_2893.pbf
 )
 target_link_libraries(unittests_nucleus PUBLIC nucleus Catch2::Catch2 Qt::Test Qt::Gui)
 target_compile_definitions(unittests_nucleus PUBLIC "ALP_TEST_DATA_DIR=\":/test_data/\"")
