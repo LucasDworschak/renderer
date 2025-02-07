@@ -42,6 +42,11 @@ void Style::load()
     const auto open = file.open(QIODeviceBase::OpenModeFlag::ReadOnly);
     assert(open);
 
+    if (!open) {
+        qDebug() << "could not open style";
+        return;
+    }
+
     const auto data = file.readAll();
 
     if (data.isEmpty()) {
