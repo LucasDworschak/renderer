@@ -52,17 +52,17 @@ public:
 public slots:
     void update_gpu_quads(const std::vector<nucleus::tile::GpuVectorLayerQuad>& new_quads, const std::vector<nucleus::tile::Id>& deleted_quads);
     void set_quad_limit(unsigned new_limit);
-    void update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> fill_styles, std::shared_ptr<const nucleus::Raster<glm::u32vec4>> line_styles);
+    void update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles);
 
 private:
     void update_gpu_id_map();
 
     std::shared_ptr<ShaderProgram> m_shader;
 
-    std::unique_ptr<Texture> m_triangle_acceleration_grid_texture;
-    std::vector<std::unique_ptr<Texture>> m_triangle_index_buffer_texture;
-    std::vector<std::unique_ptr<Texture>> m_triangle_vertex_buffer_texture;
-    std::unique_ptr<Texture> m_fill_styles_texture;
+    std::unique_ptr<Texture> m_acceleration_grid_texture;
+    std::vector<std::unique_ptr<Texture>> m_index_buffer_texture;
+    std::vector<std::unique_ptr<Texture>> m_vertex_buffer_texture;
+    std::unique_ptr<Texture> m_styles_texture;
 
     std::unique_ptr<Texture> m_tile_id_texture;
     // converts tile_id hash to texture array layer index

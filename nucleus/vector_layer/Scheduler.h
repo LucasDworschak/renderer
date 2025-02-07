@@ -36,11 +36,11 @@ public:
     void load_style();
 
 public slots:
-    void enable_scheduler(std::shared_ptr<const nucleus::Raster<glm::u32vec4>>, std::shared_ptr<const nucleus::Raster<glm::u32vec4>>);
+    void enable_scheduler(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles);
 
 signals:
     void gpu_quads_updated(const std::vector<nucleus::tile::GpuVectorLayerQuad>& new_quads, const std::vector<tile::Id>& deleted_quads);
-    void style_updated(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> fill_styles, std::shared_ptr<const nucleus::Raster<glm::u32vec4>> line_styles);
+    void style_updated(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles);
 
 protected:
     void transform_and_emit(const std::vector<tile::DataQuad>& new_quads, const std::vector<tile::Id>& deleted_quads) override;

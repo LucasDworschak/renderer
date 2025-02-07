@@ -61,12 +61,12 @@ void Scheduler::transform_and_emit(const std::vector<tile::DataQuad>& new_quads,
 // especially with changing vector layer source this would definitely cause problems
 void Scheduler::load_style() { m_style.load(); }
 
-void Scheduler::enable_scheduler(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> fill_styles, std::shared_ptr<const nucleus::Raster<glm::u32vec4>> line_styles)
+void Scheduler::enable_scheduler(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles)
 {
     qDebug() << "vectorlayer style loaded";
 
     set_enabled(true);
-    emit style_updated(fill_styles, line_styles);
+    emit style_updated(styles);
 }
 
 bool Scheduler::is_ready_to_ship(const nucleus::tile::DataQuad& quad) const

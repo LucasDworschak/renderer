@@ -140,12 +140,12 @@ TEST_CASE("nucleus/vector_preprocess")
         const std::vector<glm::vec2> triangle_left_hypo = { glm::vec2(10, 30), glm::vec2(30, 5), glm::vec2(50, 50) };
         const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5, 5), glm::vec2(25, 10), glm::vec2(5, 15) };
 
-        const std::vector<nucleus::vector_layer::details::PolygonData> polygons = { { triangle_left_hypo, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_left_hypo.size()) },
-            { triangle_right_hypo, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_right_hypo.size()) } };
+        std::vector<nucleus::vector_layer::details::GeometryData> tile_data {
+            { triangle_left_hypo, extent, 1, 1, true, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_left_hypo.size()), 0 },
+            { triangle_right_hypo, extent, 1, 1, true, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_right_hypo.size()), 0 }
+        };
 
-        const nucleus::vector_layer::details::TempDataHolder tile_data { polygons, extent, { 1, 1 }, {}, {} };
-
-        auto processed = nucleus::vector_layer::details::preprocess_triangles(tile_data);
+        auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data);
 
         auto raster = visualize_grid(processed.acceleration_grid, nucleus::vector_layer::constants::grid_size);
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
@@ -153,24 +153,24 @@ TEST_CASE("nucleus/vector_preprocess")
         auto test_image = example_grid_data_triangles();
         CHECK(image == test_image);
 
-        auto tile = nucleus::vector_layer::details::create_gpu_tile(processed, processed);
+        auto tile = nucleus::vector_layer::details::create_gpu_tile(processed);
 
-        CHECK(same_cells_are_filled(raster, tile.triangle_acceleration_grid));
+        CHECK(same_cells_are_filled(raster, tile.acceleration_grid));
 
         // we provide two triangles that overlap at one point -> we expect four entries [1], [0], ([1], [0])
-        auto bridge_data = tile.triangle_index_buffer->buffer();
-        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info]);
-        CHECK(bridge_data[0] == 1);
-        CHECK(bridge_data[1] == 0);
+        auto bridge_data = tile.index_buffer->buffer();
+        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
+        CHECK(bridge_data[0] == 3); // 1 and 3 values since lowest bit is is_polygon flag
+        CHECK(bridge_data[1] == 1);
         CHECK(bridge_data[2] == 1);
-        CHECK(bridge_data[3] == 0);
+        CHECK(bridge_data[3] == 3);
         // the rest should be undefined -> -1u
         CHECK(bridge_data[4] == -1u);
         CHECK(bridge_data[5] == -1u);
-        CHECK(bridge_data[nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * 1.5] == -1u);
+        CHECK(bridge_data[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.5] == -1u);
 
-        auto data = tile.triangle_vertex_buffer->buffer();
-        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info]);
+        auto data = tile.vertex_buffer->buffer();
+        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
         CHECK(data[0].x == 3237347648);
         CHECK(data[0].y == 3226863488);
         CHECK(data[0].z == 3247836304);
@@ -180,7 +180,7 @@ TEST_CASE("nucleus/vector_preprocess")
         // the rest should be undefined -> -1u
         CHECK(data[2].x == -1u);
         CHECK(data[3].y == -1u);
-        CHECK(data[nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * 1.7].x == -1u);
+        CHECK(data[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.7].x == -1u);
 
         // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
         //     std::cout << bridge_data[i] << std::endl;
@@ -192,7 +192,7 @@ TEST_CASE("nucleus/vector_preprocess")
         // }
 
         // // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
-        image.save(QString("vector_layer_grid_triangles.png"));
+        // image.save(QString("vector_layer_grid_triangles.png"));
     }
 
     SECTION("Triangle to Grid (outside vertices)")
@@ -204,34 +204,34 @@ TEST_CASE("nucleus/vector_preprocess")
         const std::vector<glm::vec2> triangle_left_hypo = { glm::vec2(-10, 30), glm::vec2(30, 5), glm::vec2(50, 80) };
         const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5, -5), glm::vec2(90, 10), glm::vec2(5, 15) };
 
-        const std::vector<nucleus::vector_layer::details::PolygonData> polygons = { { triangle_left_hypo, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_left_hypo.size()) },
-            { triangle_right_hypo, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_right_hypo.size()) } };
+        std::vector<nucleus::vector_layer::details::GeometryData> tile_data {
+            { triangle_left_hypo, extent, 1, 1, true, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_left_hypo.size()), 0 },
+            { triangle_right_hypo, extent, 1, 1, true, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_right_hypo.size()), 0 }
+        };
 
-        const nucleus::vector_layer::details::TempDataHolder tile_data { polygons, extent, { 1, 1 }, {}, {} };
-
-        auto processed = nucleus::vector_layer::details::preprocess_triangles(tile_data);
+        auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data);
 
         auto raster = visualize_grid(processed.acceleration_grid, nucleus::vector_layer::constants::grid_size);
         auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
-        auto tile = nucleus::vector_layer::details::create_gpu_tile(processed, processed);
+        auto tile = nucleus::vector_layer::details::create_gpu_tile(processed);
 
-        CHECK(same_cells_are_filled(raster, tile.triangle_acceleration_grid));
+        CHECK(same_cells_are_filled(raster, tile.acceleration_grid));
 
         // we provide two triangles that overlap at one point -> we expect four entries [1], ([1], [0]), [1]
-        auto bridge_data = tile.triangle_index_buffer->buffer();
-        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info]);
-        CHECK(bridge_data[0] == 1);
+        auto bridge_data = tile.index_buffer->buffer();
+        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
+        CHECK(bridge_data[0] == 3); // 1 and 3 values since lowest bit is is_polygon flag
         CHECK(bridge_data[1] == 1);
-        CHECK(bridge_data[2] == 0);
-        CHECK(bridge_data[3] == 0);
+        CHECK(bridge_data[2] == 3);
+        CHECK(bridge_data[3] == 1);
         // the rest should be undefined -> -1u
         CHECK(bridge_data[4] == -1u);
         CHECK(bridge_data[5] == -1u);
-        CHECK(bridge_data[nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * 1.5] == -1u);
+        CHECK(bridge_data[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.5] == -1u);
 
-        auto data = tile.triangle_vertex_buffer->buffer();
-        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info]);
+        auto data = tile.vertex_buffer->buffer();
+        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
         CHECK(data[0].x == 3237347648);
         CHECK(data[0].y == 3216377728);
         CHECK(data[0].z == 3247838224);
@@ -242,7 +242,7 @@ TEST_CASE("nucleus/vector_preprocess")
         CHECK(data[2].x == -1u);
         CHECK(data[3].y == -1u);
 
-        CHECK(data[nucleus::vector_layer::constants::data_size[tile.triangle_buffer_info] * 1.7].x == -1u);
+        CHECK(data[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.7].x == -1u);
 
         // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
         //     std::cout << bridge_data[i] << std::endl;
@@ -255,6 +255,64 @@ TEST_CASE("nucleus/vector_preprocess")
 
         // // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
         // image.save(QString("vector_layer_grid_triangles_outside.png"));
+    }
+
+    SECTION("Line to Grid")
+    {
+        constexpr auto extent = 64;
+        const std::vector<glm::vec2> line0 = { glm::vec2(10, 30), glm::vec2(30, 50), glm::vec2(50, 30) };
+
+        std::vector<nucleus::vector_layer::details::GeometryData> tile_data { { line0, extent, 1, 1, false, {}, 0 } };
+
+        auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data);
+
+        auto raster = visualize_grid(processed.acceleration_grid, nucleus::vector_layer::constants::grid_size);
+        auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
+
+        // auto test_image = example_grid_data_triangles();
+        // CHECK(image == test_image);
+
+        auto tile = nucleus::vector_layer::details::create_gpu_tile(processed);
+
+        CHECK(same_cells_are_filled(raster, tile.acceleration_grid));
+
+        // we provide two line segments that overlap at one point -> we expect four entries [0], [2], ([0], [2])
+        auto bridge_data = tile.index_buffer->buffer();
+        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
+        CHECK(bridge_data[0] == 0); // 0 and 2 values since lowest bit is is_polygon flag
+        CHECK(bridge_data[1] == 2);
+        CHECK(bridge_data[2] == 0);
+        CHECK(bridge_data[3] == 2);
+        // the rest should be undefined -> -1u
+        CHECK(bridge_data[4] == -1u);
+        CHECK(bridge_data[5] == -1u);
+        CHECK(bridge_data[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.5] == -1u);
+
+        auto data = tile.vertex_buffer->buffer();
+        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
+        CHECK(data[0].x == 3226863488);
+        CHECK(data[0].y == 3237350528);
+        CHECK(data[0].z == 3221618704);
+        CHECK(data[1].x == 3237350528);
+        CHECK(data[1].y == 3247835008);
+        CHECK(data[1].z == 3221618704);
+        // the rest should be undefined -> -1u
+        CHECK(data[2].x == -1u);
+        CHECK(data[3].y == -1u);
+
+        CHECK(data[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.7].x == -1u);
+
+        // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
+        //     std::cout << bridge_data[i] << std::endl;
+        // }
+
+        // std::cout << std::endl;
+        // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
+        //     std::cout << data[i] << std::endl;
+        // }
+
+        // // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
+        image.save(QString("vector_layer_grid_lines.png"));
     }
 
     // TODO can probably be discarded now -> right?

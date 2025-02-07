@@ -31,8 +31,8 @@ namespace nucleus::vector_layer {
 struct LayerStyle {
     uint32_t fill_color; // fill-color or line-color
     uint32_t outline_color; // fill-outline-color or
-    float outline_width; // line-width
-    uint32_t outline_dash; // line-dasharray
+    uint16_t outline_width; // line-width
+    uint16_t outline_dash; // line-dasharray
 
     bool operator==(const LayerStyle& other) const = default;
 };
@@ -53,22 +53,17 @@ struct Hasher {
     }
 };
 
-struct StyleBufferHolder {
-    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> fill_styles;
-    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> line_styles;
-};
-
 class Style : public QObject {
     Q_OBJECT
 public:
     Style(const QString& filename);
 
     uint32_t parse_color(const QJsonValue& value);
-    uint32_t parse_dasharray(const QJsonValue& dash_values);
+    uint16_t parse_dasharray(const QJsonValue& dash_values);
 
     std::pair<uint32_t, uint32_t> indices(std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
 
-    StyleBufferHolder style_buffer() const;
+    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles() const;
 
     static QJsonArray expand(const QJsonArray& layers);
 
@@ -76,10 +71,10 @@ public slots:
     void load();
 
 signals:
-    void load_finished(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> fill_styles, std::shared_ptr<const nucleus::Raster<glm::u32vec4>> line_styles);
+    void load_finished(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles);
 
 private:
-    StyleBufferHolder m_styles;
+    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> m_styles;
 
     uint8_t parse_opacity(const QJsonValue& value);
 

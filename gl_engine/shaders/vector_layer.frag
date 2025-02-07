@@ -26,20 +26,20 @@
 
 #include "hashing.glsl" // DEBUG
 
-uniform highp usampler2DArray triangle_acceleration_grid_sampler;
+uniform highp usampler2DArray acceleration_grid_sampler;
 uniform highp usampler2D array_index_sampler;
 uniform highp usampler2D vector_map_tile_id_sampler;
 
-uniform highp usampler2D fill_styles_sampler;
+uniform highp usampler2D styles_sampler;
 
-uniform highp usampler2DArray triangle_index_buffer_sampler_0;
-uniform highp usampler2DArray triangle_index_buffer_sampler_1;
-uniform highp usampler2DArray triangle_index_buffer_sampler_2;
-uniform highp usampler2DArray triangle_index_buffer_sampler_3;
-uniform highp usampler2DArray triangle_vertex_buffer_sampler_0;
-uniform highp usampler2DArray triangle_vertex_buffer_sampler_1;
-uniform highp usampler2DArray triangle_vertex_buffer_sampler_2;
-uniform highp usampler2DArray triangle_vertex_buffer_sampler_3;
+uniform highp usampler2DArray index_buffer_sampler_0;
+uniform highp usampler2DArray index_buffer_sampler_1;
+uniform highp usampler2DArray index_buffer_sampler_2;
+uniform highp usampler2DArray index_buffer_sampler_3;
+uniform highp usampler2DArray vertex_buffer_sampler_0;
+uniform highp usampler2DArray vertex_buffer_sampler_1;
+uniform highp usampler2DArray vertex_buffer_sampler_2;
+uniform highp usampler2DArray vertex_buffer_sampler_3;
 
 layout (location = 0) out lowp vec3 texout_albedo;
 layout (location = 1) out highp vec4 texout_position;
@@ -55,6 +55,21 @@ in lowp float is_curtain;
 #endif
 flat in lowp vec3 vertex_color;
 
+struct Style_Data
+{
+    lowp vec4 fill_color;
+    lowp vec4 outline_color;
+    lowp float outline_width;
+    lowp vec2 outline_dash;
+};
+
+struct Layer_Style
+{
+    highp uint last_style;
+    lowp float layer_alpha;
+    Style_Data current_layer_style;
+};
+
 
 ///////////////////////////////////////////////
 // CONSTANTS
@@ -64,6 +79,8 @@ const lowp uint data_size = 1u; // how many texels are needed to store the data 
 
 const lowp uint sampler_offset = 16u - 2u; // used to calculate how many bits are used to determine the sampler index, and how many are used for the layer
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
+
+const lowp float style_precision = 100;
 
 ///////////////////////////////////////////////
 
@@ -82,6 +99,13 @@ highp vec3 normal_by_fragment_position_interpolation() {
 float circle(vec2 uv, vec2 pos, float r) // DEBUG
 {
     return distance(uv, pos) - r;
+}
+
+float sdLine( in vec2 p, in vec2 a, in vec2 b )
+{
+    vec2 pa = p-a, ba = b-a;
+    float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
+    return length( pa - ba*h );
 }
 
 float sdTriangle( in vec2 p, in vec2 p0, in vec2 p1, in vec2 p2 )
@@ -126,44 +150,44 @@ lowp ivec2 to_dict_pixel(mediump uint hash) {
     return ivec2(int(hash & 255u), int(hash >> 8u));
 }
 
-highp uint triangle_index_sample(lowp uint sampler_index, highp uint pixel_index, highp uint texture_layer)
+highp uint index_sample(lowp uint sampler_index, highp uint pixel_index, highp uint texture_layer)
 {
     if(sampler_index == 0u)
     {
-        return texelFetch(triangle_index_buffer_sampler_0, ivec3(to_dict_pixel_64(pixel_index), texture_layer), 0).r * data_size;
+        return texelFetch(index_buffer_sampler_0, ivec3(to_dict_pixel_64(pixel_index), texture_layer), 0).r * data_size;
     }
     else if(sampler_index == 1u)
     {
-        return texelFetch(triangle_index_buffer_sampler_1, ivec3(to_dict_pixel_128(pixel_index), texture_layer), 0).r * data_size;
+        return texelFetch(index_buffer_sampler_1, ivec3(to_dict_pixel_128(pixel_index), texture_layer), 0).r * data_size;
     }
     else if(sampler_index == 2u)
     {
-        return texelFetch(triangle_index_buffer_sampler_2, ivec3(to_dict_pixel_256(pixel_index), texture_layer), 0).r * data_size;
+        return texelFetch(index_buffer_sampler_2, ivec3(to_dict_pixel_256(pixel_index), texture_layer), 0).r * data_size;
     }
     else
     {
-        return texelFetch(triangle_index_buffer_sampler_3, ivec3(to_dict_pixel_512(pixel_index), texture_layer), 0).r * data_size;
+        return texelFetch(index_buffer_sampler_3, ivec3(to_dict_pixel_512(pixel_index), texture_layer), 0).r * data_size;
     }
 }
 
-VectorLayerData triangle_vertex_sample(lowp uint sampler_index, highp uint triangle_index, highp uint texture_layer)
+VectorLayerData vertex_sample(lowp uint sampler_index, highp uint index, highp uint texture_layer)
 {
 
     if(sampler_index == 0u)
     {
-        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_0, ivec3(to_dict_pixel_64(triangle_index), texture_layer), 0).rgb);
+        return unpack_vectorlayer_data(texelFetch(vertex_buffer_sampler_0, ivec3(to_dict_pixel_64(index), texture_layer), 0).rgb);
     }
     else if(sampler_index == 1u)
     {
-        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_1, ivec3(to_dict_pixel_128(triangle_index), texture_layer), 0).rgb);
+        return unpack_vectorlayer_data(texelFetch(vertex_buffer_sampler_1, ivec3(to_dict_pixel_128(index), texture_layer), 0).rgb);
     }
     else if(sampler_index == 2u)
     {
-        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_2, ivec3(to_dict_pixel_256(triangle_index), texture_layer), 0).rgb);
+        return unpack_vectorlayer_data(texelFetch(vertex_buffer_sampler_2, ivec3(to_dict_pixel_256(index), texture_layer), 0).rgb);
     }
     else
     {
-        return unpack_vectorlayer_data(texelFetch(triangle_vertex_buffer_sampler_3, ivec3(to_dict_pixel_512(triangle_index), texture_layer), 0).rgb);
+        return unpack_vectorlayer_data(texelFetch(vertex_buffer_sampler_3, ivec3(to_dict_pixel_512(index), texture_layer), 0).rgb);
     }
 }
 
@@ -204,6 +228,51 @@ highp uvec3 u32_2_to_u16_u24_u24(highp uvec2 data){
     return res;
 }
 
+Style_Data parse_style(highp uint style_index) {
+    Style_Data style;
+
+    highp uvec4 style_data = texelFetch(styles_sampler, ivec2(to_dict_pixel_64(style_index)), 0);
+    style.fill_color = vec4((style_data.r & 4278190080u) >> 24, (style_data.r & 16711680u) >> 16, (style_data.r & 65280u) >> 8, style_data.r & 255u) / vec4(255.0f);
+    style.outline_color = vec4((style_data.g & 4278190080u) >> 24, (style_data.g & 16711680u) >> 16, (style_data.g & 65280u) >> 8, style_data.g & 255u) / vec4(255.0f);
+
+    style.outline_width = float(style_data.b) / style_precision;
+    // lowp vec2 outline_dash; // TODO
+
+    return style;
+}
+
+
+bool prepare_layer_style(highp uint style_index, inout Layer_Style layer_style, inout lowp vec3 pixel_color)
+{
+    // we need to make sure that a layer with < 1 opacity does only fill the correct amount of opacity
+    // we therefore fill colors per layerstyle
+    if(layer_style.last_style == style_index)
+    {
+        if(layer_style.layer_alpha >= 1.0)
+        {
+            // we already fully filled the current layer -> go to the next layer
+            return true;
+        }
+    }
+    else
+    {
+        // we encountered a new layer
+
+        // mix the previous layer color information with output
+        pixel_color = mix(pixel_color, layer_style.current_layer_style.fill_color.rgb, layer_style.layer_alpha * layer_style.current_layer_style.fill_color.a);
+
+        // get and store new style info
+        layer_style.last_style = style_index;
+        layer_style.current_layer_style = parse_style(style_index);
+        // how much alpha per layer we accumulate
+        layer_style.layer_alpha = 0.0;
+    }
+
+    return false;
+
+}
+
+
 
 void main() {
 #if CURTAIN_DEBUG_MODE == 2
@@ -236,8 +305,8 @@ void main() {
         highp uvec2 texture_layer = texelFetch(array_index_sampler, dict_px, 0).xy;
         if(texture_layer.x != highp uint(-1) && texture_layer.y != highp uint(-1)) // check for valid data
         {
-            // triangle_acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
-            offset_size = to_offset_size(texelFetch(triangle_acceleration_grid_sampler, ivec3(uv*vec2(grid_size,grid_size), texture_layer.x & layer_mask),0).r);
+            // acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
+            offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(uv*vec2(grid_size,grid_size), texture_layer.x & layer_mask),0).r);
 
             // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
             if(offset_size.y != uint(0)) // only if we have data here
@@ -248,7 +317,7 @@ void main() {
                 lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
                 vec3 triangle_lines_out = vec3(0.0f, 0.0, 0.0f); // DEBUG
 
-                vec3 polygon_color = vec3(0.0f, 0.0, 0.0f);
+                lowp vec3 pixel_color = vec3(0.0f, 0.0, 0.0f);
                 float pixel_alpha = 0.0;
 
                 // get the buffer index and extract the correct texture_layer.y
@@ -282,24 +351,81 @@ void main() {
                         cell_debug = vec3(1,0,1); // purple -> should never happen -> unrecognized index
                 }
 
-                highp uint last_style = -1u;
-                vec4 current_layer_color = vec4(0.0);
-                float layer_alpha = 0;
+                Layer_Style layer_style;
+
+                layer_style.last_style = -1u;
+                layer_style.current_layer_style = Style_Data(vec4(0.0), vec4(0.0), 0.0, vec2(0.0));
+                // layer_style.current_layer_style.fill_color = vec4(0.0);
+                layer_style.layer_alpha = 0.0;
+
+                highp float geometry_influence = 0.0;
 
                 for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
                 // for(highp uint i = offset_size.x+ offset_size.y; i --> offset_size.x ; ) // reverse traversal
                 {                    
-                    highp uint triangle_index = triangle_index_sample(sampler_buffer_index, i, texture_layer.y);
+                    highp uint index = index_sample(sampler_buffer_index, i, texture_layer.y);
+                    bool is_polygon = (index & 1u) == 1u;
+                    index = index >> 1;
 
-                    VectorLayerData triangle_data = triangle_vertex_sample(sampler_buffer_index, triangle_index, texture_layer.y);
+                    float d = 0.0;
+                    highp uint style_index = -1u;
 
-                    highp vec2 v0 = triangle_data.a / vec2(tile_extent);
-                    highp vec2 v1 = triangle_data.b / vec2(tile_extent);
-                    highp vec2 v2 = triangle_data.c / vec2(tile_extent);
-                    highp uint style_index = triangle_data.style_index;
+                    if(is_polygon)
+                    {
+                        VectorLayerData triangle_data = vertex_sample(sampler_buffer_index, index, texture_layer.y);
 
-                    float thickness = 0.0;
-                    float d = sdTriangle(uv, v0, v1, v2) - thickness;
+                        highp vec2 v0 = triangle_data.a / vec2(tile_extent);
+                        highp vec2 v1 = triangle_data.b / vec2(tile_extent);
+                        highp vec2 v2 = triangle_data.c / vec2(tile_extent);
+
+                        float thickness = 0.0;
+                        d = sdTriangle(uv, v0, v1, v2) - thickness;
+                        // d = 100.0;
+
+                        geometry_influence = 1.0 - step(0.0, d);
+
+                        // polygon does not influence pixel at all -> we do not draw it
+                        if(geometry_influence <= 0.0)
+                            continue;
+
+                        // calling it here prevents getting the layerstyle if we do not need it yet
+                        bool check_next_geometry = prepare_layer_style(triangle_data.style_index, layer_style, pixel_color);
+                        if(check_next_geometry)
+                            continue;
+
+                    }
+                    else
+                    {
+                        VectorLayerData line_data = vertex_sample(sampler_buffer_index, index, texture_layer.y);
+
+                        highp vec2 v0 = line_data.a / vec2(tile_extent);
+                        highp vec2 v1 = line_data.b / vec2(tile_extent);
+
+                        // needs to be applied here to get the thickness of the line
+                        bool check_next_geometry = prepare_layer_style(line_data.style_index, layer_style, pixel_color);
+                        if(check_next_geometry)
+                            continue;
+
+
+                        float thickness = layer_style.current_layer_style.outline_width / tile_extent;
+                        d = sdLine(uv, v0, v1) - thickness;
+
+                        // d = 100.0;
+                        // style_index = 36u;
+
+
+                        geometry_influence = 1.0 - step(0.0, d);
+
+                        // polygon does not influence pixel at all -> we do not draw it
+                        if(geometry_influence <= 0.0)
+                            continue;
+
+
+                    }
+
+
+
+
 
                     { // DEBUG -> triangle lines
                         highp float t_line = 0.0;
@@ -308,58 +434,31 @@ void main() {
                         triangle_lines_out += vec3(0.0f, t_line, 0.0f);
                     }
 
-                    highp float polygon_influence = 1.0 - step(0.0, d);
-
-                    // polygon does not influence pixel at all -> we do not draw it
-                    if(polygon_influence <= 0.0)
-                        continue;
 
 
-                    // we need to make sure that a layer with < 1 opacity does only fill the correct amount of opacity
-                    // we therefore fill colors per layerstyle
-                    if(last_style == style_index)
-                    {
-                        if(layer_alpha >= 1.0)
-                        {
-                            // we already fully filled the current layer -> go to the next layer
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        // we encountered a new layer
 
-                        // mix the previous layer color information with output
-                        polygon_color = mix(polygon_color, current_layer_color.rgb, layer_alpha * current_layer_color.a);
 
-                        // get and store new style info
-                        last_style = style_index;
-                        highp uvec4 style_data = texelFetch(fill_styles_sampler, ivec2(to_dict_pixel_64(style_index)), 0);
-                        vec4 layer_color = vec4((style_data.r & 4278190080u) >> 24, (style_data.r & 16711680u) >> 16, (style_data.r & 65280u) >> 8, style_data.r & 255u) / vec4(255.0f);
 
-                        current_layer_color = layer_color;
-                        // how much alpha per layer we accumulate
-                        layer_alpha = 0.0;
-                    }
 
-                    pixel_alpha += polygon_influence * current_layer_color.a;
+                    pixel_alpha += geometry_influence * layer_style.current_layer_style.fill_color.a;
                     if(pixel_alpha > 1.0)
-                        polygon_influence = pixel_alpha - 1.0;
+                        geometry_influence = pixel_alpha - 1.0;
 
-                    layer_alpha += polygon_influence;
+                    layer_style.layer_alpha += geometry_influence;
 
                     if(pixel_alpha >= 1.0)
                         break; // early exit if alpha is >= 1;
 
                 }
 
+
                 // mix the last layer we parsed
-                polygon_color = mix(polygon_color, current_layer_color.rgb, layer_alpha * current_layer_color.a);
+                pixel_color = mix(pixel_color, layer_style.current_layer_style.fill_color.rgb, layer_style.layer_alpha * layer_style.current_layer_style.fill_color.a);
 
                 // mix polygon color with background
-                texout_albedo = mix(texout_albedo, polygon_color, pixel_alpha);
+                texout_albedo = mix(texout_albedo, pixel_color, pixel_alpha);
 
-                // texout_albedo = polygon_color;
+                // texout_albedo = pixel_color;
 
                 // texout_albedo = mix(cells, texout_albedo, 0.9);// DEBUG
                 // texout_albedo = mix(texout_albedo, triangle_lines_out, 0.5);// DEBUG
@@ -369,8 +468,8 @@ void main() {
 
                 // texout_albedo = grid_start;
 
-                // texout_albedo = mix(grid_start, polygon_color, 0.5);// DEBUG
-                // texout_albedo = mix(raw_grid, polygon_color, 0.5);// DEBUG
+                // texout_albedo = mix(grid_start, pixel_color, 0.5);// DEBUG
+                // texout_albedo = mix(raw_grid, pixel_color, 0.5);// DEBUG
                 // texout_albedo = raw_grid;// DEBUG
                 // texout_albedo = vec3(pixel_alpha);// DEBUG
                 // texout_albedo = triangle_lines_out;// DEBUG

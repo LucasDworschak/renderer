@@ -49,11 +49,9 @@ void Style::load()
         return;
     }
 
-    std::vector<glm::u32vec4> fill_style_values;
-    std::vector<glm::u32vec4> line_style_values;
+    std::vector<glm::u32vec4> style_values;
 
-    std::unordered_map<LayerStyle, uint32_t, Hasher> style_to_fill_index;
-    std::unordered_map<LayerStyle, uint32_t, Hasher> style_to_line_index;
+    std::unordered_map<LayerStyle, uint32_t, Hasher> style_to_index;
 
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonArray layers = expand(doc.object().value("layers").toArray());
@@ -62,13 +60,7 @@ void Style::load()
 
     for (const QJsonValue& obj : layers) {
 
-        bool fill = true;
-
-        if (obj.toObject().value("type").toString() == "line") {
-            fill = false;
-        } else if (obj.toObject().value("type").toString() == "fill") {
-            // valid but nothing to do
-        } else {
+        if (obj.toObject().value("type").toString() != "line" && obj.toObject().value("type").toString() != "fill") {
             continue; // not valid
         }
 
@@ -103,15 +95,13 @@ void Style::load()
                 s.fill_color = parse_color(paintObject.value(key));
             } else if (key == "fill-opacity" || key == "line-opacity") {
                 opacity = parse_opacity(paintObject.value(key));
-            } else if (key == "fill-outline-color") {
+            } else if (key == "fill-outline-color") { // TODO visualize (only used for buildings)
                 s.outline_color = parse_color(paintObject.value(key));
-            } else if (key == "fill-outline-color") {
-                s.outline_color = parse_color(paintObject.value(key));
-            } else if (key == "line-width") {
+            } else if (key == "line-width") { //  "line-gap-width"
                 if (paintObject.value(key).isObject() && paintObject.value(key).toObject().contains("stops")) {
-                    s.outline_width = onlyLastStopValue(paintObject.value(key)).toDouble();
+                    s.outline_width = uint16_t(onlyLastStopValue(paintObject.value(key)).toDouble() * constants::style_precision);
                 } else {
-                    s.outline_width = paintObject.value(key).toDouble();
+                    s.outline_width = uint16_t(paintObject.value(key).toDouble() * constants::style_precision);
                 }
             } else if (key == "line-dasharray") {
                 s.outline_dash = parse_dasharray(paintObject.value(key).toArray());
@@ -143,28 +133,16 @@ void Style::load()
 
         // insert styles if they aren't inserted yet
         // and get the index of the style we want to use
-        if (fill) {
-            if (!style_to_fill_index.contains(s)) {
-                style_index = fill_style_values.size();
-                style_to_fill_index[s] = style_index;
 
-                // add the style to the raster
-                // *reinterpret_cast<uint32_t*>(&s.outline_width); // float to uint32 representation // TODO this does not work for release build
-                fill_style_values.push_back({ s.fill_color, s.outline_color, 0, s.outline_dash });
-            } else {
-                style_index = style_to_fill_index[s];
-            }
+        if (!style_to_index.contains(s)) {
+            style_index = style_values.size();
+            style_to_index[s] = style_index;
+
+            // add the style to the raster
+            //  // float to uint32 representation // TODO this does not work for release build
+            style_values.push_back({ s.fill_color, s.outline_color, s.outline_width, s.outline_dash });
         } else {
-            if (!style_to_line_index.contains(s)) {
-                style_index = line_style_values.size();
-                style_to_line_index[s] = style_index;
-
-                // add the style to the raster
-                // *reinterpret_cast<uint32_t*>(&s.outline_width); // float to uint32 representation // TODO this does not work for release build
-                line_style_values.push_back({ s.fill_color, s.outline_color, 0, s.outline_dash });
-            } else {
-                style_index = style_to_line_index[s];
-            }
+            style_index = style_to_index[s];
         }
 
         glm::uvec2 zoom_range(0u, 19u);
@@ -182,15 +160,12 @@ void Style::load()
     }
 
     // make sure that the style values are within the buffer size; resize them to this size and create the raster images
-    assert(fill_style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
-    assert(line_style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
-    fill_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec4(-1u));
-    line_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec4(-1u));
+    assert(style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
+    style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec4(-1u));
 
-    m_styles.fill_styles = std::make_shared<const nucleus::Raster<glm::u32vec4>>(nucleus::Raster<glm::u32vec4>(constants::style_buffer_size, std::move(fill_style_values)));
-    m_styles.line_styles = std::make_shared<const nucleus::Raster<glm::u32vec4>>(nucleus::Raster<glm::u32vec4>(constants::style_buffer_size, std::move(line_style_values)));
+    m_styles = std::make_shared<const nucleus::Raster<glm::u32vec4>>(nucleus::Raster<glm::u32vec4>(constants::style_buffer_size, std::move(style_values)));
 
-    emit load_finished(m_styles.fill_styles, m_styles.line_styles);
+    emit load_finished(m_styles);
 }
 
 bool Style::sub_is_array(QJsonObject obj, QString sub_key)
@@ -319,7 +294,7 @@ std::pair<uint32_t, uint32_t> Style::indices(
     return m_layer_to_style.at(layer).indices(zoom, feature);
 }
 
-StyleBufferHolder Style::style_buffer() const { return m_styles; }
+std::shared_ptr<const nucleus::Raster<glm::u32vec4>> Style::styles() const { return m_styles; }
 
 // NOTE std::stof uses the locale to convert strings
 // locale might be german and it expects a "," decimal
@@ -350,7 +325,7 @@ float stringToFloat(const std::string& value)
  * but we are also not quite clear about all the possible values
  * -> THEREFORE TODO veryfy the assumptions of this method
  */
-uint32_t Style::parse_dasharray(const QJsonValue&)
+uint16_t Style::parse_dasharray(const QJsonValue&)
 {
     // TODO there are also values with more than two values
     // currently only 2 values are allowed here

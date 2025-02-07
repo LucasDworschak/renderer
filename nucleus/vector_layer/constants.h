@@ -33,4 +33,7 @@ constexpr auto array_layer_quad_amount = std::array<uint32_t, 4> { -1u, -1u, 256
 constexpr auto tile_extent = 4096;
 constexpr auto style_buffer_size = 64;
 
+// number is used to multiply float numbers in style to get int values for storage ( e.g. style_precision:100 means 1.253 -> 125 -> 1.250)
+constexpr uint8_t style_precision = 100;
+
 } // namespace nucleus::vector_layer::constants

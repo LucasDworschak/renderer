@@ -41,10 +41,10 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_shader = std::make_shared<ShaderProgram>("tile.vert", "vector_layer.frag");
     shader_registry->add_shader(m_shader);
 
-    m_triangle_acceleration_grid_texture = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
-    m_triangle_acceleration_grid_texture->setParams(gl_engine::Texture::Filter::Nearest, gl_engine::Texture::Filter::Nearest);
+    m_acceleration_grid_texture = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
+    m_acceleration_grid_texture->setParams(gl_engine::Texture::Filter::Nearest, gl_engine::Texture::Filter::Nearest);
     // // TODO: might become larger than GL_MAX_ARRAY_TEXTURE_LAYERS
-    m_triangle_acceleration_grid_texture->allocate_array(constants::grid_size, constants::grid_size, unsigned(m_gpu_multi_array_helper.layer_amount(0)));
+    m_acceleration_grid_texture->allocate_array(constants::grid_size, constants::grid_size, unsigned(m_gpu_multi_array_helper.layer_amount(0)));
 
     m_tile_id_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RG32UI);
     m_tile_id_texture->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
@@ -52,22 +52,22 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_array_index_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RG16UI);
     m_array_index_texture->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
 
-    m_triangle_index_buffer_texture.resize(constants::array_layer_quad_amount.size());
-    m_triangle_vertex_buffer_texture.resize(constants::array_layer_quad_amount.size());
+    m_index_buffer_texture.resize(constants::array_layer_quad_amount.size());
+    m_vertex_buffer_texture.resize(constants::array_layer_quad_amount.size());
     for (uint8_t i = 0; i < constants::array_layer_quad_amount.size(); i++) {
         const auto layer_amount = m_gpu_multi_array_helper.layer_amount(i);
 
-        m_triangle_index_buffer_texture[i] = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
-        m_triangle_index_buffer_texture[i]->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
-        m_triangle_index_buffer_texture[i]->allocate_array(constants::data_size[i], constants::data_size[i], layer_amount);
+        m_index_buffer_texture[i] = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
+        m_index_buffer_texture[i]->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
+        m_index_buffer_texture[i]->allocate_array(constants::data_size[i], constants::data_size[i], layer_amount);
 
-        m_triangle_vertex_buffer_texture[i] = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::RGB32UI);
-        m_triangle_vertex_buffer_texture[i]->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
-        m_triangle_vertex_buffer_texture[i]->allocate_array(constants::data_size[i], constants::data_size[i], layer_amount);
+        m_vertex_buffer_texture[i] = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::RGB32UI);
+        m_vertex_buffer_texture[i]->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
+        m_vertex_buffer_texture[i]->allocate_array(constants::data_size[i], constants::data_size[i], layer_amount);
     }
 
-    m_fill_styles_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RGBA32UI);
-    m_fill_styles_texture->setParams(gl_engine::Texture::Filter::Nearest, gl_engine::Texture::Filter::Nearest);
+    m_styles_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RGBA32UI);
+    m_styles_texture->setParams(gl_engine::Texture::Filter::Nearest, gl_engine::Texture::Filter::Nearest);
 
     update_gpu_id_map();
 }
@@ -76,27 +76,27 @@ void VectorLayer::draw(
     const TileGeometry& tile_geometry, const nucleus::camera::Definition& camera, const nucleus::tile::DrawListGenerator::TileSet& draw_tiles, bool sort_tiles, glm::dvec3 sort_position) const
 {
     m_shader->bind();
-    m_shader->set_uniform("triangle_acceleration_grid_sampler", 2);
-    m_triangle_acceleration_grid_texture->bind(2);
+    m_shader->set_uniform("acceleration_grid_sampler", 2);
+    m_acceleration_grid_texture->bind(2);
 
     m_shader->set_uniform("array_index_sampler", 5);
     m_array_index_texture->bind(5);
     m_shader->set_uniform("vector_map_tile_id_sampler", 6);
     m_tile_id_texture->bind(6);
 
-    m_shader->set_uniform("fill_styles_sampler", 7);
-    m_fill_styles_texture->bind(7);
+    m_shader->set_uniform("styles_sampler", 7);
+    m_styles_texture->bind(7);
 
     // upload all index and vertex buffer
     // binds the buffers to "...buffer_sampler_[0-max]"
     constexpr uint8_t triangle_index_buffer_start = 8;
     constexpr uint8_t triangle_vertex_buffer_start = triangle_index_buffer_start + constants::array_layer_quad_amount.size();
     for (uint8_t i = 0; i < constants::array_layer_quad_amount.size(); i++) {
-        m_shader->set_uniform("triangle_index_buffer_sampler_" + std::to_string(i), triangle_index_buffer_start + i);
-        m_triangle_index_buffer_texture[i]->bind(triangle_index_buffer_start + i);
+        m_shader->set_uniform("index_buffer_sampler_" + std::to_string(i), triangle_index_buffer_start + i);
+        m_index_buffer_texture[i]->bind(triangle_index_buffer_start + i);
 
-        m_shader->set_uniform("triangle_vertex_buffer_sampler_" + std::to_string(i), triangle_vertex_buffer_start + i);
-        m_triangle_vertex_buffer_texture[i]->bind(triangle_vertex_buffer_start + i);
+        m_shader->set_uniform("vertex_buffer_sampler_" + std::to_string(i), triangle_vertex_buffer_start + i);
+        m_vertex_buffer_texture[i]->bind(triangle_vertex_buffer_start + i);
     }
 
     tile_geometry.draw(m_shader.get(), camera, draw_tiles, sort_tiles, sort_position);
@@ -117,20 +117,20 @@ void VectorLayer::update_gpu_quads(const std::vector<nucleus::tile::GpuVectorLay
         for (const auto& tile : quad.tiles) {
             // test for validity
             assert(tile.id.zoom_level < 100);
-            if (!tile.triangle_acceleration_grid)
+            if (!tile.acceleration_grid)
                 continue; // nothing here
 
             // assert(tile.triangle_acceleration_grid);
-            assert(tile.triangle_index_buffer);
-            assert(tile.triangle_vertex_buffer);
+            assert(tile.index_buffer);
+            assert(tile.vertex_buffer);
 
             // find empty spot and upload texture
-            const auto layer_index = m_gpu_multi_array_helper.add_tile(tile.id, tile.triangle_buffer_info);
+            const auto layer_index = m_gpu_multi_array_helper.add_tile(tile.id, tile.buffer_info);
 
-            m_triangle_acceleration_grid_texture->upload(*tile.triangle_acceleration_grid, layer_index[0]);
+            m_acceleration_grid_texture->upload(*tile.acceleration_grid, layer_index[0]);
 
-            m_triangle_index_buffer_texture[tile.triangle_buffer_info]->upload(*tile.triangle_index_buffer, layer_index[1]);
-            m_triangle_vertex_buffer_texture[tile.triangle_buffer_info]->upload(*tile.triangle_vertex_buffer, layer_index[1]);
+            m_index_buffer_texture[tile.buffer_info]->upload(*tile.index_buffer, layer_index[1]);
+            m_vertex_buffer_texture[tile.buffer_info]->upload(*tile.vertex_buffer, layer_index[1]);
         }
     }
 
@@ -145,11 +145,10 @@ void VectorLayer::update_gpu_id_map()
     m_tile_id_texture->upload(packed_ids);
 }
 
-void VectorLayer::update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> fill_styles, std::shared_ptr<const nucleus::Raster<glm::u32vec4>>)
+void VectorLayer::update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles)
 {
     // upload the styles to the texture
-    m_fill_styles_texture->upload(*fill_styles);
-    // todo line style
+    m_styles_texture->upload(*styles);
 }
 
 } // namespace gl_engine

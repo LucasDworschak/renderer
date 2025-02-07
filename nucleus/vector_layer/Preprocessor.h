@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <set>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -47,7 +48,7 @@ namespace details {
     template <class T> inline void hash_combine(std::size_t& seed, T const& v) { seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2); }
 
     struct Hasher {
-        size_t operator()(const std::vector<uint32_t>& seq) const
+        size_t operator()(const std::set<uint32_t>& seq) const
         {
             size_t seed = 0;
             for (const uint32_t& i : seq) {
@@ -58,12 +59,7 @@ namespace details {
         }
     };
 
-    struct PolygonData {
-        std::vector<glm::vec2> vertices;
-        std::vector<glm::ivec2> edges;
-    };
-
-    using VectorLayerGrid = std::vector<std::vector<uint32_t>>;
+    using VectorLayerGrid = std::vector<std::set<uint32_t>>;
 
     struct VectorLayerCollection {
     public:
@@ -72,20 +68,23 @@ namespace details {
         VectorLayerGrid acceleration_grid;
     };
 
-    struct TempDataHolder {
-        std::vector<PolygonData> polygons;
+    struct GeometryData {
+        std::vector<glm::vec2> vertices;
         uint32_t extent;
-        std::vector<size_t> polygon_styles;
-        std::vector<PolygonData> lines;
-        std::vector<size_t> line_styles;
+        uint32_t style;
+        uint32_t layer;
+        bool is_polygon;
+
+        // type dependent
+        std::vector<glm::ivec2> edges;
+        float line_width;
     };
 
-    VectorLayerCollection preprocess_triangles(const TempDataHolder& data);
-    VectorLayerCollection preprocess_lines(const TempDataHolder& data);
+    VectorLayerCollection preprocess_geometry(const std::vector<GeometryData>& data);
 
-    GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& triangle_collection, const VectorLayerCollection& line_collection);
+    GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& layer_collection);
 
-    TempDataHolder parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
+    std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
 
     /**
      * 96 bits -> rgb32UI
@@ -94,6 +93,7 @@ namespace details {
      * 78+14 bits = 92 -> 4 bits remain
      */
     glm::uvec3 pack_triangle_data(glm::vec2 a, glm::vec2 b, glm::vec2 c, uint32_t style_index);
+    glm::uvec3 pack_line_data(glm::vec2 a, glm::vec2 b, uint32_t style_index);
     std::tuple<glm::vec2, glm::vec2, glm::vec2, uint32_t> unpack_triangle_data(glm::uvec3 packed);
 } // namespace details
 

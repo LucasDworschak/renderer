@@ -104,7 +104,8 @@ RenderingContext::RenderingContext(QObject* parent)
     m->geometry.scheduler->set_dataquerier(m->data_querier);
 
     m->vector_layer = nucleus::vector_layer::setup::scheduler("vector_layer",
-        std::make_unique<TileLoadService>("http://localhost:3000/getmvt/", TilePattern::ZXY_yPointingSouth, ""),
+        std::make_unique<TileLoadService>("https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/", TilePattern::ZXY_yPointingSouth, ""),
+        // std::make_unique<TileLoadService>("http://localhost:3000/getmvt/", TilePattern::ZXY_yPointingSouth, ""),
         // std::make_unique<TileLoadService>("http://localhost:8080/data/openmaptiles/", TilePattern::ZXY_yPointingSouth, ".pbf"),
         // std::make_unique<TileLoadService>("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/tile/", TilePattern::ZYX_yPointingSouth, ".pbf"),
         m->aabb_decorator,
