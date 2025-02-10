@@ -71,14 +71,29 @@ VectorLayerData unpack_vectorlayer_data(highp uvec3 data) {
     const highp uint bitmask_6 = (1u << 6) - 1u;
     const highp uint bitmask_2 = (1u << 2) - 1u;
 
-    const highp int negative_bits = highp int(((1u << 31) - 1u) << 12u);
+    const highp int negative_bits = int(((1u << 31) - 1u) << 12u);
 
-    unpacked_data.a.x = highp int((data.x & bitmask_12_first) >> (32u - 13u)) | (negative_bits & -highp int((data.x & sign_mask_first) >> 31));
-    unpacked_data.a.y = highp int((data.x & bitmask_12_middle) >> (32u - 26u)) | (negative_bits & -highp int((data.x & sign_mask_middle) >> (31 - 13)));
-    unpacked_data.b.x = highp int((data.y & bitmask_12_first) >> (32u - 13u)) | (negative_bits & -highp int((data.y & sign_mask_first) >> 31));
-    unpacked_data.b.y = highp int((data.y & bitmask_12_middle) >> (32u - 26u)) | (negative_bits & -highp int((data.y & sign_mask_middle) >> (31 - 13)));
-    unpacked_data.c.x = highp int((data.z & bitmask_12_first) >> (32u - 13u)) | (negative_bits & -highp int((data.z & sign_mask_first) >> 31));
-    unpacked_data.c.y = highp int((data.z & bitmask_12_middle) >> (32u - 26u)) | (negative_bits & -highp int((data.z & sign_mask_middle) >> (31 - 13)));
+    highp int x_first = int((data.x & bitmask_12_first) >> (32u - 13u));
+    highp int x_middle = int((data.x & bitmask_12_middle) >> (32u - 26u));
+    highp int x_sign_first = int((data.x & sign_mask_first) >> 31);
+    highp int x_sign_middle = int((data.x & sign_mask_middle) >> (31 - 13));
+
+    highp int y_first = int((data.y & bitmask_12_first) >> (32u - 13u));
+    highp int y_middle = int((data.y & bitmask_12_middle) >> (32u - 26u));
+    highp int y_sign_first = int((data.y & sign_mask_first) >> 31);
+    highp int y_sign_middle = int((data.y & sign_mask_middle) >> (31 - 13));
+
+    highp int z_first = int((data.z & bitmask_12_first) >> (32u - 13u));
+    highp int z_middle = int((data.z & bitmask_12_middle) >> (32u - 26u));
+    highp int z_sign_first = int((data.z & sign_mask_first) >> 31);
+    highp int z_sign_middle = int((data.z & sign_mask_middle) >> (31 - 13));
+
+    unpacked_data.a.x = x_first | (negative_bits & -x_sign_first);
+    unpacked_data.a.y = x_middle | (negative_bits & -x_sign_middle);
+    unpacked_data.b.x = y_first | (negative_bits & -y_sign_first);
+    unpacked_data.b.y = y_middle | (negative_bits & -y_sign_middle);
+    unpacked_data.c.x = z_first | (negative_bits & -z_sign_first);
+    unpacked_data.c.y = z_middle | (negative_bits & -z_sign_middle);
 
     unpacked_data.style_index = (data.x & bitmask_6) << (14u - 6u);
     unpacked_data.style_index = unpacked_data.style_index | (data.y & bitmask_6) << (14u - 12u);
@@ -89,9 +104,10 @@ VectorLayerData unpack_vectorlayer_data(highp uvec3 data) {
     unpacked_data.style_index = unpacked_data.style_index | ((data.z & (((1u << 2) - 1u) << 4u)) >> 4u);
 
     // move the values back to the correct coordinates
-    unpacked_data.a = unpacked_data.a + highp ivec2(tile_extent / 2.0);
-    unpacked_data.b = unpacked_data.b + highp ivec2(tile_extent / 2.0);
-    unpacked_data.c = unpacked_data.c + highp ivec2(tile_extent / 2.0);
+    const highp ivec2 half_extent = ivec2(tile_extent / 2.0);
+    unpacked_data.a = unpacked_data.a + half_extent;
+    unpacked_data.b = unpacked_data.b + half_extent;
+    unpacked_data.c = unpacked_data.c + half_extent;
 
     return unpacked_data;
 }
