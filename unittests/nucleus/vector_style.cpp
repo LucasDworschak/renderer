@@ -26,7 +26,6 @@
 #include <QString>
 #include <glm/glm.hpp>
 
-#include <iomanip>
 
 #include <nucleus/tile/TileLoadService.h>
 #include <nucleus/tile/conversion.h>
@@ -36,7 +35,6 @@
 
 #include "nucleus/vector_layer/Style.h"
 #include "nucleus/vector_layer/StyleExpression.h"
-#include "nucleus/vector_layer/constants.h"
 #include "nucleus/vector_tile/util.h"
 
 #include <QJsonArray>

@@ -96,27 +96,27 @@ highp vec3 normal_by_fragment_position_interpolation() {
 }
 
 // https://iquilezles.org/articles/distfunctions2d/
-float circle(vec2 uv, vec2 pos, float r) // DEBUG
+highp float circle(highp vec2 uv, highp vec2 pos, highp float r) // DEBUG
 {
     return distance(uv, pos) - r;
 }
 
-float sdLine( in vec2 p, in vec2 a, in vec2 b )
+highp float sdLine( in highp vec2 p, in highp vec2 a, in highp vec2 b )
 {
-    vec2 pa = p-a, ba = b-a;
-    float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
+    highp vec2 pa = p-a, ba = b-a;
+    highp float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
     return length( pa - ba*h );
 }
 
-float sdTriangle( in vec2 p, in vec2 p0, in vec2 p1, in vec2 p2 )
+highp float sdTriangle( in highp vec2 p, in highp vec2 p0, in highp vec2 p1, in highp vec2 p2 )
 {
-    vec2 e0 = p1-p0, e1 = p2-p1, e2 = p0-p2;
-    vec2 v0 = p -p0, v1 = p -p1, v2 = p -p2;
-    vec2 pq0 = v0 - e0*clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );
-    vec2 pq1 = v1 - e1*clamp( dot(v1,e1)/dot(e1,e1), 0.0, 1.0 );
-    vec2 pq2 = v2 - e2*clamp( dot(v2,e2)/dot(e2,e2), 0.0, 1.0 );
-    float s = sign( e0.x*e2.y - e0.y*e2.x );
-    vec2 d = min(min(vec2(dot(pq0,pq0), s*(v0.x*e0.y-v0.y*e0.x)),
+    highp vec2 e0 = p1-p0, e1 = p2-p1, e2 = p0-p2;
+    highp vec2 v0 = p -p0, v1 = p -p1, v2 = p -p2;
+    highp vec2 pq0 = v0 - e0*clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );
+    highp vec2 pq1 = v1 - e1*clamp( dot(v1,e1)/dot(e1,e1), 0.0, 1.0 );
+    highp vec2 pq2 = v2 - e2*clamp( dot(v2,e2)/dot(e2,e2), 0.0, 1.0 );
+    highp float s = sign( e0.x*e2.y - e0.y*e2.x );
+    highp vec2 d = min(min(vec2(dot(pq0,pq0), s*(v0.x*e0.y-v0.y*e0.x)),
                      vec2(dot(pq1,pq1), s*(v1.x*e1.y-v1.y*e1.x))),
                      vec2(dot(pq2,pq2), s*(v2.x*e2.y-v2.y*e2.x)));
     return -sqrt(d.x)*sign(d.y);
@@ -313,12 +313,12 @@ void main() {
             {
                 // lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
                 lowp vec3 raw_grid = vec3(1,0,0);// DEBUG
-                ivec2 grid_cell = ivec2(uv*vec2(grid_size,grid_size)); // DEBUG
+                lowp ivec2 grid_cell = ivec2(uv*vec2(grid_size,grid_size)); // DEBUG
                 lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
-                vec3 triangle_lines_out = vec3(0.0f, 0.0, 0.0f); // DEBUG
+                lowp vec3 triangle_lines_out = vec3(0.0f, 0.0, 0.0f); // DEBUG
 
                 lowp vec3 pixel_color = vec3(0.0f, 0.0, 0.0f);
-                float pixel_alpha = 0.0;
+                lowp float pixel_alpha = 0.0;
 
                 // get the buffer index and extract the correct texture_layer.y
                 lowp uint sampler_buffer_index = (texture_layer.y & ((highp uint(-1u) << sampler_offset))) >> sampler_offset;
@@ -367,7 +367,7 @@ void main() {
                     bool is_polygon = (index & 1u) == 1u;
                     index = index >> 1;
 
-                    float d = 0.0;
+                    highp float d = 0.0;
                     highp uint style_index = -1u;
 
                     if(is_polygon)
@@ -378,7 +378,7 @@ void main() {
                         highp vec2 v1 = triangle_data.b / vec2(tile_extent);
                         highp vec2 v2 = triangle_data.c / vec2(tile_extent);
 
-                        float thickness = 0.0;
+                        highp float thickness = 0.0;
                         d = sdTriangle(uv, v0, v1, v2) - thickness;
                         // d = 100.0;
 
@@ -407,7 +407,7 @@ void main() {
                             continue;
 
 
-                        float thickness = layer_style.current_layer_style.outline_width / tile_extent;
+                        highp float thickness = layer_style.current_layer_style.outline_width / tile_extent;
                         d = sdLine(uv, v0, v1) - thickness;
 
                         // d = 100.0;

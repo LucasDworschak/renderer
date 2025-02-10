@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-const float tile_extent = 4096.0;
+const highp float tile_extent = 4096.0;
 
 struct VectorLayerData{
     highp ivec2 a;
@@ -34,28 +34,29 @@ highp uvec3 pack_vectorlayer_data(VectorLayerData data) {
     const highp uint bitmask_2 = (1u << 2) - 1u;
 
     // move the values by half extent
-    data.a = data.a - highp ivec2(tile_extent / 2.0);
-    data.b = data.b - highp ivec2(tile_extent / 2.0);
-    data.c = data.c - highp ivec2(tile_extent / 2.0);
+    const highp ivec2 half_extent = ivec2(tile_extent / 2.0);
+    highp uvec2 a = uvec2(data.a - half_extent);
+    highp uvec2 b = uvec2(data.b - half_extent);
+    highp uvec2 c = uvec2(data.c - half_extent);
 
-    packed_data.x = highp uint(data.a.x) << (32u - 13u);
-    packed_data.x = packed_data.x | (highp uint(data.a.x) & sign_mask);
-    packed_data.x = packed_data.x | ((highp uint(data.a.y) & bitmask_12) << (32u - 26u));
-    packed_data.x = packed_data.x | ((highp uint(data.a.y) & sign_mask) >> (13u));
+    packed_data.x = a.x << (32u - 13u);
+    packed_data.x = packed_data.x | (a.x & sign_mask);
+    packed_data.x = packed_data.x | ((a.y & bitmask_12) << (32u - 26u));
+    packed_data.x = packed_data.x | ((a.y & sign_mask) >> (13u));
 
-    packed_data.y = highp uint(data.b.x) << (32u - 13u);
-    packed_data.y = packed_data.y | (highp uint(data.b.x) & sign_mask);
-    packed_data.y = packed_data.y | ((highp uint(data.b.y) & bitmask_12) << (32u - 26u));
-    packed_data.y = packed_data.y | ((highp uint(data.b.y) & sign_mask) >> (13u));
+    packed_data.y = b.x << (32u - 13u);
+    packed_data.y = packed_data.y | (b.x & sign_mask);
+    packed_data.y = packed_data.y | ((b.y & bitmask_12) << (32u - 26u));
+    packed_data.y = packed_data.y | ((b.y & sign_mask) >> (13u));
 
-    packed_data.z = highp uint(data.c.x) << (32u - 13u);
-    packed_data.z = packed_data.z | (highp uint(data.c.x) & sign_mask);
-    packed_data.z = packed_data.z | ((highp uint(data.c.y) & bitmask_12) << (32u - 26u));
-    packed_data.z = packed_data.z | ((highp uint(data.c.y) & sign_mask) >> (13u));
+    packed_data.z = c.x << (32u - 13u);
+    packed_data.z = packed_data.z | (c.x & sign_mask);
+    packed_data.z = packed_data.z | ((c.y & bitmask_12) << (32u - 26u));
+    packed_data.z = packed_data.z | ((c.y & sign_mask) >> (13u));
 
-    packed_data.x = packed_data.x | ((highp uint(data.style_index) >> (14u - 6u)) & bitmask_6);
-    packed_data.y = packed_data.y | ((highp uint(data.style_index) >> (14u - 12u)) & bitmask_6);
-    packed_data.z = packed_data.z | ((highp uint(data.style_index) & bitmask_2) << 4u);
+    packed_data.x = packed_data.x | ((data.style_index >> (14u - 6u)) & bitmask_6);
+    packed_data.y = packed_data.y | ((data.style_index >> (14u - 12u)) & bitmask_6);
+    packed_data.z = packed_data.z | ((data.style_index & bitmask_2) << 4u);
 
     return packed_data;
 }
