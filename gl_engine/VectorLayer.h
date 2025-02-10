@@ -70,6 +70,10 @@ private:
 
     nucleus::vector_layer::GpuMultiArrayHelper m_gpu_multi_array_helper;
 
+    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> m_styles;
+
+    bool m_initialized;
+
     // nucleus::tile::IdMap<std::shared_ptr<const std::vector<uint32_t>>> m_id_to_data_bridge;
     // nucleus::tile::IdMap<std::shared_ptr<const std::vector<uint32_t>>> m_id_to_triangle_data;
 };

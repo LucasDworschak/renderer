@@ -33,6 +33,7 @@ using namespace nucleus::vector_layer;
 VectorLayer::VectorLayer(QObject* parent)
     : QObject { parent }
     , m_gpu_multi_array_helper()
+    , m_initialized(false)
 {
 }
 
@@ -70,6 +71,10 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_styles_texture->setParams(gl_engine::Texture::Filter::Nearest, gl_engine::Texture::Filter::Nearest);
 
     update_gpu_id_map();
+
+    m_initialized = true;
+    if (m_styles)
+        m_styles_texture->upload(*m_styles);
 }
 
 void VectorLayer::draw(
@@ -147,8 +152,11 @@ void VectorLayer::update_gpu_id_map()
 
 void VectorLayer::update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles)
 {
-    // upload the styles to the texture
-    m_styles_texture->upload(*styles);
+    // at this point we cannot be sure that the texture has been initialized -> save the pointer for now and upload after init
+    m_styles = styles;
+
+    if (m_initialized) // only upload if it is already initialized
+        m_styles_texture->upload(*m_styles);
 }
 
 } // namespace gl_engine
