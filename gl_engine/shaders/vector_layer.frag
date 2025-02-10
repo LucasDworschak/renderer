@@ -72,7 +72,7 @@ struct Layer_Style
 
 
 ///////////////////////////////////////////////
-// CONSTANTS
+// CPP CONFIG CONSTANTS
 
 const lowp int grid_size = 64;
 const lowp uint data_size = 1u; // how many texels are needed to store the data for one triangle
@@ -80,9 +80,11 @@ const lowp uint data_size = 1u; // how many texels are needed to store the data 
 const lowp uint sampler_offset = 16u - 2u; // used to calculate how many bits are used to determine the sampler index, and how many are used for the layer
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 
-const lowp float style_precision = 100;
+const lowp float style_precision = 100.0;
 
 ///////////////////////////////////////////////
+
+const highp uint bit_mask_ones = uint(-1u);
 
 
 highp float calculate_falloff(highp float dist, highp float from, highp float to) {
@@ -303,7 +305,8 @@ void main() {
 
 
         highp uvec2 texture_layer = texelFetch(array_index_sampler, dict_px, 0).xy;
-        if(texture_layer.x != highp uint(-1) && texture_layer.y != highp uint(-1)) // check for valid data
+
+        if(texture_layer.x != bit_mask_ones && texture_layer.y != bit_mask_ones) // check for valid data
         {
             // acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
             offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(uv*vec2(grid_size,grid_size), texture_layer.x & layer_mask),0).r);
@@ -321,7 +324,7 @@ void main() {
                 lowp float pixel_alpha = 0.0;
 
                 // get the buffer index and extract the correct texture_layer.y
-                lowp uint sampler_buffer_index = (texture_layer.y & ((highp uint(-1u) << sampler_offset))) >> sampler_offset;
+                lowp uint sampler_buffer_index = (texture_layer.y & ((bit_mask_ones << sampler_offset))) >> sampler_offset;
                 texture_layer.y = texture_layer.y & layer_mask;
 
                 lowp vec3 layer_debug = vec3(0,0,0);// DEBUG -> which cascade is being used
