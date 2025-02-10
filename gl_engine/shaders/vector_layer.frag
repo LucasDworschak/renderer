@@ -377,9 +377,9 @@ void main() {
                     {
                         VectorLayerData triangle_data = vertex_sample(sampler_buffer_index, index, texture_layer.y);
 
-                        highp vec2 v0 = triangle_data.a / vec2(tile_extent);
-                        highp vec2 v1 = triangle_data.b / vec2(tile_extent);
-                        highp vec2 v2 = triangle_data.c / vec2(tile_extent);
+                        highp vec2 v0 = vec2(triangle_data.a) / vec2(tile_extent);
+                        highp vec2 v1 = vec2(triangle_data.b) / vec2(tile_extent);
+                        highp vec2 v2 = vec2(triangle_data.c) / vec2(tile_extent);
 
                         highp float thickness = 0.0;
                         d = sdTriangle(uv, v0, v1, v2) - thickness;
@@ -401,8 +401,8 @@ void main() {
                     {
                         VectorLayerData line_data = vertex_sample(sampler_buffer_index, index, texture_layer.y);
 
-                        highp vec2 v0 = line_data.a / vec2(tile_extent);
-                        highp vec2 v1 = line_data.b / vec2(tile_extent);
+                        highp vec2 v0 = vec2(line_data.a) / vec2(tile_extent);
+                        highp vec2 v1 = vec2(line_data.b) / vec2(tile_extent);
 
                         // needs to be applied here to get the thickness of the line
                         bool check_next_geometry = prepare_layer_style(line_data.style_index, layer_style, pixel_color);
