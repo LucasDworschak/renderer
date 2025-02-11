@@ -294,9 +294,11 @@ void main() {
 
 
 
-    lowp vec3 layer_debug = vec3(0,0,0);// DEBUG -> which cascade is being used
-    lowp vec3 cell_debug = vec3(0,0,0);// DEBUG -> how many triangles per cell
-    lowp vec3 triangle_lines_out = vec3(0.0f, 0.0, 0.0f); // DEBUG
+    lowp vec3 debug_cacscade_layer = vec3(0,0,0);// DEBUG -> which cascade is being used
+    lowp vec3 debug_cell_size = vec3(0,0,0);// DEBUG -> how many triangles per cell
+    lowp vec3 debug_triangle_lines = vec3(0.0f, 0.0, 0.0f); // DEBUG
+    lowp vec3 debug_index_buffer_start = vec3(0.0f, 0.0, 0.0f); // DEBUG
+    lowp vec3 debug_index_buffer_size = vec3(0.0f, 0.0, 0.0f); // DEBUG
 
 
 
@@ -338,29 +340,32 @@ void main() {
 
                 {
                     if(sampler_buffer_index == 0u)
-                        layer_debug = vec3(0,1,0); // green
+                        debug_cacscade_layer = vec3(0,1,0); // green
                     else if(sampler_buffer_index == 1u)
-                        layer_debug = vec3(1,1,0); // yellow
+                        debug_cacscade_layer = vec3(1,1,0); // yellow
                     else if(sampler_buffer_index == 2u)
-                        layer_debug = vec3(1,0.5,0); // orange
+                        debug_cacscade_layer = vec3(1,0.5,0); // orange
                     else if(sampler_buffer_index == 3u)
-                        layer_debug = vec3(1,0,0); // red
+                        debug_cacscade_layer = vec3(1,0,0); // red
                     else
-                        layer_debug = vec3(1,0,1); // purple -> should never happen -> unrecognized index
+                        debug_cacscade_layer = vec3(1,0,1); // purple -> should never happen -> unrecognized index
                 }
 
                 {
                     if(offset_size.y < 32u)
-                        cell_debug = vec3(0,1,0); // green
+                        debug_cell_size = vec3(0,1,0); // green
                     else if(offset_size.y < 64u)
-                        cell_debug = vec3(1,1,0); // yellow
+                        debug_cell_size = vec3(1,1,0); // yellow
                     else if(offset_size.y  < 128u)
-                        cell_debug = vec3(1,0.5,0); // orange
+                        debug_cell_size = vec3(1,0.5,0); // orange
                     else if(offset_size.y < 255u)
-                        cell_debug = vec3(1,0,0); // red
+                        debug_cell_size = vec3(1,0,0); // red
                     else
-                        cell_debug = vec3(1,0,1); // purple -> should never happen -> unrecognized index
+                        debug_cell_size = vec3(1,0,1); // purple -> should never happen -> unrecognized index
                 }
+
+                debug_index_buffer_start = color_from_id_hash(offset_size.x);
+                debug_index_buffer_size = color_from_id_hash(offset_size.y);
 
                 Layer_Style layer_style;
 
@@ -385,9 +390,14 @@ void main() {
                     {
                         VectorLayerData triangle_data = vertex_sample(sampler_buffer_index, index, texture_layer.y);
 
-                        highp vec2 v0 = vec2(triangle_data.a) / vec2(tile_extent);
-                        highp vec2 v1 = vec2(triangle_data.b) / vec2(tile_extent);
-                        highp vec2 v2 = vec2(triangle_data.c) / vec2(tile_extent);
+                        const highp vec2 vec2_tile_extent = vec2(tile_extent);
+
+                        highp vec2 v0 = vec2(triangle_data.a);
+                        v0 = v0 / vec2_tile_extent;
+                        highp vec2 v1 = vec2(triangle_data.b);
+                        v1 = v1 / vec2_tile_extent;
+                        highp vec2 v2 = vec2(triangle_data.c);
+                        v2 = v2 / vec2_tile_extent;
 
                         highp float thickness = 0.0;
                         d = sdTriangle(uv, v0, v1, v2) - thickness;
@@ -442,7 +452,7 @@ void main() {
                         highp float t_line = 0.0;
                         if(d <= 0.001 && d >= -0.001)
                             t_line = 0.2;
-                        triangle_lines_out += vec3(0.0f, t_line, 0.0f);
+                        debug_triangle_lines += vec3(0.0f, t_line, 0.0f);
                     }
 
 
@@ -475,7 +485,7 @@ void main() {
                 // texout_albedo = pixel_color;
 
                 // texout_albedo = mix(cells, texout_albedo, 0.9);// DEBUG
-                // texout_albedo = mix(texout_albedo, triangle_lines_out, 0.5);// DEBUG
+                // texout_albedo = mix(texout_albedo, debug_triangle_lines, 0.5);// DEBUG
 
                 // vec3 grid_start = color_from_id_hash(offset_size.x);
                 // vec3 grid_start = color_from_id_hash(offset_size.y);
@@ -486,9 +496,9 @@ void main() {
                 // texout_albedo = mix(raw_grid, pixel_color, 0.5);// DEBUG
                 // texout_albedo = raw_grid;// DEBUG
                 // texout_albedo = vec3(pixel_alpha);// DEBUG
-                // texout_albedo = triangle_lines_out;// DEBUG
-                // texout_albedo = layer_debug;// DEBUG
-                // texout_albedo = cell_debug;// DEBUG
+                // texout_albedo = debug_triangle_lines;// DEBUG
+                // texout_albedo = debug_cacscade_layer;// DEBUG
+                // texout_albedo = debug_cell_size;// DEBUG
                 // texout_albedo = mix(texout_albedo, color_from_id_hash(texture_layer.y), 0.2);
 
             }
@@ -510,9 +520,11 @@ void main() {
         lowp vec3 overlay_color = vec3(0.0);
         switch(conf.overlay_mode) {
             case 200u: overlay_color = vec3(uv, 0.0);break;
-            case 201u: overlay_color = layer_debug;break;
-            case 202u: overlay_color = cell_debug;break;
-            case 203u: overlay_color = triangle_lines_out;break;
+            case 201u: overlay_color = debug_cacscade_layer;break;
+            case 202u: overlay_color = debug_cell_size;break;
+            case 203u: overlay_color = debug_triangle_lines;break;
+            case 204u: overlay_color = debug_index_buffer_start;break;
+            case 205u: overlay_color = debug_index_buffer_size;break;
             default: overlay_color = vertex_color;
         }
         texout_albedo = mix(texout_albedo, overlay_color, conf.overlay_strength);

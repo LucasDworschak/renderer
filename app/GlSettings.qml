@@ -49,6 +49,8 @@ SettingsPanel {
                 { text: "Cascade Level",        value: 201  }, // (only in vector_layer.frag)
                 { text: "Triangles per Cell",   value: 202  }, // (only in vector_layer.frag)
                 { text: "Triangle Outlines",    value: 203  }, // (only in vector_layer.frag)
+                { text: "Index Buffer Start",   value: 204  }, // (only in vector_layer.frag)
+                { text: "Index Buffer Size",    value: 205  }, // (only in vector_layer.frag)
             ]
             onActivated:  map.shared_config.overlay_mode = currentValue;
             Component.onCompleted: normal_mode.currentIndex = map.shared_config.normal_mode;
