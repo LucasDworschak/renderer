@@ -32,29 +32,29 @@ void StyleFilter::add_filter(uint32_t style_index, uint32_t layer_index, std::sh
     }
 }
 
-std::pair<uint32_t, uint32_t> StyleFilter::indices(unsigned zoom, const mapbox::vector_tile::feature& feature) const
+std::vector<std::pair<uint32_t, uint32_t>> StyleFilter::indices(unsigned zoom, const mapbox::vector_tile::feature& feature) const
 {
     if (!m_filter.contains(zoom)) {
         // qDebug() << "filter at zoom not found ";
-        return std::make_pair(-1u, -1u); // not found
+        return {}; // not found
     }
 
     const auto type = feature.getType();
     const auto properties = feature.getProperties();
 
+    auto styles = std::vector<std::pair<uint32_t, uint32_t>>();
+
     for (const auto& values : m_filter.at(zoom)) {
         if (std::get<2>(values) == nullptr) // no filter is here -> we assume that every feature with layername and zoom is valid
         {
             assert(m_filter.at(zoom).size() == 1); // if there is no filter -> there should only be one valid value
-            return std::make_pair(std::get<0>(values), std::get<1>(values));
-        }
-        if (std::get<2>(values)->matches(type, properties)) {
-            return std::make_pair(std::get<0>(values), std::get<1>(values)); // first filter that matches returns the indices
+            styles.push_back(std::make_pair(std::get<0>(values), std::get<1>(values)));
+        } else if (std::get<2>(values)->matches(type, properties)) {
+            styles.push_back(std::make_pair(std::get<0>(values), std::get<1>(values))); // first filter that matches returns the indices
         }
     }
 
-    // qDebug() << "filter and zoom exist but no match found";
-    return std::make_pair(-1u, -1u); // not found
+    return styles;
 }
 
 } // namespace nucleus::vector_layer

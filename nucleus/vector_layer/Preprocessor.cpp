@@ -93,48 +93,46 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
             const auto feature = mapbox::vector_tile::feature(layer.getFeature(i), layer);
 
             const auto type = (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) ? "line" : "fill";
-            uint32_t style_index;
-            uint32_t layer_index;
-            std::tie(style_index, layer_index) = style.indices(layer_name, type, id.zoom_level, feature);
+            auto styles = style.indices(layer_name, type, id.zoom_level, feature);
 
-            if (style_index == -1u) // no style found -> we do not visualize it
+            if (styles.size() == 0) // no styles found -> we do not visualize it
                 continue;
 
             if (feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
                 PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
 
                 // construct edges from the current polygon and move them to the collection
-                GeometryData geom_data;
+                std::vector<glm::vec2> vertices;
+                std::vector<glm::ivec2> all_edges;
                 for (size_t j = 0; j < geom.size(); ++j) {
-                    auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(geom[j].size(), geom_data.vertices.size());
-                    geom_data.edges.insert(geom_data.edges.end(), edges.begin(), edges.end());
-                    geom_data.vertices.insert(geom_data.vertices.end(), geom[j].begin(), geom[j].end());
+                    auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(geom[j].size(), vertices.size());
+                    all_edges.insert(all_edges.end(), edges.begin(), edges.end());
+                    vertices.insert(vertices.end(), geom[j].begin(), geom[j].end());
                 }
 
-                geom_data.extent = extent;
-                geom_data.is_polygon = true;
-                geom_data.layer = layer_index;
-                geom_data.style = style_index;
-                geom_data.line_width = 0;
+                // qDebug() << layer_name << styles.size();
 
-                data.push_back(geom_data);
+                for (const auto& style : styles)
+                    data.emplace_back(vertices, extent, style.first, style.second, true, all_edges, 0);
+                // data.emplace_back(std::vector<glm::vec2>(vertices), extent, styles[0].first, styles[0].second, true, std::vector<glm::ivec2>(edges), 0);
+                // data.push_back({ vertices, extent, styles[0].first, styles[0].second, true, all_edges, 0 });
 
             } else if (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) {
-                PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(1.0);
+                PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
 
-                GeometryData geom_data;
+                std::vector<glm::vec2> vertices;
                 for (size_t j = 0; j < geom.size(); ++j) {
-                    geom_data.vertices.insert(geom_data.vertices.end(), geom[j].begin(), geom[j].end());
+                    vertices.insert(vertices.end(), geom[j].begin(), geom[j].end());
                 }
 
-                geom_data.extent = extent;
-                geom_data.is_polygon = false;
-                geom_data.layer = layer_index;
-                geom_data.style = style_index;
+                constexpr std::vector<glm::ivec2> no_edges; // necessary for emplace_back
 
-                geom_data.line_width = float(style_buffer[style_index].z) / float(constants::style_precision);
+                // TODO performance -> instead of duplicating the vertice data we only want to duplicate the index data
 
-                // data.push_back(geom_data);
+                for (const auto& style : styles) {
+                    const auto line_width = float(style_buffer[style.first].z) / float(constants::style_precision);
+                    data.emplace_back(vertices, extent, style.first, style.second, false, no_edges, line_width);
+                }
             }
         }
     }

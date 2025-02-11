@@ -289,14 +289,14 @@ QJsonArray Style::expand(const QJsonArray& layers)
     return out_layer;
 }
 
-std::pair<uint32_t, uint32_t> Style::indices(
+std::vector<std::pair<uint32_t, uint32_t>> Style::indices(
     std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const // + properties // type=Polygon/Point/... // class? subclass
 {
     const auto layer = layer_name + "_" + type;
 
     if (!m_layer_to_style.contains(layer)) {
         // qDebug() << "no style for: " << layer_name;
-        return std::make_pair(-1u, -1u);
+        return {};
     }
 
     return m_layer_to_style.at(layer).indices(zoom, feature);

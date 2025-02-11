@@ -61,7 +61,7 @@ public:
     uint32_t parse_color(const QJsonValue& value);
     uint16_t parse_dasharray(const QJsonValue& dash_values);
 
-    std::pair<uint32_t, uint32_t> indices(std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
+    std::vector<std::pair<uint32_t, uint32_t>> indices(std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
 
     std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles() const;
 

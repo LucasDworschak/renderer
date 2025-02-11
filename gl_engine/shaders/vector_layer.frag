@@ -74,7 +74,8 @@ struct Layer_Style
 ///////////////////////////////////////////////
 // CPP CONFIG CONSTANTS
 
-const lowp int grid_size = 64;
+// const lowp int grid_size = 64;
+const highp vec2 grid_size = vec2(64.0,64.0); // not a singular int variable because there might be some precision problems with webgl if cast at later point
 
 const lowp uint sampler_offset = 16u - 2u; // used to calculate how many bits are used to determine the sampler index, and how many are used for the layer
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
@@ -320,14 +321,15 @@ void main() {
         if(texture_layer.x != bit_mask_ones && texture_layer.y != bit_mask_ones) // check for valid data
         {
             // acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
-            offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(uv*vec2(grid_size,grid_size), texture_layer.x & layer_mask),0).r);
+            highp vec2 grid_lookup = grid_size*uv;
+            offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(int(grid_lookup.x), int(grid_lookup.y), texture_layer.x & layer_mask),0).r);
 
             // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
             if(offset_size.y != uint(0)) // only if we have data here
             {
                 // lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
                 lowp vec3 raw_grid = vec3(1,0,0);// DEBUG
-                lowp ivec2 grid_cell = ivec2(uv*vec2(grid_size,grid_size)); // DEBUG
+                lowp ivec2 grid_cell = ivec2(int(grid_lookup.x), int(grid_lookup.y)); // DEBUG
                 lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
 
 
@@ -489,8 +491,7 @@ void main() {
 
                 // vec3 grid_start = color_from_id_hash(offset_size.x);
                 // vec3 grid_start = color_from_id_hash(offset_size.y);
-
-                // texout_albedo = grid_start;
+ // texout_albedo = grid_start;
 
                 // texout_albedo = mix(grid_start, pixel_color, 0.5);// DEBUG
                 // texout_albedo = mix(raw_grid, pixel_color, 0.5);// DEBUG

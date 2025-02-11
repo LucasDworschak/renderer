@@ -38,7 +38,7 @@ public:
 
     void add_filter(uint32_t style_index, uint32_t layer_index, std::shared_ptr<StyleExpressionBase> filter, glm::uvec2 zoom_range);
 
-    std::pair<uint32_t, uint32_t> indices(unsigned zoom, const mapbox::vector_tile::feature& feature) const;
+    std::vector<std::pair<uint32_t, uint32_t>> indices(unsigned zoom, const mapbox::vector_tile::feature& feature) const;
 
 private:
     // zoom level -> vector<style_index,StyleExpression>
