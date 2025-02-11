@@ -540,7 +540,7 @@ void main() {
         if(conf.overlay_mode == 208u)
         {
             lowp float upper_limit = conf.overlay_strength * 255.0;
-            if(debug_draw_calls > upper_limit)
+            if(debug_draw_calls > int(upper_limit))
                 texout_albedo = vec3(1.0, 0.0, 0.0);
             else if (debug_draw_calls == 0)
                 texout_albedo = vec3(1.0, 0.0, 1.0);
