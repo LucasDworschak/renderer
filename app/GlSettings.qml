@@ -51,6 +51,9 @@ SettingsPanel {
                 { text: "Triangle Outlines",    value: 203  }, // (only in vector_layer.frag)
                 { text: "Index Buffer Start",   value: 204  }, // (only in vector_layer.frag)
                 { text: "Index Buffer Size",    value: 205  }, // (only in vector_layer.frag)
+                { text: "Index Texture Layer",  value: 206  }, // (only in vector_layer.frag)
+                { text: "PixelAlpha",           value: 207  }, // (only in vector_layer.frag)
+                { text: "Draw Calls",           value: 208  }, // (only in vector_layer.frag)
             ]
             onActivated:  map.shared_config.overlay_mode = currentValue;
             Component.onCompleted: normal_mode.currentIndex = map.shared_config.normal_mode;

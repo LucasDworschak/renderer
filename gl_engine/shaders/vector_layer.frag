@@ -300,6 +300,9 @@ void main() {
     lowp vec3 debug_triangle_lines = vec3(0.0f, 0.0, 0.0f); // DEBUG
     lowp vec3 debug_index_buffer_start = vec3(0.0f, 0.0, 0.0f); // DEBUG
     lowp vec3 debug_index_buffer_size = vec3(0.0f, 0.0, 0.0f); // DEBUG
+    lowp vec3 debug_texture_layer = vec3(0.0f, 0.0, 0.0f); // DEBUG
+    lowp int debug_draw_calls = 0; // DEBUG
+
 
 
 
@@ -309,6 +312,8 @@ void main() {
 
     lowp ivec2 dict_px;
     highp uvec2 offset_size = uvec2(0u);
+
+    lowp float pixel_alpha = 0.0;
     texout_albedo = vec3(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f);
 
 
@@ -334,53 +339,56 @@ void main() {
 
 
                 lowp vec3 pixel_color = vec3(0.0f, 0.0, 0.0f);
-                lowp float pixel_alpha = 0.0;
+
 
                 // get the buffer index and extract the correct texture_layer.y
                 lowp uint sampler_buffer_index = (texture_layer.y & ((bit_mask_ones << sampler_offset))) >> sampler_offset;
                 texture_layer.y = texture_layer.y & layer_mask;
 
-                {
-                    if(sampler_buffer_index == 0u)
-                        debug_cacscade_layer = vec3(0,1,0); // green
-                    else if(sampler_buffer_index == 1u)
-                        debug_cacscade_layer = vec3(1,1,0); // yellow
-                    else if(sampler_buffer_index == 2u)
-                        debug_cacscade_layer = vec3(1,0.5,0); // orange
-                    else if(sampler_buffer_index == 3u)
-                        debug_cacscade_layer = vec3(1,0,0); // red
-                    else
-                        debug_cacscade_layer = vec3(1,0,1); // purple -> should never happen -> unrecognized index
-                }
+                { // DEBUG
+                    debug_texture_layer = color_from_id_hash(texture_layer.y);
 
-                {
-                    if(offset_size.y < 32u)
-                        debug_cell_size = vec3(0,1,0); // green
-                    else if(offset_size.y < 64u)
-                        debug_cell_size = vec3(1,1,0); // yellow
-                    else if(offset_size.y  < 128u)
-                        debug_cell_size = vec3(1,0.5,0); // orange
-                    else if(offset_size.y < 255u)
-                        debug_cell_size = vec3(1,0,0); // red
-                    else
-                        debug_cell_size = vec3(1,0,1); // purple -> should never happen -> unrecognized index
-                }
+                    {
+                        if(sampler_buffer_index == 0u)
+                            debug_cacscade_layer = vec3(0,1,0); // green
+                        else if(sampler_buffer_index == 1u)
+                            debug_cacscade_layer = vec3(1,1,0); // yellow
+                        else if(sampler_buffer_index == 2u)
+                            debug_cacscade_layer = vec3(1,0.5,0); // orange
+                        else if(sampler_buffer_index == 3u)
+                            debug_cacscade_layer = vec3(1,0,0); // red
+                        else
+                            debug_cacscade_layer = vec3(1,0,1); // purple -> should never happen -> unrecognized index
+                    }
 
-                debug_index_buffer_start = color_from_id_hash(offset_size.x);
-                debug_index_buffer_size = color_from_id_hash(offset_size.y);
+                    {
+                        if(offset_size.y < 32u)
+                            debug_cell_size = vec3(0,1,0); // green
+                        else if(offset_size.y < 64u)
+                            debug_cell_size = vec3(1,1,0); // yellow
+                        else if(offset_size.y  < 128u)
+                            debug_cell_size = vec3(1,0.5,0); // orange
+                        else if(offset_size.y < 255u)
+                            debug_cell_size = vec3(1,0,0); // red
+                        else
+                            debug_cell_size = vec3(1,0,1); // purple -> should never happen -> unrecognized index
+                    }
+
+                    debug_index_buffer_start = color_from_id_hash(offset_size.x);
+                    debug_index_buffer_size = color_from_id_hash(offset_size.y);
+                } // DEBUG END
 
                 Layer_Style layer_style;
-
                 layer_style.last_style = -1u;
                 layer_style.current_layer_style = Style_Data(vec4(0.0), vec4(0.0), 0.0, vec2(0.0));
-                // layer_style.current_layer_style.fill_color = vec4(0.0);
                 layer_style.layer_alpha = 0.0;
 
-                lowp float geometry_influence = 0.0;
+                lowp float geometry_influence = 0.0; // how much is the current line/polygon visible
 
                 for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
                 // for(highp uint i = offset_size.x+ offset_size.y; i --> offset_size.x ; ) // reverse traversal
-                {                    
+                {
+                    debug_draw_calls = debug_draw_calls + 1;
                     highp uint index = index_sample(sampler_buffer_index, i, texture_layer.y);
                     bool is_polygon = (index & 1u) == 1u;
                     index = index >> 1;
@@ -415,7 +423,6 @@ void main() {
                         bool check_next_geometry = prepare_layer_style(triangle_data.style_index, layer_style, pixel_color);
                         if(check_next_geometry)
                             continue;
-
                     }
                     else
                     {
@@ -432,9 +439,6 @@ void main() {
 
                         highp float thickness = layer_style.current_layer_style.outline_width / tile_extent;
                         d = sdLine(uv, v0, v1) - thickness;
-
-                        // d = 100.0;
-                        // style_index = 36u;
 
 
                         geometry_influence = 1.0 - step(0.0, d);
@@ -485,6 +489,7 @@ void main() {
 
 
                 // texout_albedo = pixel_color;
+                // texout_albedo = debug_texture_layer;
 
                 // texout_albedo = mix(cells, texout_albedo, 0.9);// DEBUG
                 // texout_albedo = mix(texout_albedo, debug_triangle_lines, 0.5);// DEBUG
@@ -526,9 +531,22 @@ void main() {
             case 203u: overlay_color = debug_triangle_lines;break;
             case 204u: overlay_color = debug_index_buffer_start;break;
             case 205u: overlay_color = debug_index_buffer_size;break;
+            case 206u: overlay_color = debug_texture_layer;break;
+            case 207u: overlay_color = vec3(pixel_alpha, 0.0, 0.0);break;
             default: overlay_color = vertex_color;
         }
         texout_albedo = mix(texout_albedo, overlay_color, conf.overlay_strength);
+
+        if(conf.overlay_mode == 208u)
+        {
+            lowp float upper_limit = conf.overlay_strength * 255.0;
+            if(debug_draw_calls > upper_limit)
+                texout_albedo = vec3(1.0, 0.0, 0.0);
+            else if (debug_draw_calls == 0)
+                texout_albedo = vec3(1.0, 0.0, 1.0);
+            else
+                texout_albedo = vec3(0.0, debug_draw_calls / upper_limit, 0.0);
+        }
     }
 
 
