@@ -120,20 +120,19 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
                 data.push_back(geom_data);
 
             } else if (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) {
-                // TODO activate again
-                // PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(1.0);
+                PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(1.0);
 
-                // GeometryData geom_data;
-                // for (size_t j = 0; j < geom.size(); ++j) {
-                //     geom_data.vertices.insert(geom_data.vertices.end(), geom[j].begin(), geom[j].end());
-                // }
+                GeometryData geom_data;
+                for (size_t j = 0; j < geom.size(); ++j) {
+                    geom_data.vertices.insert(geom_data.vertices.end(), geom[j].begin(), geom[j].end());
+                }
 
-                // geom_data.extent = extent;
-                // geom_data.is_polygon = false;
-                // geom_data.layer = layer_index;
-                // geom_data.style = style_index;
+                geom_data.extent = extent;
+                geom_data.is_polygon = false;
+                geom_data.layer = layer_index;
+                geom_data.style = style_index;
 
-                // geom_data.line_width = float(style_buffer[style_index].z) / float(constants::style_precision);
+                geom_data.line_width = float(style_buffer[style_index].z) / float(constants::style_precision);
 
                 // data.push_back(geom_data);
             }

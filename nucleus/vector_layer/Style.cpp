@@ -161,6 +161,9 @@ void Style::load()
             m_layer_to_style[layer_name] = StyleFilter();
         m_layer_to_style[layer_name].add_filter(style_index, layer_index, filter, zoom_range);
 
+        auto id = obj.toObject().value("id").toString(); // DEBUG -> what layers with what index are used
+        qDebug() << layer_index << id;
+
         layer_index++;
     }
 

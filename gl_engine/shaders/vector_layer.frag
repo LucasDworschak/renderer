@@ -75,7 +75,6 @@ struct Layer_Style
 // CPP CONFIG CONSTANTS
 
 const lowp int grid_size = 64;
-const lowp uint data_size = 1u; // how many texels are needed to store the data for one triangle
 
 const lowp uint sampler_offset = 16u - 2u; // used to calculate how many bits are used to determine the sampler index, and how many are used for the layer
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
@@ -105,22 +104,28 @@ highp float circle(highp vec2 uv, highp vec2 pos, highp float r) // DEBUG
 
 highp float sdLine( in highp vec2 p, in highp vec2 a, in highp vec2 b )
 {
-    highp vec2 pa = p-a, ba = b-a;
+    highp vec2 pa = p-a;
+    highp vec2 ba = b-a;
     highp float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
     return length( pa - ba*h );
 }
 
 highp float sdTriangle( in highp vec2 p, in highp vec2 p0, in highp vec2 p1, in highp vec2 p2 )
 {
-    highp vec2 e0 = p1-p0, e1 = p2-p1, e2 = p0-p2;
-    highp vec2 v0 = p -p0, v1 = p -p1, v2 = p -p2;
+    highp vec2 e0 = p1 - p0;
+    highp vec2 e1 = p2 - p1;
+    highp vec2 e2 = p0 - p2;
+    highp vec2 v0 = p  - p0;
+    highp vec2 v1 = p  - p1;
+    highp vec2 v2 = p  - p2;
     highp vec2 pq0 = v0 - e0*clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );
     highp vec2 pq1 = v1 - e1*clamp( dot(v1,e1)/dot(e1,e1), 0.0, 1.0 );
     highp vec2 pq2 = v2 - e2*clamp( dot(v2,e2)/dot(e2,e2), 0.0, 1.0 );
     highp float s = sign( e0.x*e2.y - e0.y*e2.x );
-    highp vec2 d = min(min(vec2(dot(pq0,pq0), s*(v0.x*e0.y-v0.y*e0.x)),
-                     vec2(dot(pq1,pq1), s*(v1.x*e1.y-v1.y*e1.x))),
-                     vec2(dot(pq2,pq2), s*(v2.x*e2.y-v2.y*e2.x)));
+    highp vec2 d0 = vec2(dot(pq0,pq0), s*(v0.x*e0.y-v0.y*e0.x));
+    highp vec2 d1 = vec2(dot(pq1,pq1), s*(v1.x*e1.y-v1.y*e1.x));
+    highp vec2 d2 = vec2(dot(pq2,pq2), s*(v2.x*e2.y-v2.y*e2.x));
+    highp vec2 d = min(min(d0,d1),d2);
     return -sqrt(d.x)*sign(d.y);
 }
 
@@ -156,19 +161,19 @@ highp uint index_sample(lowp uint sampler_index, highp uint pixel_index, highp u
 {
     if(sampler_index == 0u)
     {
-        return texelFetch(index_buffer_sampler_0, ivec3(to_dict_pixel_64(pixel_index), texture_layer), 0).r * data_size;
+        return texelFetch(index_buffer_sampler_0, ivec3(to_dict_pixel_64(pixel_index), texture_layer), 0).r;
     }
     else if(sampler_index == 1u)
     {
-        return texelFetch(index_buffer_sampler_1, ivec3(to_dict_pixel_128(pixel_index), texture_layer), 0).r * data_size;
+        return texelFetch(index_buffer_sampler_1, ivec3(to_dict_pixel_128(pixel_index), texture_layer), 0).r;
     }
     else if(sampler_index == 2u)
     {
-        return texelFetch(index_buffer_sampler_2, ivec3(to_dict_pixel_256(pixel_index), texture_layer), 0).r * data_size;
+        return texelFetch(index_buffer_sampler_2, ivec3(to_dict_pixel_256(pixel_index), texture_layer), 0).r;
     }
     else
     {
-        return texelFetch(index_buffer_sampler_3, ivec3(to_dict_pixel_512(pixel_index), texture_layer), 0).r * data_size;
+        return texelFetch(index_buffer_sampler_3, ivec3(to_dict_pixel_512(pixel_index), texture_layer), 0).r;
     }
 }
 
@@ -289,7 +294,9 @@ void main() {
 
 
 
-
+    lowp vec3 layer_debug = vec3(0,0,0);// DEBUG -> which cascade is being used
+    lowp vec3 cell_debug = vec3(0,0,0);// DEBUG -> how many triangles per cell
+    lowp vec3 triangle_lines_out = vec3(0.0f, 0.0, 0.0f); // DEBUG
 
 
 
@@ -300,6 +307,8 @@ void main() {
     lowp ivec2 dict_px;
     highp uvec2 offset_size = uvec2(0u);
     texout_albedo = vec3(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f);
+
+
 
     if (find_tile(tile_id, dict_px, uv)) {
 
@@ -318,7 +327,7 @@ void main() {
                 lowp vec3 raw_grid = vec3(1,0,0);// DEBUG
                 lowp ivec2 grid_cell = ivec2(uv*vec2(grid_size,grid_size)); // DEBUG
                 lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
-                lowp vec3 triangle_lines_out = vec3(0.0f, 0.0, 0.0f); // DEBUG
+
 
                 lowp vec3 pixel_color = vec3(0.0f, 0.0, 0.0f);
                 lowp float pixel_alpha = 0.0;
@@ -327,7 +336,6 @@ void main() {
                 lowp uint sampler_buffer_index = (texture_layer.y & ((bit_mask_ones << sampler_offset))) >> sampler_offset;
                 texture_layer.y = texture_layer.y & layer_mask;
 
-                lowp vec3 layer_debug = vec3(0,0,0);// DEBUG -> which cascade is being used
                 {
                     if(sampler_buffer_index == 0u)
                         layer_debug = vec3(0,1,0); // green
@@ -340,15 +348,15 @@ void main() {
                     else
                         layer_debug = vec3(1,0,1); // purple -> should never happen -> unrecognized index
                 }
-                lowp vec3 cell_debug = vec3(0,0,0);// DEBUG -> how many triangles per cell
+
                 {
                     if(offset_size.y < 32u)
                         cell_debug = vec3(0,1,0); // green
-                    else if(offset_size.y  < 64u)
+                    else if(offset_size.y < 64u)
                         cell_debug = vec3(1,1,0); // yellow
                     else if(offset_size.y  < 128u)
                         cell_debug = vec3(1,0.5,0); // orange
-                    else if(offset_size.y  < 255u)
+                    else if(offset_size.y < 255u)
                         cell_debug = vec3(1,0,0); // red
                     else
                         cell_debug = vec3(1,0,1); // purple -> should never happen -> unrecognized index
@@ -361,7 +369,7 @@ void main() {
                 // layer_style.current_layer_style.fill_color = vec4(0.0);
                 layer_style.layer_alpha = 0.0;
 
-                highp float geometry_influence = 0.0;
+                lowp float geometry_influence = 0.0;
 
                 for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
                 // for(highp uint i = offset_size.x+ offset_size.y; i --> offset_size.x ; ) // reverse traversal
@@ -432,7 +440,7 @@ void main() {
 
                     { // DEBUG -> triangle lines
                         highp float t_line = 0.0;
-                        if(d <= 0.0001 && d >= -0.0001)
+                        if(d <= 0.001 && d >= -0.001)
                             t_line = 0.2;
                         triangle_lines_out += vec3(0.0f, t_line, 0.0f);
                     }
@@ -461,6 +469,9 @@ void main() {
                 // mix polygon color with background
                 texout_albedo = mix(texout_albedo, pixel_color, pixel_alpha);
 
+
+
+
                 // texout_albedo = pixel_color;
 
                 // texout_albedo = mix(cells, texout_albedo, 0.9);// DEBUG
@@ -478,7 +489,7 @@ void main() {
                 // texout_albedo = triangle_lines_out;// DEBUG
                 // texout_albedo = layer_debug;// DEBUG
                 // texout_albedo = cell_debug;// DEBUG
-                 // texout_albedo = mix(texout_albedo, color_from_id_hash(texture_layer.y), 0.2);
+                // texout_albedo = mix(texout_albedo, color_from_id_hash(texture_layer.y), 0.2);
 
             }
             else
@@ -495,13 +506,17 @@ void main() {
     }
 
 
-    // DEBUG tile bounds
-    // if(uv.x <= 0.01 || uv.y <= 0.01)
-    // {
-    //     texout_albedo = vec3(1.0, 0.0, 0.0);
-    // }
-
-
+    if (conf.overlay_mode > 199u && conf.overlay_mode < 300u) {
+        lowp vec3 overlay_color = vec3(0.0);
+        switch(conf.overlay_mode) {
+            case 200u: overlay_color = vec3(uv, 0.0);break;
+            case 201u: overlay_color = layer_debug;break;
+            case 202u: overlay_color = cell_debug;break;
+            case 203u: overlay_color = triangle_lines_out;break;
+            default: overlay_color = vertex_color;
+        }
+        texout_albedo = mix(texout_albedo, overlay_color, conf.overlay_strength);
+    }
 
 
 

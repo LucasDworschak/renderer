@@ -44,7 +44,11 @@ SettingsPanel {
                 { text: "Decoded Normals",      value: 100  },
                 { text: "Steepness",            value: 101  },
                 { text: "SSAO Buffer",          value: 102  },
-                { text: "Shadow Cascades",      value: 103  }
+                { text: "Shadow Cascades",      value: 103  },
+                { text: "UV",                   value: 200  }, // (only in vector_layer.frag)
+                { text: "Cascade Level",        value: 201  }, // (only in vector_layer.frag)
+                { text: "Triangles per Cell",   value: 202  }, // (only in vector_layer.frag)
+                { text: "Triangle Outlines",    value: 203  }, // (only in vector_layer.frag)
             ]
             onActivated:  map.shared_config.overlay_mode = currentValue;
             Component.onCompleted: normal_mode.currentIndex = map.shared_config.normal_mode;
