@@ -173,6 +173,7 @@ endif()
 
 if (EMSCRIPTEN)
     target_link_options(alpineapp PUBLIC -sASYNCIFY)
+    target_link_options(alpineapp PRIVATE -s FULL_ES3=1)
 
     set(ALP_INSTALL_FILES
         "$<TARGET_FILE_DIR:alpineapp>/alpineapp.js"

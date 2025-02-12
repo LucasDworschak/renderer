@@ -373,6 +373,9 @@ TEST_CASE("glsl tile functions")
             { glm::ivec2(3193, -210), glm::ivec2(4159, 1941), glm::ivec2(3662, 3806), 2182 },
         };
 
+        // const auto x = nucleus::vector_layer::details::pack_triangle_data(glm::ivec2(2568, -731), glm::ivec2(-428, 3500), glm::ivec2(4535, 298), 4540);
+        // qDebug() << x.x << x.y << x.z;
+
         for (const auto& d : data) {
             vectorlayer_packing_cpp_same_as_glsl(d);
         }
