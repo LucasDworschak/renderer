@@ -200,7 +200,7 @@ void packing_cpp_same_as_glsl(const Id& id)
     }
 }
 
-// void vectorlayer_packing_cpp_same_as_glsl(const std::tuple<glm::vec2, glm::vec2, glm::vec2, uint32_t>& data)
+// void vectorlayer_packing_cpp_same_as_glsl(const std::tuple<glm::ivec2, glm::ivec2, glm::ivec2, uint32_t>& data)
 // {
 //     {
 //         Framebuffer b(Framebuffer::DepthFormat::None, { Framebuffer::ColourFormat::RGBA8 }, { 1, 1 });
@@ -212,7 +212,7 @@ void packing_cpp_same_as_glsl(const Id& id)
 //             out lowp vec4 out_color;
 //             void main() {
 //                 highp uvec3 cpp_packed_data = uvec3(%1u, %2u, %3u);
-//                 VectorLayerData data = VectorLayerData(ivec2(%4u, %5u),ivec2(%6u, %7u),ivec2(%8u, %9u), %10u);
+//                 VectorLayerData data = VectorLayerData(ivec2(%4, %5),ivec2(%6, %7),ivec2(%8, %9), %10u);
 //                 VectorLayerData unpacked_data = unpack_vectorlayer_data(cpp_packed_data);
 
 //                 bool unpack_ok = data == unpacked_data;
@@ -257,7 +257,7 @@ void packing_cpp_same_as_glsl(const Id& id)
 //             flat out lowp vec2 ok;
 //             void main() {
 //                 highp uvec3 cpp_packed_data = uvec3(%1u, %2u, %3u);
-//                 VectorLayerData data = VectorLayerData(ivec2(%4u, %5u),ivec2(%6u, %7u),ivec2(%8u, %9u), %10u);
+//                 VectorLayerData data = VectorLayerData(ivec2(%4, %5),ivec2(%6, %7),ivec2(%8, %9), %10u);
 //                 VectorLayerData unpacked_data = unpack_vectorlayer_data(cpp_packed_data);
 
 //                 bool unpack_ok = data == unpacked_data;
@@ -334,9 +334,9 @@ TEST_CASE("glsl tile functions")
         }
     }
 
-    // SECTION("vectorlayer packing c++ same as glsl")// TODO uncomment
+    // SECTION("vectorlayer packing c++ same as glsl") // TODO uncomment again
     // {
-    //     const auto data = std::vector<std::tuple<glm::vec2, glm::vec2, glm::vec2, uint32_t>> {
+    //     const auto data = std::vector<std::tuple<glm::ivec2, glm::ivec2, glm::ivec2, uint32_t>> {
     //         { glm::ivec2(2568, -731), glm::ivec2(-428, 3500), glm::ivec2(4535, 298), 4540 },
     //         { glm::ivec2(4116, 2789), glm::ivec2(3248, 2225), glm::ivec2(1464, 4824), 4721 },
     //         { glm::ivec2(-344, 2433), glm::ivec2(71, 3082), glm::ivec2(2572, 1766), 810 },
