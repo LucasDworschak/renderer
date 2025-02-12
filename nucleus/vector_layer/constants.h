@@ -30,7 +30,7 @@ constexpr auto data_size = std::array<uint32_t, 4> { 64u, 128u, 256u, 512u }; //
 // NOTE: -1u is used to say that we should use the upper limit determined by renderingcontext, if renderingcontext gives us a lower value than set, it is automatically lowered
 // IMPORTANT: only set -1u for the first values since those values will be combined to only one array_helper
 constexpr auto array_layer_quad_amount = std::array<uint32_t, 4> { -1u, -1u, 256u, 32u };
-constexpr auto tile_extent = 4096;
+constexpr auto tile_extent = 512;
 constexpr auto style_buffer_size = 64;
 
 // number is used to multiply float numbers in style to get int values for storage ( e.g. style_precision:100 means 1.253 -> 125 -> 1.250)

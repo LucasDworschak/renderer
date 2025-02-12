@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-const highp float tile_extent = 4096.0;
+const highp float tile_extent = 512.0;
 
 struct VectorLayerData{
     highp ivec2 a;
