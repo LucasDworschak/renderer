@@ -38,6 +38,7 @@ public:
         RG8, // normalised on gpu
         RG32UI,
         RGB32UI,
+        RGBA32I,
         RGBA32UI,
         R16UI,
         RG16UI,
@@ -93,11 +94,13 @@ extern template void gl_engine::Texture::upload<glm::vec<3, uint32_t>>(const nuc
 extern template void gl_engine::Texture::upload<glm::vec<4, uint32_t>>(const nucleus::Raster<glm::vec<4, uint32_t>>&);
 extern template void gl_engine::Texture::upload<glm::vec<2, uint8_t>>(const nucleus::Raster<glm::vec<2, uint8_t>>&);
 extern template void gl_engine::Texture::upload<glm::vec<4, uint8_t>>(const nucleus::Raster<glm::vec<4, uint8_t>>&);
+extern template void gl_engine::Texture::upload<glm::vec<4, int32_t>>(const nucleus::Raster<glm::vec<4, int32_t>>&);
 
 extern template void gl_engine::Texture::upload<uint32_t>(const nucleus::Raster<uint32_t>&, unsigned int);
 extern template void gl_engine::Texture::upload<glm::vec<2, uint16_t>>(const nucleus::Raster<glm::vec<2, uint16_t>>&, unsigned int);
 extern template void gl_engine::Texture::upload<glm::vec<2, uint32_t>>(const nucleus::Raster<glm::vec<2, uint32_t>>&, unsigned int);
 extern template void gl_engine::Texture::upload<glm::vec<3, uint32_t>>(const nucleus::Raster<glm::vec<3, uint32_t>>&, unsigned int);
 extern template void gl_engine::Texture::upload<glm::vec<4, uint32_t>>(const nucleus::Raster<glm::vec<4, uint32_t>>&, unsigned int);
+extern template void gl_engine::Texture::upload<glm::vec<4, int32_t>>(const nucleus::Raster<glm::vec<4, int32_t>>&, unsigned int);
 
 } // namespace gl_engine
