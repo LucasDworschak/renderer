@@ -402,11 +402,14 @@ void main() {
 
                         const highp vec2 vec2_tile_extent = vec2(tile_extent);
 
-                        highp vec2 v0 = vec2(triangle_data.a);
+                        highp vec2 v0 = vec2(300.0, 300.0);
+                        highp vec2 v1 = vec2(3700.0, 300.0);
+                        highp vec2 v2 = vec2(2000.0, 3700.0);
+                        // highp vec2 v0 = vec2(triangle_data.a);
+                        // highp vec2 v1 = vec2(triangle_data.b);
+                        // highp vec2 v2 = vec2(triangle_data.c);
                         v0 = v0 / vec2_tile_extent;
-                        highp vec2 v1 = vec2(triangle_data.b);
                         v1 = v1 / vec2_tile_extent;
-                        highp vec2 v2 = vec2(triangle_data.c);
                         v2 = v2 / vec2_tile_extent;
 
                         highp float thickness = 0.0;
