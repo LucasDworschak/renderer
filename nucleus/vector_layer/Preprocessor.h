@@ -33,6 +33,28 @@ using namespace nucleus::tile;
 
 namespace details {
 
+    /////////////////////////////////////////////
+    // constants for data packing/unpacking
+    // coordinates 14 bits
+    // style 12 bits
+    //
+    constexpr int all_bits = 32;
+    constexpr int coordinate_bits = 14;
+
+    constexpr int style_bits_per_coord = all_bits - (2 * coordinate_bits);
+    constexpr int all_style_bits = (style_bits_per_coord * 3);
+
+    constexpr int coordinate_shift1 = all_bits - coordinate_bits;
+    constexpr int coordinate_shift2 = all_bits - (2 * coordinate_bits);
+    constexpr int style_shift1 = all_style_bits - style_bits_per_coord;
+    constexpr int style_shift2 = all_style_bits - (2 * style_bits_per_coord);
+
+    constexpr uint32_t coordinate_bitmask = (1u << coordinate_bits) - 1u;
+    constexpr uint32_t style_bitmask = (1u << style_bits_per_coord) - 1u;
+    //
+    // end constants for data packing/unpacking
+    /////////////////////////////////////////////
+
     class PointCollectionVec2 : public std::vector<std::vector<glm::vec2>> {
     public:
         using coordinate_type = float;

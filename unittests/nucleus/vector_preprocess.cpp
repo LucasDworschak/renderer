@@ -171,12 +171,12 @@ TEST_CASE("nucleus/vector_preprocess")
 
         auto data = tile.vertex_buffer->buffer();
         REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
-        // CHECK(data[0].x == 3237347648); // TODO uncomment all the checks
-        // CHECK(data[0].y == 3226863488);
-        // CHECK(data[0].z == 3247836304);
-        // CHECK(data[1].x == 3224240448);
-        // CHECK(data[1].y == 3234726528);
-        // CHECK(data[1].z == 3224241104);
+        CHECK(data[0].x == 1081671760);
+        CHECK(data[0].y == 1076429280);
+        CHECK(data[0].z == 1086915361);
+        CHECK(data[1].x == 1075118160);
+        CHECK(data[1].y == 1080361120);
+        CHECK(data[1].z == 1075118321);
         // the rest should be undefined -> -1u
         CHECK(data[2].x == -1u);
         CHECK(data[3].y == -1u);
@@ -232,12 +232,12 @@ TEST_CASE("nucleus/vector_preprocess")
 
         auto data = tile.vertex_buffer->buffer();
         REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
-        // CHECK(data[0].x == 3237347648);// TODO uncomment all the checks
-        // CHECK(data[0].y == 3216377728);
-        // CHECK(data[0].z == 3247838224);
-        // CHECK(data[1].x == 3224239808);
-        // CHECK(data[1].y == 3268805248);
-        // CHECK(data[1].z == 3224241104);
+        CHECK(data[0].x == 1081671760);
+        CHECK(data[0].y == 1071186400);
+        CHECK(data[0].z == 1086915841);
+        CHECK(data[1].x == 1075118000);
+        CHECK(data[1].y == 1097400480);
+        CHECK(data[1].z == 1075118321);
         // the rest should be undefined -> -1u
         CHECK(data[2].x == -1u);
         CHECK(data[3].y == -1u);
@@ -290,12 +290,12 @@ TEST_CASE("nucleus/vector_preprocess")
 
         auto data = tile.vertex_buffer->buffer();
         REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
-        // CHECK(data[0].x == 3226863488);// TODO uncomment all the checks
-        // CHECK(data[0].y == 3237350528);
-        // CHECK(data[0].z == 3221618704);
-        // CHECK(data[1].x == 3237350528);
-        // CHECK(data[1].y == 3247835008);
-        // CHECK(data[1].z == 3221618704);
+        CHECK(data[0].x == 1076429280);
+        CHECK(data[0].y == 1081672480);
+        CHECK(data[0].z == 1073807361);
+        CHECK(data[1].x == 1081672480);
+        CHECK(data[1].y == 1086915040);
+        CHECK(data[1].z == 1073807361);
         // the rest should be undefined -> -1u
         CHECK(data[2].x == -1u);
         CHECK(data[3].y == -1u);
@@ -489,7 +489,7 @@ TEST_CASE("nucleus/vector_preprocess")
             auto a = glm::ivec2(0b110101010100, 0b111101110100);
             auto b = glm::ivec2(0b001111000101, 0b001111101101);
             auto c = glm::ivec2(0b010110011011, 0b100111001110);
-            uint32_t style = 0b11000111000101;
+            uint32_t style = 0b110001110001;
 
             auto packed = nucleus::vector_layer::details::pack_triangle_data(a, b, c, style);
             auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
@@ -541,7 +541,7 @@ TEST_CASE("nucleus/vector_preprocess")
             auto a = glm::ivec2(0b010101010100 * -1, 0b011101110100);
             auto b = glm::ivec2(0b001111000101, 0b001111101101 * -1);
             auto c = glm::ivec2(0b010110011011 * -1, 0b010111001110 * -1);
-            uint32_t style = 0b11000111000101;
+            uint32_t style = 0b00100111000101;
 
             auto packed = nucleus::vector_layer::details::pack_triangle_data(a, b, c, style);
             auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);

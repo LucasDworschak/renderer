@@ -25,89 +25,68 @@ struct VectorLayerData{
     highp uint style_index;
 };
 
+/////////////////////////////////////////////
+// constants for data packing/unpacking
+const lowp int all_bits = 32;
+const lowp int coordinate_bits = 14;
+
+const lowp int style_bits_per_coord = all_bits - (2 * coordinate_bits);
+const lowp int all_style_bits = (style_bits_per_coord * 3);
+
+const lowp int coordinate_shift1 = all_bits - coordinate_bits;
+const lowp int coordinate_shift2 = all_bits - (2 * coordinate_bits);
+const lowp int style_shift1 = all_style_bits - style_bits_per_coord;
+const lowp int style_shift2 = all_style_bits - (2 * style_bits_per_coord);
+
+const highp uint coordinate_bitmask = (1u << coordinate_bits) - 1u;
+const highp uint style_bitmask = (1u << style_bits_per_coord) - 1u;
+// end constants for data packing/unpacking
+/////////////////////////////////////////////
+
 highp uvec3 pack_vectorlayer_data(VectorLayerData data) {
     highp uvec3 packed_data;
 
-    const highp uint sign_mask = (1u << 31);
-    const highp uint bitmask_12 = (1u << 12) - 1u;
-    const highp uint bitmask_6 = (1u << 6) - 1u;
-    const highp uint bitmask_2 = (1u << 2) - 1u;
+    // the extent from the tile gives us e.g. 4096
+    // in reality the coordinates can be a little over and a little under the extent -> something like [-128, 4096+128]
+    // solution: coordinate normalization (move from [-tile_extent - tile_extent] to [0 - 2*tile_extent])
+    data.a += ivec2(tile_extent);
+    data.b += ivec2(tile_extent);
+    data.c += ivec2(tile_extent);
 
-    // move the values by half extent
-    const highp ivec2 half_extent = ivec2(tile_extent / 2.0);
-    highp uvec2 a = uvec2(data.a - half_extent);
-    highp uvec2 b = uvec2(data.b - half_extent);
-    highp uvec2 c = uvec2(data.c - half_extent);
+    packed_data.x = uint(data.a.x) << coordinate_shift1;
+    packed_data.x = packed_data.x | ((uint(data.a.y) & coordinate_bitmask) << coordinate_shift2);
 
-    packed_data.x = a.x << (32u - 13u);
-    packed_data.x = packed_data.x | (a.x & sign_mask);
-    packed_data.x = packed_data.x | ((a.y & bitmask_12) << (32u - 26u));
-    packed_data.x = packed_data.x | ((a.y & sign_mask) >> (13u));
+    packed_data.y = uint(data.b.x) << coordinate_shift1;
+    packed_data.y = packed_data.y | ((uint(data.b.y) & coordinate_bitmask) << coordinate_shift2);
 
-    packed_data.y = b.x << (32u - 13u);
-    packed_data.y = packed_data.y | (b.x & sign_mask);
-    packed_data.y = packed_data.y | ((b.y & bitmask_12) << (32u - 26u));
-    packed_data.y = packed_data.y | ((b.y & sign_mask) >> (13u));
+    packed_data.z = uint(data.c.x) << coordinate_shift1;
+    packed_data.z = packed_data.z | ((uint(data.c.y) & coordinate_bitmask) << coordinate_shift2);
 
-    packed_data.z = c.x << (32u - 13u);
-    packed_data.z = packed_data.z | (c.x & sign_mask);
-    packed_data.z = packed_data.z | ((c.y & bitmask_12) << (32u - 26u));
-    packed_data.z = packed_data.z | ((c.y & sign_mask) >> (13u));
-
-    packed_data.x = packed_data.x | ((data.style_index >> (14u - 6u)) & bitmask_6);
-    packed_data.y = packed_data.y | ((data.style_index >> (14u - 12u)) & bitmask_6);
-    packed_data.z = packed_data.z | ((data.style_index & bitmask_2) << 4u);
+    packed_data.x = packed_data.x | ((data.style_index >> style_shift1) & style_bitmask);
+    packed_data.y = packed_data.y | ((data.style_index >> style_shift2) & style_bitmask);
+    packed_data.z = packed_data.z | ((data.style_index & style_bitmask));
 
     return packed_data;
 }
 
-VectorLayerData unpack_vectorlayer_data(highp uvec3 data) {
+VectorLayerData unpack_vectorlayer_data(highp uvec3 packed_data) {
     VectorLayerData unpacked_data;
 
-    const highp uint sign_mask_first = (1u << 31);
-    const highp uint sign_mask_middle = (1u << (31u - 13u));
-    const highp uint bitmask_12_first = ((1u << 12) - 1u) << (32u - 13u);
-    const highp uint bitmask_12_middle = ((1u << 12) - 1u) << (32u - 26u);
-    const highp uint bitmask_6 = (1u << 6) - 1u;
-    const highp uint bitmask_2 = (1u << 2) - 1u;
+    unpacked_data.a.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
+    unpacked_data.a.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
+    unpacked_data.b.x = int((packed_data.y & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
+    unpacked_data.b.y = int((packed_data.y & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
+    unpacked_data.c.x = int((packed_data.z & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
+    unpacked_data.c.y = int((packed_data.z & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
 
-    const highp int negative_bits = int(((1u << 31) - 1u) << 12u);
-
-    highp int x_first = int((data.x & bitmask_12_first) >> (32u - 13u));
-    highp int x_middle = int((data.x & bitmask_12_middle) >> (32u - 26u));
-    highp int x_sign_first = int((data.x & sign_mask_first) >> 31);
-    highp int x_sign_middle = int((data.x & sign_mask_middle) >> (31 - 13));
-
-    highp int y_first = int((data.y & bitmask_12_first) >> (32u - 13u));
-    highp int y_middle = int((data.y & bitmask_12_middle) >> (32u - 26u));
-    highp int y_sign_first = int((data.y & sign_mask_first) >> 31);
-    highp int y_sign_middle = int((data.y & sign_mask_middle) >> (31 - 13));
-
-    highp int z_first = int((data.z & bitmask_12_first) >> (32u - 13u));
-    highp int z_middle = int((data.z & bitmask_12_middle) >> (32u - 26u));
-    highp int z_sign_first = int((data.z & sign_mask_first) >> 31);
-    highp int z_sign_middle = int((data.z & sign_mask_middle) >> (31 - 13));
-
-    unpacked_data.a.x = x_first | (negative_bits & -x_sign_first);
-    unpacked_data.a.y = x_middle | (negative_bits & -x_sign_middle);
-    unpacked_data.b.x = y_first | (negative_bits & -y_sign_first);
-    unpacked_data.b.y = y_middle | (negative_bits & -y_sign_middle);
-    unpacked_data.c.x = z_first | (negative_bits & -z_sign_first);
-    unpacked_data.c.y = z_middle | (negative_bits & -z_sign_middle);
-
-    unpacked_data.style_index = (data.x & bitmask_6) << (14u - 6u);
-    unpacked_data.style_index = unpacked_data.style_index | (data.y & bitmask_6) << (14u - 12u);
-    unpacked_data.style_index = unpacked_data.style_index | ((data.z & (bitmask_2 << 4u)) >> 4u);
-
-    unpacked_data.style_index = (data.x & ((1u << 6) - 1u)) << (14u - 6u);
-    unpacked_data.style_index = unpacked_data.style_index | (data.y & (1u << 6) - 1u) << (14u - 12u);
-    unpacked_data.style_index = unpacked_data.style_index | ((data.z & (((1u << 2) - 1u) << 4u)) >> 4u);
+    unpacked_data.style_index = (packed_data.x & style_bitmask) << style_shift1;
+    unpacked_data.style_index = unpacked_data.style_index | (packed_data.y & style_bitmask) << style_shift2;
+    unpacked_data.style_index = unpacked_data.style_index | (packed_data.z & style_bitmask);
 
     // move the values back to the correct coordinates
-    const highp ivec2 half_extent = ivec2(tile_extent / 2.0);
-    unpacked_data.a = unpacked_data.a + half_extent;
-    unpacked_data.b = unpacked_data.b + half_extent;
-    unpacked_data.c = unpacked_data.c + half_extent;
+    unpacked_data.a -= ivec2(tile_extent);
+    unpacked_data.b -= ivec2(tile_extent);
+    unpacked_data.c -= ivec2(tile_extent);
 
     return unpacked_data;
 }

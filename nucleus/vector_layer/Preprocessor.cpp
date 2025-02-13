@@ -144,94 +144,72 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
     return data;
 }
 
-glm::uvec3 pack_triangle_data(glm::vec2 a, glm::vec2 b, glm::vec2 c, uint32_t style_index)
-{
-    glm::uvec3 out;
-    // coordinates 13 bits
-    // style 14 bits
-
-    constexpr uint32_t sign_mask = (1u << 31);
-    constexpr uint32_t bitmask_12 = (1u << 12) - 1u;
-    constexpr uint32_t bitmask_6 = (1u << 6) - 1u;
-    constexpr uint32_t bitmask_2 = (1u << 2) - 1u;
-
-    // the extent from the tile gives us e.g. 4096
-    // in reality the coordinates can be a little over and a little under the extent -> something like [-128, 4096+128]
-    // solution: move all coordinates by half the extent for storing, and move them back when retrieving
-    // this way we are using only necessary the necessary bits
-    a -= constants::tile_extent / 2.0;
-    b -= constants::tile_extent / 2.0;
-    c -= constants::tile_extent / 2.0;
-
-    out.x = uint32_t(a.x) << (32u - 13u);
-    out.x = out.x | (uint32_t(a.x) & sign_mask);
-    out.x = out.x | ((uint32_t(a.y) & bitmask_12) << (32u - 26u));
-    out.x = out.x | ((uint32_t(a.y) & sign_mask) >> (13u));
-
-    out.y = uint32_t(b.x) << (32u - 13u);
-    out.y = out.y | (uint32_t(b.x) & sign_mask);
-    out.y = out.y | ((uint32_t(b.y) & bitmask_12) << (32u - 26u));
-    out.y = out.y | ((uint32_t(b.y) & sign_mask) >> (13u));
-
-    out.z = uint32_t(c.x) << (32u - 13u);
-    out.z = out.z | (uint32_t(c.x) & sign_mask);
-    out.z = out.z | ((uint32_t(c.y) & bitmask_12) << (32u - 26u));
-    out.z = out.z | ((uint32_t(c.y) & sign_mask) >> (13u));
-
-    out.x = out.x | ((style_index >> (14u - 6u)) & bitmask_6);
-    out.y = out.y | ((style_index >> (14u - 12u)) & bitmask_6);
-    out.z = out.z | ((style_index & bitmask_2) << 4u);
-
-    // last 4 bits of out.z are empty
-
-    return out;
-}
-
 glm::uvec3 pack_line_data(glm::vec2 a, glm::vec2 b, uint32_t style_index)
 {
     // TODO -> possibly need to store additional values here in the future -> refactor this and pack_triangle_data to pack it efficiently
     return pack_triangle_data(a, b, {}, style_index);
 }
 
+glm::uvec3 pack_triangle_data(glm::vec2 a, glm::vec2 b, glm::vec2 c, uint32_t style_index)
+{
+    glm::uvec3 out;
+
+    // the extent from the tile gives us e.g. 4096
+    // in reality the coordinates can be a little over and a little under the extent -> something like [-128, 4096+128]
+    // solution: coordinate normalization (move from [-tile_extent - tile_extent] to [0 - 2*tile_extent])
+    a += constants::tile_extent;
+    b += constants::tile_extent;
+    c += constants::tile_extent;
+
+    // make sure that we do not remove bits from the coordinates
+    assert((uint32_t(a.x) & ((1u << coordinate_bits) - 1u)) == uint32_t(a.x));
+    assert((uint32_t(a.y) & ((1u << coordinate_bits) - 1u)) == uint32_t(a.y));
+    assert((uint32_t(b.x) & ((1u << coordinate_bits) - 1u)) == uint32_t(b.x));
+    assert((uint32_t(b.y) & ((1u << coordinate_bits) - 1u)) == uint32_t(b.y));
+    assert((uint32_t(c.x) & ((1u << coordinate_bits) - 1u)) == uint32_t(c.x));
+    assert((uint32_t(c.y) & ((1u << coordinate_bits) - 1u)) == uint32_t(c.y));
+
+    // make sure that we do not remove bits from style_index
+    assert((style_index & ((1u << all_style_bits) - 1u)) == style_index);
+
+    out.x = uint32_t(a.x) << coordinate_shift1;
+    out.x = out.x | ((uint32_t(a.y) & coordinate_bitmask) << coordinate_shift2);
+
+    out.y = uint32_t(b.x) << coordinate_shift1;
+    out.y = out.y | ((uint32_t(b.y) & coordinate_bitmask) << coordinate_shift2);
+
+    out.z = uint32_t(c.x) << coordinate_shift1;
+    out.z = out.z | ((uint32_t(c.y) & coordinate_bitmask) << coordinate_shift2);
+
+    out.x = out.x | ((style_index >> style_shift1) & style_bitmask);
+    out.y = out.y | ((style_index >> style_shift2) & style_bitmask);
+    out.z = out.z | ((style_index & style_bitmask));
+
+    return out;
+}
+
 std::tuple<glm::vec2, glm::vec2, glm::vec2, uint32_t> unpack_triangle_data(glm::uvec3 packed)
 {
-    constexpr uint32_t sign_mask_first = (1u << 31);
-    constexpr uint32_t sign_mask_middle = (1u << (31u - 13u));
-    constexpr uint32_t bitmask_12_first = ((1u << 12) - 1u) << (32u - 13u);
-    constexpr uint32_t bitmask_12_middle = ((1u << 12) - 1u) << (32u - 26u);
-    constexpr uint32_t bitmask_6 = (1u << 6) - 1u;
-    constexpr uint32_t bitmask_2 = (1u << 2) - 1u;
-
-    constexpr int32_t negative_bits = ((1u << 31) - 1u) << 12u;
-
     glm::vec2 a;
     glm::vec2 b;
     glm::vec2 c;
     uint32_t style_index;
 
-    // a.x = ((packed.x & bitmask_12_first) >> (32u - 13u)) ^ -(int32_t((packed.x & sign_mask_first) >> 31));
-    // a.x = int32_t((packed.x & bitmask_12_first) >> (32u - 13u)) | (negative_bits & -int32_t((packed.x & sign_mask_first) >> 31));
-    // a.y = (packed.x & sign_mask_first);
-    // b.x = (packed.x & sign_mask_first) >> 31u;
-    // b.y = -int32_t((packed.x & sign_mask_first) >> 31);
-    // c.x = negative_bits;
-    // c.y = 0;
+    a.x = int32_t((packed.x & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
+    a.y = int32_t((packed.x & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
+    b.x = int32_t((packed.y & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
+    b.y = int32_t((packed.y & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
+    c.x = int32_t((packed.z & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
+    c.y = int32_t((packed.z & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
 
-    a.x = int32_t((packed.x & bitmask_12_first) >> (32u - 13u)) | (negative_bits & -int32_t((packed.x & sign_mask_first) >> 31));
-    a.y = int32_t((packed.x & bitmask_12_middle) >> (32u - 26u)) | (negative_bits & -int32_t((packed.x & sign_mask_middle) >> (31 - 13)));
-    b.x = int32_t((packed.y & bitmask_12_first) >> (32u - 13u)) | (negative_bits & -int32_t((packed.y & sign_mask_first) >> 31));
-    b.y = int32_t((packed.y & bitmask_12_middle) >> (32u - 26u)) | (negative_bits & -int32_t((packed.y & sign_mask_middle) >> (31 - 13)));
-    c.x = int32_t((packed.z & bitmask_12_first) >> (32u - 13u)) | (negative_bits & -int32_t((packed.z & sign_mask_first) >> 31));
-    c.y = int32_t((packed.z & bitmask_12_middle) >> (32u - 26u)) | (negative_bits & -int32_t((packed.z & sign_mask_middle) >> (31 - 13)));
-
-    style_index = (packed.x & bitmask_6) << (14u - 6u);
-    style_index = style_index | (packed.y & bitmask_6) << (14u - 12u);
-    style_index = style_index | ((packed.z & (bitmask_2 << 4u)) >> 4u);
+    style_index = (packed.x & style_bitmask) << style_shift1;
+    style_index = style_index | (packed.y & style_bitmask) << style_shift2;
+    style_index = style_index | (packed.z & style_bitmask);
 
     // move the values back to the correct coordinates
-    a += constants::tile_extent / 2.0;
-    b += constants::tile_extent / 2.0;
-    c += constants::tile_extent / 2.0;
+    a -= constants::tile_extent;
+    b -= constants::tile_extent;
+    c -= constants::tile_extent;
 
     return { a, b, c, style_index };
 }

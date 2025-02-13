@@ -388,6 +388,7 @@ void main() {
                 for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
                 // for(highp uint i = offset_size.x+ offset_size.y; i --> offset_size.x ; ) // reverse traversal
                 {
+
                     debug_draw_calls = debug_draw_calls + 1;
                     highp uint index = index_sample(sampler_buffer_index, i, texture_layer.y);
                     bool is_polygon = (index & 1u) == 1u;
@@ -438,6 +439,10 @@ void main() {
                         bool check_next_geometry = prepare_layer_style(line_data.style_index, layer_style, pixel_color);
                         if(check_next_geometry)
                             continue;
+
+                        // TODO tile extent depends on zoom level
+                        // highp int tmp = tile_extent;
+                        // tmp = tmp >> (18-int(tile_id.z));
 
 
                         highp float thickness = layer_style.current_layer_style.outline_width / tile_extent;
