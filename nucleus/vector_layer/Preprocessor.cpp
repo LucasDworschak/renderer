@@ -120,18 +120,19 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
             } else if (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) {
                 PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
 
-                std::vector<glm::vec2> vertices;
                 for (size_t j = 0; j < geom.size(); ++j) {
+                    // lines have to be split according to geom -> otherwise Bug #171
+                    std::vector<glm::vec2> vertices;
                     vertices.insert(vertices.end(), geom[j].begin(), geom[j].end());
-                }
 
-                constexpr std::vector<glm::ivec2> no_edges; // necessary for emplace_back
+                    constexpr std::vector<glm::ivec2> no_edges; // necessary for emplace_back
 
-                // TODO performance -> instead of duplicating the vertice data we only want to duplicate the index data
+                    // TODO performance -> instead of duplicating the vertice data we only want to duplicate the index data
 
-                for (const auto& style : styles) {
-                    const auto line_width = float(style_buffer[style.first].z) / float(constants::style_precision);
-                    data.emplace_back(vertices, extent, style.first, style.second, false, no_edges, line_width);
+                    for (const auto& style : styles) {
+                        const auto line_width = float(style_buffer[style.first].z) / float(constants::style_precision);
+                        data.emplace_back(vertices, extent, style.first, style.second, false, no_edges, line_width);
+                    }
                 }
             }
         }
