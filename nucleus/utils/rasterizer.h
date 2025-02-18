@@ -412,8 +412,6 @@ namespace details {
         add_circle_end_cap(pixel_writer, line_points[0], line_index, distance);
         add_circle_end_cap(pixel_writer, line_points[1], line_index, distance);
 
-        // distance += sqrt(0.5);
-
         // create normal
         // make sure that the normal points downwards
         glm::vec2 normal;
@@ -447,21 +445,32 @@ namespace details {
         // -> only one pass from top to bottom necessary
         if (normal.y == 0) {
             render_line(pixel_writer, line_index, enlarged_top_origin, edge, (enlarged_top_origin.x > enlarged_middle_origin.x) ? -1 : 1, enlarged_middle_origin, edge);
-
             return;
         }
 
         // we have to fill once the edge side and once the normal side.
         // one side should not need fallbacks to render everything
+        float x_middle_of_top_bottom_line = get_x_for_y_on_line(enlarged_top_origin, edge, enlarged_middle_origin.y);
+        int fill_direction = (enlarged_middle_origin.x < x_middle_of_top_bottom_line) ? 1 : -1;
 
-        int fill_direction = (edge.x > 0) ? -1 : 1;
+        // we essentially split the line into 2 triangles
+        // top line part spans enlarged_top_origin - enlarged_middle_origin - enlarged_middle_end
+        // bottom line part spans enlarged_middle_origin - enlarged_middle_end - enlarged_bottom_origin
+        // top middle
+        render_line(pixel_writer, line_index, enlarged_top_origin, normal, fill_direction, enlarged_top_origin, edge);
+        // middle bottom
+        render_line(pixel_writer, line_index, enlarged_middle_origin, edge, fill_direction, enlarged_top_origin, edge, enlarged_middle_end, normal);
 
-        // go from top of the line to bottom of the line
-        // first fill everything between edge and 2xnormal, after this fill everything betweent edge and other edge
-        render_line(pixel_writer, line_index, enlarged_top_origin, edge, fill_direction, enlarged_middle_origin, edge, enlarged_top_origin, normal, enlarged_top_origin, normal);
+        // we need to reevaluate fill_direction for the bottom part
+        x_middle_of_top_bottom_line = get_x_for_y_on_line(enlarged_middle_origin, edge, enlarged_middle_end.y);
+        fill_direction = (enlarged_middle_end.x < x_middle_of_top_bottom_line) ? 1 : -1;
 
-        // render the last bit of the line (from line end top to line end bottom) -> no need for a fallback line since both lines meet at the bottom
-        render_line(pixel_writer, line_index, enlarged_middle_end, normal, fill_direction, enlarged_middle_origin, edge * 2.0f);
+        glm::vec2 middle_orgin_middle_end_edge = enlarged_middle_end - enlarged_middle_origin;
+
+        // top middle (bottom line part)
+        render_line(pixel_writer, line_index, enlarged_middle_origin, middle_orgin_middle_end_edge, fill_direction, enlarged_middle_origin, edge);
+        // middle bottom (bottom line part)
+        render_line(pixel_writer, line_index, enlarged_middle_end, normal / 1.0f, fill_direction, enlarged_middle_origin, edge);
 
         // { // DEBUG visualize enlarged points
         //     // const auto enlarged_bottom_origin = origin + edge + normal * distance;

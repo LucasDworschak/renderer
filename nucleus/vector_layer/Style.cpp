@@ -84,7 +84,7 @@ void Style::load()
         auto paintObject = obj.toObject().value("paint").toObject();
         auto filterData = obj.toObject().value("filter").toArray();
 
-        LayerStyle s;
+        LayerStyle s { 0, 0, 0, 0 };
         std::shared_ptr<StyleExpressionBase> filter = StyleExpressionBase::create_filter_expression(filterData);
 
         bool invalid = false;
@@ -162,7 +162,7 @@ void Style::load()
         m_layer_to_style[layer_name].add_filter(style_index, layer_index, filter, zoom_range);
 
         // auto id = obj.toObject().value("id").toString(); // DEBUG -> what layers with what index are used
-        // qDebug() << layer_index << id;
+        // qDebug() << style_index << id;
 
         layer_index++;
     }

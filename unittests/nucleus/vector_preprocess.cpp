@@ -315,19 +315,19 @@ TEST_CASE("nucleus/vector_preprocess")
         image.save(QString("vector_layer_grid_lines.png"));
     }
 
-    // TODO can probably be discarded now -> right?
+    // TODO can probably be discarded now->right ?
     // SECTION("Basemap decoding - vectortile Neusiedlersee")
     // {
     //     // TODO test vectortile_neusiedlersee.pbf and see what is wrong with the rasterization of the lake
     //     // const auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 4477 * 2, 2850 * 2 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap };
     //     // const auto id = nucleus::tile::Id { .zoom_level = 13, .coords = { 4477, 2850 }, .scheme = nucleus::tile::Scheme::SlippyMap };
     //     // const auto id = nucleus::tile::Id { .zoom_level = 15, .coords = { (4477 * 2 + 1) * 2, (2850 * 2 + 1) * 2 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-    //     const auto id = nucleus::tile::Id { .zoom_level = 9, .coords = { 268, 178 }, .scheme = nucleus::tile::Scheme::SlippyMap }; // bodensee
+    //     const auto id = nucleus::tile::Id { .zoom_level = 18, .coords = { 70137 * 2, 46097 * 2 }, .scheme = nucleus::tile::Scheme::SlippyMap }; // bodensee
 
     //     QByteArray byte_data;
 
     //     {
-    //         nucleus::tile::TileLoadService service("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/tile/", nucleus::tile::TileLoadService::UrlPattern::ZYX_yPointingSouth, ".pbf");
+    //         nucleus::tile::TileLoadService service("https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/", nucleus::tile::TileLoadService::UrlPattern::ZXY_yPointingSouth, "");
     //         QSignalSpy spy(&service, &nucleus::tile::TileLoadService::load_finished);
     //         service.load(id);
     //         spy.wait(15000);
@@ -343,10 +343,11 @@ TEST_CASE("nucleus/vector_preprocess")
     //     // file.open(QFile::ReadOnly);
     //     // const auto byte_data = file.readAll();
 
-    //     Style style("");
+    //     Style s(":/vectorlayerstyles/openstreetmap.json");
+    //     s.load();
 
     //     // auto processed = nucleus::vector_layer::preprocess(id, byte_data, style);
-    //     auto tile_data = nucleus::vector_layer::details::parse_tile(id, byte_data, style);
+    //     auto tile_data = nucleus::vector_layer::details::parse_tile(id, byte_data, s);
 
     //     // constexpr float point_scale = 1.0f / 64.0f;
 
@@ -359,23 +360,46 @@ TEST_CASE("nucleus/vector_preprocess")
     //     // const std::vector<std::vector<glm::vec2>> polygons = { triangle_left_hypo, triangle_right_hypo };
 
     //     size_t data_offset = 1;
+    //     auto acceleration_grid = std::vector<std::set<uint32_t>>(nucleus::vector_layer::constants::grid_size * nucleus::vector_layer::constants::grid_size, std::set<uint32_t>());
 
-    //     for (size_t i = 0; i < tile_data.polygons.size(); ++i) {
-    //         std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(tile_data.polygons[i].vertices, tile_data.polygons[i].edges, true);
+    //     for (size_t i = 0; i < tile_data.size(); ++i) {
+    //         if (tile_data[i].is_polygon) {
 
-    //         std::cout << "o Water" << i << std::endl;
-    //         for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
+    //         } else {
+    //             // qDebug() << tile_data[i].style;
+    //             if (tile_data[i].style != 92u)
+    //                 continue;
+    //             const auto cell_writer = [&acceleration_grid, data_offset](glm::vec2 pos, int data_index) {
+    //                 // if in grid_size bounds and not already present -> than add index to vector
+    //                 if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(nucleus::vector_layer::constants::grid_size), pos))) {
+    //                     // last bit of index indicates that this is a line
+    //                     // !! IMPORTANT !! we have to use the lowest bit since set orders the input depending on key -> lines and polygons have to stay intermixed
+    //                     const auto index = ((data_index + data_offset) << 1); // | 0u;
+    //                     acceleration_grid[int(pos.x) + nucleus::vector_layer::constants::grid_size * int(pos.y)].insert(index);
+    //                 }
+    //             };
 
-    //             std::cout << "v " << triangle_points[j * 3 + 0].x << " 0.0 " << triangle_points[j * 3 + 0].y << std::endl;
-    //             std::cout << "v " << triangle_points[j * 3 + 1].x << " 0.0 " << triangle_points[j * 3 + 1].y << std::endl;
-    //             std::cout << "v " << triangle_points[j * 3 + 2].x << " 0.0 " << triangle_points[j * 3 + 2].y << std::endl;
+    //             std::cout << std::endl << "o road" << i << std::endl;
+    //             for (size_t j = 0; j < tile_data[i].vertices.size(); ++j) {
+    //                 std::cout << "v " << tile_data[i].vertices[j].x << " 0 " << tile_data[i].vertices[j].y << std::endl;
+    //             }
+    //             std::cout << "l ";
+    //             for (size_t j = 0; j < tile_data[i].vertices.size(); ++j) {
+    //                 std::cout << (j + data_offset) << " ";
+    //             }
+
+    //             std::cout << std::endl << std::endl;
+
+    //             const auto scale = float(nucleus::vector_layer::constants::grid_size) / float(tile_data[i].extent);
+    //             nucleus::utils::rasterizer::rasterize_line(cell_writer, tile_data[i].vertices, tile_data[i].line_width * scale, scale);
+
+    //             data_offset += tile_data[i].vertices.size();
     //         }
-
-    //         for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
-    //             std::cout << "f " << (data_offset + j * 3 + 0) << " " << (data_offset + j * 3 + 1) << " " << (data_offset + j * 3 + 2) << std::endl;
-    //         }
-    //         data_offset += triangle_points.size();
     //     }
+
+    //     auto raster = visualize_grid(acceleration_grid, nucleus::vector_layer::constants::grid_size);
+    //     auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
+    //     image.save(QString("vector_layer_lines_debuggggg.png"));
 
     //     // TODO here -> visualize the grid first,
     //     // probably best to execute each step individually and rasterize the resulting polygons with own raster with higher level of detail than grid size

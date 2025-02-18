@@ -85,7 +85,8 @@ void line_sdf(const PixelWriterFunction& pixel_writer, const glm::vec2 current_p
  * ideal if you want to rasterize only a few triangles, where every triangle covers a large part of the raster size
  * in this method we traverse through every triangle and generate the bounding box and traverse the bounding box
  */
-template <typename PixelWriterFunction> void rasterize_triangle_sdf(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& triangles, float distance)
+template <typename PixelWriterFunction>
+void rasterize_triangle_sdf(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& triangles, float distance)
 {
     // we sample from the center
     // and have a radius of a half pixel diagonal
@@ -111,7 +112,8 @@ template <typename PixelWriterFunction> void rasterize_triangle_sdf(const PixelW
     }
 }
 
-template <typename PixelWriterFunction> void rasterize_line_sdf(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& line_points, float distance)
+template <typename PixelWriterFunction>
+void rasterize_line_sdf(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& line_points, float distance)
 {
     // we sample from the center
     // and have a radius of a half pixel diagonal
@@ -976,6 +978,40 @@ TEST_CASE("nucleus/rasterizer")
         // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
         auto image = nucleus::tile::conversion::u8raster_2_to_qimage(output, output2);
         image.save(QString("rasterizer_output_line_diagonal_enlarged.png"));
+#endif
+    }
+
+    SECTION("Line rasterization - big line width")
+    { // test for bug missing fragments (part of task #153)
+        const std::vector<glm::vec2> line = {
+            glm::vec2(3795 / 64.0, 58 / 64.0),
+            glm::vec2(3580 / 64.0, 56 / 64.0),
+        };
+        auto size = glm::vec2(64, 64);
+        nucleus::Raster<uint8_t> output(size, 0u);
+        float distance = 17.0 / 64.0;
+
+        radix::geometry::Aabb2<double> bounds = { { 0, 0 }, size };
+
+        const auto pixel_writer = [&output, bounds](glm::ivec2 pos) {
+            if (bounds.contains(pos))
+                output.pixel(pos) = 255;
+        };
+        nucleus::utils::rasterizer::rasterize_line(pixel_writer, line, distance);
+
+        nucleus::Raster<uint8_t> output2(size, 0u);
+        const auto pixel_writer2 = [&output2, bounds](glm::ivec2 pos) {
+            if (bounds.contains(pos))
+                output2.pixel(pos) = 255;
+        };
+        rasterize_line_sdf(pixel_writer2, line, distance);
+
+        CHECK(output.buffer() == output2.buffer());
+
+#ifdef WRITE_RASTERIZER_DEBUG_IMAGE
+        // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
+        auto image = nucleus::tile::conversion::u8raster_2_to_qimage(output, output2);
+        image.save(QString("rasterizer_output_line_big_line_width.png"));
 #endif
     }
 }
