@@ -440,10 +440,6 @@ void main() {
                         if(check_next_geometry)
                             continue;
 
-                        // TODO tile extent depends on zoom level
-                        // highp int tmp = tile_extent;
-                        // tmp = tmp >> (18-int(tile_id.z));
-
 
                         highp float thickness = layer_style.current_layer_style.outline_width / tile_extent;
                         d = sdLine(uv, v0, v1) - thickness;

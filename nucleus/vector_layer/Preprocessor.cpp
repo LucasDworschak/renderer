@@ -112,6 +112,8 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
 
                 // qDebug() << layer_name << styles.size();
 
+                // TODO performance -> might be more efficient to find out if the style is the same and the alpha is full -> only visualize the higher layer_index
+
                 for (const auto& style : styles)
                     data.emplace_back(vertices, extent, style.first, style.second, true, all_edges, 0);
                 // data.emplace_back(std::vector<glm::vec2>(vertices), extent, styles[0].first, styles[0].second, true, std::vector<glm::ivec2>(edges), 0);
