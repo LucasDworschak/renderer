@@ -150,7 +150,7 @@ void Style::load()
             style_index = style_to_index[s];
         }
 
-        glm::uvec2 zoom_range(0u, 19u);
+        glm::uvec2 zoom_range(8u, 20u);
         if (obj.toObject().contains("minzoom"))
             zoom_range.x = obj.toObject().value("minzoom").toInt();
         if (obj.toObject().contains("maxzoom"))

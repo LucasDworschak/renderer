@@ -119,7 +119,7 @@ bool StyleExpression::matches(const mapbox::vector_tile::GeomType& type, const m
 
     } else if (m_comparator == "has" || m_comparator == "!has") {
         // if the value is a null value -> the value was not in the list
-        bool has_not_value = std::visit([](auto&& v) { return std::is_same_v<decltype(v), mapbox::feature::null_value_t>; }, value);
+        bool has_not_value = std::visit([](auto&& v) { return typeid(v) == typeid(mapbox::feature::null_value); }, value);
         return m_comparator.starts_with("!") ? has_not_value : !has_not_value;
     } else {
         return std::visit([this](auto&& v) { return vector_tile::util::compare_visitor(v, m_values[0], m_comparator); }, value);

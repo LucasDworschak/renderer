@@ -24,7 +24,7 @@ namespace nucleus::vector_layer {
 
 void StyleFilter::add_filter(uint32_t style_index, uint32_t layer_index, std::shared_ptr<StyleExpressionBase> filter, glm::uvec2 zoom_range)
 {
-    for (unsigned i = zoom_range.x; i < zoom_range.y; i++) {
+    for (unsigned i = zoom_range.x; i < zoom_range.y + 1; i++) {
         if (!m_filter.contains(i)) {
             m_filter[i] = std::vector<std::tuple<uint32_t, uint32_t, std::shared_ptr<StyleExpressionBase>>>();
         }

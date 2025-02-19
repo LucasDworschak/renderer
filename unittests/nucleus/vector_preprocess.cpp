@@ -48,7 +48,7 @@ inline std::ostream& operator<<(std::ostream& os, const glm::ivec2& v) { return 
 
 QImage example_grid_data_triangles()
 {
-    auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer_grid_triangles.png"));
+    auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/grid_triangles.png"));
     file.open(QFile::ReadOnly);
     const auto bytes = file.readAll();
     auto image = QImage::fromData(bytes);
@@ -58,7 +58,7 @@ QImage example_grid_data_triangles()
 
 QImage example_grid_data_lines()
 {
-    auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer_grid_lines.png"));
+    auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/grid_lines.png"));
     file.open(QFile::ReadOnly);
     const auto bytes = file.readAll();
     auto image = QImage::fromData(bytes);
@@ -315,14 +315,12 @@ TEST_CASE("nucleus/vector_preprocess")
         image.save(QString("vector_layer_grid_lines.png"));
     }
 
-    // TODO can probably be discarded now->right ?
-    // SECTION("Basemap decoding - vectortile Neusiedlersee")
+    // SECTION("Tile exploration") // section mostly used for tile debugging -> not a real test
     // {
-    //     // TODO test vectortile_neusiedlersee.pbf and see what is wrong with the rasterization of the lake
     //     // const auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 4477 * 2, 2850 * 2 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap };
     //     // const auto id = nucleus::tile::Id { .zoom_level = 13, .coords = { 4477, 2850 }, .scheme = nucleus::tile::Scheme::SlippyMap };
     //     // const auto id = nucleus::tile::Id { .zoom_level = 15, .coords = { (4477 * 2 + 1) * 2, (2850 * 2 + 1) * 2 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-    //     const auto id = nucleus::tile::Id { .zoom_level = 18, .coords = { 70137 * 2, 46097 * 2 }, .scheme = nucleus::tile::Scheme::SlippyMap }; // bodensee
+    //     const auto id = nucleus::tile::Id { .zoom_level = 19, .coords = { 285987, 181795 }, .scheme = nucleus::tile::Scheme::SlippyMap }; // bodensee
 
     //     QByteArray byte_data;
 
@@ -339,25 +337,10 @@ TEST_CASE("nucleus/vector_preprocess")
     //         byte_data = *tile.data;
     //     }
 
-    //     // auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_neusiedlersee.pbf"));
-    //     // file.open(QFile::ReadOnly);
-    //     // const auto byte_data = file.readAll();
-
     //     Style s(":/vectorlayerstyles/openstreetmap.json");
     //     s.load();
 
-    //     // auto processed = nucleus::vector_layer::preprocess(id, byte_data, style);
     //     auto tile_data = nucleus::vector_layer::details::parse_tile(id, byte_data, s);
-
-    //     // constexpr float point_scale = 1.0f / 64.0f;
-
-    //     // const std::vector<glm::vec2> triangle_left_hypo
-    //     //     = { glm::vec2(10 * point_scale, 30 * point_scale), glm::vec2(30 * point_scale, 5 * point_scale), glm::vec2(50 * point_scale, 50 * point_scale) };
-    //     // const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5 * point_scale, 5 * point_scale), glm::vec2(25 * point_scale, 10 * point_scale), glm::vec2(5 * point_scale, 15 *
-    //     // point_scale)
-    //     // };
-
-    //     // const std::vector<std::vector<glm::vec2>> polygons = { triangle_left_hypo, triangle_right_hypo };
 
     //     size_t data_offset = 1;
     //     auto acceleration_grid = std::vector<std::set<uint32_t>>(nucleus::vector_layer::constants::grid_size * nucleus::vector_layer::constants::grid_size, std::set<uint32_t>());
@@ -365,7 +348,25 @@ TEST_CASE("nucleus/vector_preprocess")
     //     for (size_t i = 0; i < tile_data.size(); ++i) {
     //         if (tile_data[i].is_polygon) {
 
+    //             if (tile_data[i].style != 88u)
+    //                 continue;
+
+    //             std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(tile_data[i].vertices, tile_data[i].edges, true);
+
+    //             std::cout << std::endl << "o pedestrian_area" << i << std::endl;
+    //             for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
+    //                 std::cout << "v " << triangle_points[j * 3 + 0].x << " 0 " << triangle_points[j * 3 + 0].y << std::endl;
+    //                 std::cout << "v " << triangle_points[j * 3 + 1].x << " 0 " << triangle_points[j * 3 + 1].y << std::endl;
+    //                 std::cout << "v " << triangle_points[j * 3 + 2].x << " 0 " << triangle_points[j * 3 + 2].y << std::endl;
+
+    //                 auto f_ind = ((j + data_offset) * 3);
+    //                 std::cout << "f " << f_ind << " " << (f_ind + 1) << " " << (f_ind + 2) << std::endl;
+    //             }
+
+    //             data_offset += triangle_points.size() / 3;
+
     //         } else {
+    //             continue;
     //             // qDebug() << tile_data[i].style;
     //             if (tile_data[i].style != 92u)
     //                 continue;
@@ -399,16 +400,7 @@ TEST_CASE("nucleus/vector_preprocess")
 
     //     auto raster = visualize_grid(acceleration_grid, nucleus::vector_layer::constants::grid_size);
     //     auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
-    //     image.save(QString("vector_layer_lines_debuggggg.png"));
-
-    //     // TODO here -> visualize the grid first,
-    //     // probably best to execute each step individually and rasterize the resulting polygons with own raster with higher level of detail than grid size
-
-    //     // auto raster = processed.grid_triangle;
-    //     // auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
-
-    //     // auto test_image = example_grid_data_triangles();
-    //     // CHECK(image == test_image);
+    //     image.save(QString("vector_layer_debuggggg.png"));
 
     //     // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
     //     //     std::cout << bridge_data[i] << std::endl;
@@ -418,48 +410,6 @@ TEST_CASE("nucleus/vector_preprocess")
     //     // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
     //     //     std::cout << data[i] << std::endl;
     //     // }
-
-    //     // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
-    //     // image.save(QString("vector_layer_grid_triangles.png"));
-    // }
-
-    // TODO
-    // SECTION("Lines to Grid")
-    // {
-    //     const std::vector<std::vector<glm::vec2>> line_points
-    //         = { { glm::vec2(10.5, 40.5), glm::vec2(30.5, 20.5) }, { glm::vec2(10.5, 5.5), glm::vec2(30.5, 5.5) }, { glm::vec2(10.5, 50), glm::vec2(30.5, 50) } };
-    //     const std::vector<unsigned int> style_indices = { 1, 2, 3 };
-
-    //     // const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-
-    //     auto processed = nucleus::vector_layer::details::preprocess_lines(line_points, style_indices);
-
-    //     auto raster = visualize_grid(processed.cell_to_temp, nucleus::vector_layer::constants::grid_size);
-
-    //     auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
-
-    //     // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
-    //     // image.save(QString("vector_layer_grid_lines.png"));
-    // }
-
-    // SECTION("float to uint array conversion")// TODO this does not work for release build
-    // {
-    //     auto f0 = 1.3434f;
-    //     auto f1 = 3.5656f;
-    //     auto f2 = 5.44432f;
-
-    //     uint32_t u0 = *reinterpret_cast<uint32_t*>(&f0);
-    //     uint32_t u1 = *reinterpret_cast<uint32_t*>(&f1);
-    //     uint32_t u2 = *reinterpret_cast<uint32_t*>(&f2);
-
-    //     // convert back to values we can test against
-    //     float t0 = *reinterpret_cast<float*>(&u0);
-    //     float t1 = *reinterpret_cast<float*>(&u1);
-    //     float t2 = *reinterpret_cast<float*>(&u2);
-
-    //     CHECK(t0 == 1.3434f);
-    //     CHECK(t1 == 3.5656f);
-    //     CHECK(t2 == 5.44432f);
     // }
 
     SECTION("16/24/24 Bit Data packer")
