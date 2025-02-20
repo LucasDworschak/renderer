@@ -120,6 +120,7 @@ qt_add_library(nucleus STATIC
     vector_layer/Preprocessor.h vector_layer/Preprocessor.cpp
     vector_layer/setup.h
     vector_layer/Scheduler.h vector_layer/Scheduler.cpp
+    vector_layer/StyleExpander.h vector_layer/StyleExpander.cpp
     vector_layer/Style.h vector_layer/Style.cpp
     vector_layer/constants.h
     vector_layer/StyleFilter.h vector_layer/StyleFilter.cpp

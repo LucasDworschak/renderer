@@ -65,8 +65,6 @@ public:
 
     std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles() const;
 
-    static QJsonArray expand(const QJsonArray& layers);
-
 public slots:
     void load();
 
@@ -79,11 +77,6 @@ private:
     uint8_t parse_opacity(const QJsonValue& value);
 
     QJsonValue onlyLastStopValue(const QJsonValue& value);
-
-    static bool sub_is_array(QJsonObject obj, QString sub_key);
-    static QJsonValue get_match_value(QJsonArray match_array, QString match_key);
-    static std::unordered_map<QString, std::vector<QJsonArray>> get_sub_layer(QJsonArray filter);
-    static QJsonArray rejoin_filter(std::vector<QJsonArray> filters);
 
     std::unordered_map<std::string, StyleFilter> m_layer_to_style;
 
