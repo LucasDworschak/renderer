@@ -115,7 +115,7 @@ TEST_CASE("nucleus/vector_style")
         CHECK(s.parse_color("hsl(36, 6%, 74%)") == 0XC1BDB9FF);
     }
 
-    SECTION("Style expand")
+    SECTION("Style expand openstreetmap")
     {
         QFile file(":/vectorlayerstyles/openstreetmap.json");
         file.open(QIODeviceBase::OpenModeFlag::ReadOnly);
@@ -134,6 +134,33 @@ TEST_CASE("nucleus/vector_style")
 
         CHECK(layers.size() == 208); // makes sure that the input file is still the same
         CHECK(expanded_layers.size() == 312);
+
+        // // DEBUG view what is written in expanded layers
+        // QFile out_file("expanded.style.json");
+        // out_file.open(QFile::WriteOnly);
+        // QJsonDocument out = QJsonDocument(expanded_layers);
+        // out_file.write(out.toJson());
+    }
+
+    SECTION("Style expand qwant")
+    {
+        QFile file(":/vectorlayerstyles/qwant.json");
+        file.open(QIODeviceBase::OpenModeFlag::ReadOnly);
+
+        const auto data = file.readAll();
+
+        if (data.isEmpty()) {
+            CHECK(false);
+            return;
+        }
+
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonArray layers = doc.object().value("layers").toArray();
+
+        QJsonArray expanded_layers = Style::expand(layers);
+
+        // CHECK(layers.size() == 208); // makes sure that the input file is still the same
+        // CHECK(expanded_layers.size() == 312);
 
         // // DEBUG view what is written in expanded layers
         // QFile out_file("expanded.style.json");
@@ -324,6 +351,64 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[feature_to_style.at("line__waterway__river__null__0_0")].x == s.parse_color("#a0c8f0ff"));
         CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__0_0")].x == s.parse_color("#a0c8f0ff"));
         CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__1_0")].x == s.parse_color("#a0c8f0ff"));
+
+        // // DEBUG show all keys to styles
+        // for (const auto& el : feature_to_style) {
+
+        //     if (el.second == -1u)
+        //         continue;
+
+        //     // easy to renew check:
+        //     std::cout << "CHECK(style_buffer[feature_to_style.at(\"" << el.first << "\")].x == s.parse_color(\"#" << std::hex << style_buffer[el.second].x << "\"));" << std::endl;
+
+        //     // simple output to check:
+        //     // qDebug() << el.first << " " << el.second;
+        // }
+        // std::cout << std::endl << std::endl;
+    }
+    SECTION("Style parsing openmaptile")
+    {
+
+        // Style s(":/vectorlayerstyles/qwant.json");
+
+        // s.load();
+
+        // QString filepath = QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_openmaptile_13_4412_2893.pbf");
+        // QFile file(filepath);
+        // file.open(QIODevice::ReadOnly | QIODevice::Unbuffered);
+        // QByteArray data = file.readAll();
+        // const auto zoom = 13;
+
+        // const auto d = data.toStdString();
+        // const mapbox::vector_tile::buffer tile(d);
+
+        // auto key_generator = [](std::string layer_name, mapbox::vector_tile::feature feature) {
+        //     std::string out = "";
+        //     std::vector<std::pair<std::string, std::string>> sorted_props;
+
+        //     for (auto& prop : feature.getProperties()) {
+        //         if (prop.first == "class" || prop.first == "subclass" || prop.first == "id" || prop.first == "mvt_id" || prop.first.starts_with("name"))
+        //             continue;
+        //         sorted_props.push_back(std::make_pair(prop.first, std::visit(nucleus::vector_tile::util::string_print_visitor, prop.second).toStdString()));
+        //     }
+
+        //     std::sort(sorted_props.begin(), sorted_props.end(), [](std::pair<std::string, std::string> a, std::pair<std::string, std::string> b) { return a.first < b.first; });
+
+        //     for (auto& prop : sorted_props) {
+        //         out += "__" + prop.second;
+        //     }
+
+        //     const auto class_name = std::visit(nucleus::vector_tile::util::string_print_visitor, feature.getProperties()["class"]).toStdString();
+        //     const auto subclass_name = std::visit(nucleus::vector_tile::util::string_print_visitor, feature.getProperties()["subclass"]).toStdString();
+        //     return layer_name + "__" + class_name + "__" + subclass_name + out;
+        // };
+
+        // auto skipped_layers = std::unordered_set<std::string> { "transportation_name", "water_name" };
+
+        // auto feature_to_style = parse_tile(s, tile, zoom, key_generator, skipped_layers, false);
+
+        // // check if the color stored int he style buffer points to the correct color in the stylesheet
+        // const auto style_buffer = s.styles()->buffer();
 
         // // DEBUG show all keys to styles
         // for (const auto& el : feature_to_style) {

@@ -28,6 +28,7 @@ Scheduler::Scheduler(std::string name, QObject* parent)
     : nucleus::tile::Scheduler(std::move(name), 1024, parent)
     // , m_style(":/vectorlayerstyles/basemap.json")
     , m_style(":/vectorlayerstyles/openstreetmap.json")
+// , m_style(":/vectorlayerstyles/qwant.json")
 {
     connect(&m_style, &Style::load_finished, this, &Scheduler::enable_scheduler);
 }

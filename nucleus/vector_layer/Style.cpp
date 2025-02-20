@@ -18,6 +18,8 @@
 
 #include "Style.h"
 
+#include <unordered_set>
+
 #include <QFile>
 
 #include <QJsonArray>
@@ -30,6 +32,8 @@
 #include <regex>
 
 namespace nucleus::vector_layer {
+
+// https://maplibre.org/maplibre-style-spec/
 
 Style::Style(const QString& filename)
     : m_filename(filename)
@@ -202,41 +206,71 @@ QJsonValue Style::get_match_value(QJsonArray match_array, QString match_key)
     return match_array.last();
 }
 
-std::unordered_map<QString, QJsonArray> Style::get_sub_layer(QJsonArray filter)
+std::unordered_map<QString, std::vector<QJsonArray>> Style::get_sub_layer(QJsonArray filter)
 {
-    std::unordered_map<QString, QJsonArray> sub_layer;
+    std::unordered_map<QString, std::vector<QJsonArray>> sub_layer;
 
-    if (!filter.contains("all")) {
-        assert(false); // currently only works if in expression is within an all expression -> you have to adapt the code to make this work
-        return sub_layer;
-    }
+    std::vector<QJsonArray> sub_filter;
 
-    // find index of "in" expression
-    qsizetype in_filter_index = -1;
-    for (qsizetype i = 1; i < filter.size(); i++) {
-        if (filter[i].isArray() && filter[i].toArray().contains("in")) {
-            in_filter_index = i;
-            break;
+    int in_filter_index = -1;
+
+    if (filter.contains("all")) {
+        for (qsizetype i = 1; i < filter.size(); i++) {
+            assert(filter[i].isArray()); // all sub filters should also be arrays
+
+            // add filter to sub filters
+            sub_filter.push_back(filter[i].toArray());
+
+            if (sub_filter[i - 1].contains("in")) {
+                assert(in_filter_index == -1); // 2 in conditions -> function needs to be rewritten do deal with it
+                in_filter_index = i - 1;
+            }
+        }
+    } else {
+        // no all -> only save the current instance as the sub filter
+        sub_filter.push_back(filter);
+
+        if (filter.contains("in")) {
+            in_filter_index = 0;
         }
     }
 
-    const auto in_expression = filter[in_filter_index].toArray();
-    const auto criterium = in_expression[1].toString();
+    if (in_filter_index == -1) {
+        // no filter splitting necessary here
+        sub_layer["all"] = sub_filter;
+        return sub_layer;
+    }
 
-    std::vector<QJsonArray> new_filter;
-
+    const auto criterium = sub_filter[in_filter_index][1].toString();
     // get all layers that are stated in the in expression
-    for (qsizetype i = 2; i < in_expression.size(); i++) {
-        const auto layer_name = in_expression[i].toString();
+    for (qsizetype i = 2; i < sub_filter[in_filter_index].size(); i++) {
+        const auto layer_name = sub_filter[in_filter_index][i].toString();
 
         // replace the "in" filter with an "==" filter
-        QJsonArray new_filter = QJsonArray(filter);
+        auto new_filter = std::vector<QJsonArray>(sub_filter);
         new_filter[in_filter_index] = QJsonArray { "==", criterium, layer_name };
 
         sub_layer[layer_name] = new_filter;
     }
 
     return sub_layer;
+}
+
+QJsonArray Style::rejoin_filter(std::vector<QJsonArray> filters)
+{
+    assert(filters.size() > 0);
+
+    if (filters.size() == 1) {
+        // just one element -> we can just use it without changing anything
+        return filters[0];
+    }
+
+    // we have to wrap everything in an all expression
+    QJsonArray out_filter { "all" };
+    for (size_t i = 0; i < filters.size(); i++) {
+        out_filter.append(filters[i]);
+    }
+    return out_filter;
 }
 
 QJsonArray Style::expand(const QJsonArray& layers)
@@ -263,7 +297,37 @@ QJsonArray Style::expand(const QJsonArray& layers)
         }
 
         // we need to expand the layer
+        // qDebug() << layer.toObject().value("id").toString();
         const auto sublayer = get_sub_layer(layer.toObject().value("filter").toArray());
+
+        // store criterium_key, criterium_value of all the paint expressions
+        std::unordered_map<QString, std::unordered_set<QString>> paint_criterium_values;
+
+        for (const auto& key : paint.keys()) {
+            if (paint[key].isArray()) {
+                QJsonArray paint_value_array = paint[key].toArray();
+                if (paint_value_array[0] == "match") {
+                    // asserts make sure that we have something like: ["get", value]
+                    assert(paint_value_array[1].isArray());
+                    assert(paint_value_array[1].toArray().size() == 2);
+                    assert(paint_value_array[1].toArray()[0].isString());
+                    assert(paint_value_array[1].toArray()[0].toString() == "get");
+                    assert(paint_value_array[1].toArray()[1].isString());
+
+                    QString criterium_key = paint_value_array[1].toArray()[1].toString();
+
+                    for (qsizetype i = 2; i < paint_value_array.size() - 1; i += 2) {
+                        if (paint_value_array[i].isString()) {
+                            // add criterium_key, and criterium_value to list
+                            paint_criterium_values[criterium_key].insert(paint_value_array[i].toString());
+                        }
+                    }
+
+                } else if (paint_value_array[0] == "case") {
+                    // TODO implement
+                }
+            }
+        }
 
         for (const auto& [layer_name, new_filter] : sublayer) {
             QJsonObject new_paint;
@@ -271,6 +335,13 @@ QJsonArray Style::expand(const QJsonArray& layers)
                 if (paint[key].isArray() && paint[key].toArray()[0] == "match") {
                     // choose the value that matches and use it for the paint option
                     new_paint[key] = QJsonValue(get_match_value(paint[key].toArray(), layer_name));
+                } else if (paint[key].isArray() && paint[key].toArray()[0] == "case") {
+
+                    //
+
+                    // TODO implement
+                    // new_paint[key] = QJsonValue(get_match_value(paint[key].toArray(), layer_name));
+                    new_paint[key] = paint[key];
                 } else {
                     // write the previous value
                     new_paint[key] = paint[key];
@@ -279,7 +350,7 @@ QJsonArray Style::expand(const QJsonArray& layers)
 
             // copy layer so that we can change values specific for one sublayer
             QJsonObject new_layer = QJsonObject(layer.toObject());
-            new_layer["filter"] = new_filter;
+            new_layer["filter"] = rejoin_filter(new_filter);
             new_layer["paint"] = new_paint;
 
             out_layer.append(new_layer);
@@ -417,11 +488,10 @@ uint32_t Style::parse_color(const QJsonValue& value)
 
         return out;
     } else if (colorValue.starts_with("hsl")) {
-
-        const std::regex regex("hsl\\((\\d+),\\s?(\\d+)%,\\s?(\\d+)%\\)");
+        const std::regex regex("hsla?\\((\\d+),\\s?(\\d+)%,\\s?(\\d+)%(?:,\\s?(\\d+.?\\d*))?\\)");
         std::smatch matches;
         if (!std::regex_match(colorValue, matches, regex)) {
-            qDebug() << "could not match hsl regex";
+            qDebug() << "could not match hsl regex" << colorValue;
             assert(false);
             return 0ul;
         }
@@ -429,7 +499,11 @@ uint32_t Style::parse_color(const QJsonValue& value)
         const float h = std::stoi(matches[1]) % 360;
         const float s = std::stoi(matches[2]) / 100.0;
         const float l = std::stoi(matches[3]) / 100.0;
-        const uint8_t a = 255;
+
+        uint8_t a = 255;
+        if (matches.size() == 5 && matches[4].length() > 0) {
+            a = std::stod(matches[4]) * 255.0;
+        }
 
         // formula from https://www.rapidtables.com/convert/color/hsl-to-rgb.html
         const float c = (1.0 - abs(2.0 * l - 1.0)) * s;

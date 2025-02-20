@@ -82,7 +82,8 @@ private:
 
     static bool sub_is_array(QJsonObject obj, QString sub_key);
     static QJsonValue get_match_value(QJsonArray match_array, QString match_key);
-    static std::unordered_map<QString, QJsonArray> get_sub_layer(QJsonArray filter);
+    static std::unordered_map<QString, std::vector<QJsonArray>> get_sub_layer(QJsonArray filter);
+    static QJsonArray rejoin_filter(std::vector<QJsonArray> filters);
 
     std::unordered_map<std::string, StyleFilter> m_layer_to_style;
 

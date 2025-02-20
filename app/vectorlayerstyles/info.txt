@@ -13,3 +13,13 @@ https://maplibre.org/maputnik/
 on the site -> open -> "OSM OpenMapTiles"
 styled map should be visible -> Export -> Download Style
 alternative: https://github.com/openmaptiles/openmaptiles
+
+osm-bright.json
+https://github.com/openmaptiles/osm-bright-gl-style
+
+qwant.json
+https://qwant.github.io/qwant-basic-gl-style/
+
+
+others (for future consideration):
+https://github.com/teamapps-org/maplibre-gl-styles
