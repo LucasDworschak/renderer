@@ -145,6 +145,13 @@ TEST_CASE("nucleus/vector_style")
 
     SECTION("Style expand qwant")
     {
+        // expanding the following filters
+        // landcover-grass (+1)
+        // water (+1)
+        // bridge-link (+4)
+        // bridge-trunk-primary (+2)
+        // = adds 8 filters
+
         QFile file(":/vectorlayerstyles/qwant.json");
         file.open(QIODeviceBase::OpenModeFlag::ReadOnly);
 
@@ -160,11 +167,46 @@ TEST_CASE("nucleus/vector_style")
 
         QJsonArray expanded_layers = style_expander::expand(layers);
 
-        // CHECK(layers.size() == 208); // makes sure that the input file is still the same
-        // CHECK(expanded_layers.size() == 312);
+        CHECK(layers.size() == 115); // makes sure that the input file is still the same
+        CHECK(expanded_layers.size() == 123);
+
+        // qDebug() << layers.size();
+        // qDebug() << expanded_layers.size();
 
         // // DEBUG view what is written in expanded layers
-        // QFile out_file("expanded.style.json");
+        // QFile out_file("quant-expanded-style.json");
+        // out_file.open(QFile::WriteOnly);
+        // QJsonDocument out = QJsonDocument(expanded_layers);
+        // out_file.write(out.toJson());
+    }
+
+    SECTION("Style expand osm-bright")
+    {
+        // osm-bright style does not expand
+
+        QFile file(":/vectorlayerstyles/osm-bright.json");
+        file.open(QIODeviceBase::OpenModeFlag::ReadOnly);
+
+        const auto data = file.readAll();
+
+        if (data.isEmpty()) {
+            CHECK(false);
+            return;
+        }
+
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        QJsonArray layers = doc.object().value("layers").toArray();
+
+        QJsonArray expanded_layers = style_expander::expand(layers);
+
+        CHECK(layers.size() == 128); // makes sure that the input file is still the same
+        CHECK(expanded_layers.size() == 128);
+
+        // qDebug() << layers.size();
+        // qDebug() << expanded_layers.size();
+
+        // DEBUG view what is written in expanded layers
+        // QFile out_file("osm-bright-expanded-style.json");
         // out_file.open(QFile::WriteOnly);
         // QJsonDocument out = QJsonDocument(expanded_layers);
         // out_file.write(out.toJson());
@@ -172,7 +214,6 @@ TEST_CASE("nucleus/vector_style")
 
     SECTION("Style parsing openmaptile")
     {
-
         Style s(":/vectorlayerstyles/openstreetmap.json");
         s.load();
 
@@ -367,7 +408,7 @@ TEST_CASE("nucleus/vector_style")
         // }
         // std::cout << std::endl << std::endl;
     }
-    SECTION("Style parsing openmaptile")
+    SECTION("Style parsing qwant")
     {
 
         // Style s(":/vectorlayerstyles/qwant.json");

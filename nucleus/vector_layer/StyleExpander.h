@@ -1,6 +1,6 @@
 /*****************************************************************************
  * AlpineMaps.org
- * Copyright (C) 2024 Lucas Dworschak
+ * Copyright (C) 2025 Lucas Dworschak
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,15 +25,45 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
-namespace nucleus::vector_layer::style_expander {
 namespace nucleus::vector_layer::style_expander::details {
 
-    bool sub_is_array(QJsonObject obj, QString sub_key);
-    QJsonValue get_match_value(QJsonArray match_array, QString match_key);
-    std::unordered_map<QString, std::vector<QJsonArray>> get_sub_layer(QJsonArray filter);
-    QJsonArray rejoin_filter(std::vector<QJsonArray> filters);
+template <class T>
+inline void hash_combine(std::size_t& seed, T const& v)
+{
+    seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
+struct PairHasher {
+    size_t operator()(const std::pair<QJsonValue, QJsonValue>& pair) const
+    {
+        size_t seed = 0;
+
+        hash_combine<size_t>(seed, qHash(pair.first));
+        hash_combine<size_t>(seed, qHash(pair.second));
+
+        return seed;
+    }
+};
+
+struct SubLayerInfo {
+    // key is a hash that is generated from filter_criterium/filter_criterium value (e.g. class, landuse)
+    // the key of the filter matches the key to a specific entry in the criterium_values map
+    std::vector<size_t> filter_order;
+    std::unordered_map<size_t, std::vector<QJsonArray>> filter;
+    // the value is a qHash of the criterium_value (for match it is a combination of criterium and value)
+    QMap<size_t, QSet<size_t>> criterium_values;
+};
+
+QJsonValue evaluate_get(QJsonValue expression);
+bool sub_is_array(QJsonObject obj, QString sub_key);
+QJsonValue get_match_value(QJsonArray match_array, QSet<size_t> criterium_hashes);
+QJsonValue get_case_value(QJsonArray match_array, QSet<size_t> criterium_hashes);
+SubLayerInfo generate_expanded_filters(const QJsonObject& paint, const QJsonArray& filter);
+QJsonArray rejoin_filter(std::vector<QJsonArray> filters);
 
 } // namespace nucleus::vector_layer::style_expander::details
 
+namespace nucleus::vector_layer::style_expander {
 QJsonArray expand(const QJsonArray& layers);
+QJsonArray expand2(const QJsonArray& layers);
 } // namespace nucleus::vector_layer::style_expander
