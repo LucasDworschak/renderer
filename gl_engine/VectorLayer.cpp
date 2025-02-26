@@ -60,7 +60,7 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
 
         m_index_buffer_texture[i] = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
         m_index_buffer_texture[i]->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
-        m_index_buffer_texture[i]->allocate_array(constants::data_size[i], constants::data_size[i], layer_amount);
+        m_index_buffer_texture[i]->allocate_array(constants::data_size[i] * constants::index_buffer_size_multiplier, constants::data_size[i] * constants::index_buffer_size_multiplier, layer_amount);
 
         m_vertex_buffer_texture[i] = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::RGB32UI);
         m_vertex_buffer_texture[i]->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);

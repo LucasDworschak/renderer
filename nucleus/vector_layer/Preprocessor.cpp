@@ -396,11 +396,13 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& layer_collection
     uint8_t fitting_cascade_index = uint8_t(-1u);
     for (uint8_t i = 0; i < constants::data_size.size(); i++) {
         const auto data_size_sq = constants::data_size[i] * constants::data_size[i];
-        if (index_buffer.size() <= data_size_sq && data_triangle.size() <= data_size_sq) {
+        if (index_buffer.size() <= data_size_sq * constants::index_buffer_size_multiplier * constants::index_buffer_size_multiplier && data_triangle.size() <= data_size_sq) {
             fitting_cascade_index = i;
             break;
         }
     }
+
+    // qDebug() << "cascade_data:" << index_buffer.size() << data_triangle.size();
 
     // qDebug() << "index: " << start_offset << fitting_cascade_index;
 
@@ -410,11 +412,13 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& layer_collection
     assert(fitting_cascade_index < constants::data_size.size());
 
     // resize data to buffer size
-    index_buffer.resize(constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index], -1u);
+    index_buffer.resize(
+        constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index] * constants::index_buffer_size_multiplier * constants::index_buffer_size_multiplier, -1u);
     data_triangle.resize(constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index], glm::u32vec3(-1u));
 
     tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size, std::move(acceleration_grid)));
-    tile.index_buffer = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size[fitting_cascade_index], std::move(index_buffer)));
+    tile.index_buffer
+        = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size[fitting_cascade_index] * constants::index_buffer_size_multiplier, std::move(index_buffer)));
     tile.vertex_buffer = std::make_shared<const nucleus::Raster<glm::u32vec3>>(nucleus::Raster<glm::u32vec3>(constants::data_size[fitting_cascade_index], std::move(data_triangle)));
 
     tile.buffer_info = fitting_cascade_index;

@@ -26,6 +26,7 @@ namespace nucleus::vector_layer::constants {
 // if values here change -> you also need to change them in the shader
 constexpr auto grid_size = 64; // 64
 constexpr auto data_size = std::array<uint32_t, 4> { 64u, 128u, 256u, 512u }; // needs to be in ascending order
+constexpr auto index_buffer_size_multiplier = 2.0; // index buffer can be bigger by this multiplier than the vertex buffer
 // how many array layers quads per data size
 // NOTE: -1u is used to say that we should use the upper limit determined by renderingcontext, if renderingcontext gives us a lower value than set, it is automatically lowered
 // IMPORTANT: only set -1u for the first values since those values will be combined to only one array_helper

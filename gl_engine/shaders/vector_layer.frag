@@ -160,21 +160,22 @@ lowp ivec2 to_dict_pixel(mediump uint hash) {
 
 highp uint index_sample(lowp uint sampler_index, highp uint pixel_index, highp uint texture_layer)
 {
+    // NOTE index sample currently have double the size of vertex buffer -> we need to double the dict_pixel lookups
     if(sampler_index == 0u)
     {
-        return texelFetch(index_buffer_sampler_0, ivec3(to_dict_pixel_64(pixel_index), texture_layer), 0).r;
+        return texelFetch(index_buffer_sampler_0, ivec3(to_dict_pixel_128(pixel_index), texture_layer), 0).r;
     }
     else if(sampler_index == 1u)
     {
-        return texelFetch(index_buffer_sampler_1, ivec3(to_dict_pixel_128(pixel_index), texture_layer), 0).r;
+        return texelFetch(index_buffer_sampler_1, ivec3(to_dict_pixel_256(pixel_index), texture_layer), 0).r;
     }
     else if(sampler_index == 2u)
     {
-        return texelFetch(index_buffer_sampler_2, ivec3(to_dict_pixel_256(pixel_index), texture_layer), 0).r;
+        return texelFetch(index_buffer_sampler_2, ivec3(to_dict_pixel_512(pixel_index), texture_layer), 0).r;
     }
     else
     {
-        return texelFetch(index_buffer_sampler_3, ivec3(to_dict_pixel_512(pixel_index), texture_layer), 0).r;
+        return texelFetch(index_buffer_sampler_3, ivec3(to_dict_pixel_1024(pixel_index), texture_layer), 0).r;
     }
 }
 
@@ -268,6 +269,7 @@ bool prepare_layer_style(highp uint style_index, inout Layer_Style layer_style, 
 
         // mix the previous layer color information with output
         pixel_color = mix(pixel_color, layer_style.current_layer_style.fill_color.rgb, layer_style.layer_alpha * layer_style.current_layer_style.fill_color.a);
+        // pixel_color = mix(pixel_color, layer_style.current_layer_style.fill_color.rgb,  layer_style.current_layer_style.fill_color.a);
 
         // get and store new style info
         layer_style.last_style = style_index;
@@ -489,10 +491,13 @@ void main() {
 
 
                 // mix the last layer we parsed
-                pixel_color = mix(pixel_color, layer_style.current_layer_style.fill_color.rgb, layer_style.layer_alpha * layer_style.current_layer_style.fill_color.a);
+                // pixel_color = mix(pixel_color, layer_style.current_layer_style.fill_color.rgb, layer_style.layer_alpha * layer_style.current_layer_style.fill_color.a);
+                pixel_color = mix(pixel_color, layer_style.current_layer_style.fill_color.rgb,  layer_style.current_layer_style.fill_color.a);
+
 
                 // mix polygon color with background
                 texout_albedo = mix(texout_albedo, pixel_color, pixel_alpha);
+                // texout_albedo = vec3(layer_style.layer_alpha);
 
 
 

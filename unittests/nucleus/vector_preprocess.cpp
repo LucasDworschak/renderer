@@ -159,7 +159,9 @@ TEST_CASE("nucleus/vector_preprocess")
 
         // we provide two triangles that overlap at one point -> we expect four entries [1], [0], ([1], [0])
         auto bridge_data = tile.index_buffer->buffer();
-        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
+        REQUIRE(bridge_data.size()
+            == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::index_buffer_size_multiplier
+                * nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::index_buffer_size_multiplier);
         CHECK(bridge_data[0] == 3); // 1 and 3 values since lowest bit is is_polygon flag
         CHECK(bridge_data[1] == 1);
         CHECK(bridge_data[2] == 1);
@@ -220,7 +222,9 @@ TEST_CASE("nucleus/vector_preprocess")
 
         // we provide two triangles that overlap at one point -> we expect four entries [1], ([1], [0]), [1]
         auto bridge_data = tile.index_buffer->buffer();
-        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
+        REQUIRE(bridge_data.size()
+            == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::index_buffer_size_multiplier
+                * nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::index_buffer_size_multiplier);
         CHECK(bridge_data[0] == 3); // 1 and 3 values since lowest bit is is_polygon flag
         CHECK(bridge_data[1] == 1);
         CHECK(bridge_data[2] == 3);
@@ -278,7 +282,9 @@ TEST_CASE("nucleus/vector_preprocess")
 
         // we provide two line segments that overlap at one point -> we expect four entries [0], [2], ([0], [2])
         auto bridge_data = tile.index_buffer->buffer();
-        REQUIRE(bridge_data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
+        REQUIRE(bridge_data.size()
+            == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::index_buffer_size_multiplier
+                * nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::index_buffer_size_multiplier);
         CHECK(bridge_data[0] == 0); // 0 and 2 values since lowest bit is is_polygon flag
         CHECK(bridge_data[1] == 2);
         CHECK(bridge_data[2] == 0);
