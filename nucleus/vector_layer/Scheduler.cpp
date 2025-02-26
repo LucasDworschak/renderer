@@ -29,6 +29,7 @@ Scheduler::Scheduler(std::string name, QObject* parent)
     // , m_style(":/vectorlayerstyles/basemap.json")
     , m_style(":/vectorlayerstyles/openstreetmap.json")
 // , m_style(":/vectorlayerstyles/qwant.json")
+// , m_style(":/vectorlayerstyles/osm-bright.json")
 {
     connect(&m_style, &Style::load_finished, this, &Scheduler::enable_scheduler);
 }

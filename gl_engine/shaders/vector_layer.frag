@@ -314,7 +314,12 @@ void main() {
     highp uvec2 offset_size = uvec2(0u);
 
     lowp float pixel_alpha = 0.0;
-    texout_albedo = vec3(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f);
+    // openmaptile
+    // texout_albedo = vec3(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f);
+    // qwant
+    // texout_albedo = vec3(248.0f/255.0f, 248.0f/255.0f, 248.0f/255.0f);
+    // osm-bright
+    texout_albedo = vec3(248.0f/255.0f, 244.0f/255.0f, 240.0f/255.0f);
 
 
 

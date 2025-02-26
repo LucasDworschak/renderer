@@ -24,6 +24,16 @@
 
 namespace nucleus::vector_layer {
 
+QJsonValue StyleExpressionBase::extract_literal(QJsonValue expression)
+{
+    assert(expression.isArray());
+    assert(expression.toArray()[0].isString());
+    assert(expression.toArray()[0].toString() == "literal");
+    assert(expression.toArray().size() == 2);
+
+    return expression.toArray()[1];
+}
+
 std::unique_ptr<StyleExpressionBase> StyleExpressionBase::create_filter_expression(QJsonArray data)
 {
     if (data.isEmpty())
@@ -73,9 +83,28 @@ StyleExpression::StyleExpression(QJsonArray data)
     // values
     if (m_comparator == "in" || m_comparator == "!in") {
         // multiple values
-        for (qsizetype i = 2; i < data.size(); ++i) {
-            m_values.push_back(data[i].toString().toStdString());
+        if (data.size() == 3 && data[2].isArray()) {
+            // we most likely have a "literal" sub array
+            const auto values = extract_literal(data[2]).toArray();
+
+            for (qsizetype i = 0; i < values.size(); ++i) {
+                assert(values[i].isString());
+                m_values.push_back(values[i].toString().toStdString());
+            }
+
+        } else {
+            for (qsizetype i = 2; i < data.size(); ++i) {
+                if (data[i].isDouble()) {
+                    m_values.push_back(std::to_string(data[i].toDouble()));
+                } else if (data[i].isString()) {
+                    m_values.push_back(data[i].toString().toStdString());
+                } else {
+                    qDebug() << "invalid data: " << data[i];
+                    assert(false);
+                }
+            }
         }
+
     } else if (m_comparator == "has" || m_comparator == "!has") {
         // no values for has expressions -> we only check if key is present
         if (data.size() > 2) {
@@ -103,8 +132,8 @@ bool compare_equal(int64_t) { return true; }
 
 bool StyleExpression::matches(const mapbox::vector_tile::GeomType& type, const mapbox::feature::properties_type& properties)
 {
-    mapbox::feature::value value = extract_value(type, properties);
     // qDebug() << "match: " << m_key;
+    mapbox::feature::value value = extract_value(type, properties);
 
     if (m_comparator == "in" || m_comparator == "!in") {
         const auto string_value = std::visit(vector_tile::util::string_print_visitor, value).toStdString(); // we are only using the value to see if it is in a list -> string is sufficient
@@ -161,21 +190,29 @@ StyleExpressionCollection::StyleExpressionCollection(QJsonArray data)
     m_subFilters = std::vector<std::unique_ptr<StyleExpressionBase>>();
 
     for (qsizetype i = 1; i < data.size(); ++i) {
-        if (data[i].isArray())
+        if (data[i].isArray()) {
+            if (data[i].toArray().isEmpty()) {
+                qDebug() << "empty array";
+                assert(false);
+            }
             m_subFilters.push_back(create_filter_expression(data[i].toArray()));
-        else
+        } else {
             qDebug() << "not an array??";
+            assert(false);
+        }
     }
 }
 
 bool StyleExpressionCollection::matches(const mapbox::vector_tile::GeomType& type, const mapbox::feature::properties_type& properties)
 {
     if (m_negate) {
+        assert(m_subFilters.size() == 1);
         // negate should only handle one subfilter -> get the match and negate it
         return !m_subFilters[0]->matches(type, properties);
     }
 
     for (size_t i = 0; i < m_subFilters.size(); ++i) {
+        assert(m_subFilters[i] != nullptr);
         bool result = m_subFilters[i]->matches(type, properties);
         if (m_all && !result) {
             return false; // the current match was false but all had to be true

@@ -47,6 +47,7 @@ public:
     virtual bool matches(const mapbox::vector_tile::GeomType& type, const mapbox::feature::properties_type& properties) = 0;
 
     static std::unique_ptr<StyleExpressionBase> create_filter_expression(QJsonArray data);
+    QJsonValue extract_literal(QJsonValue expression);
 };
 
 class StyleExpression : public StyleExpressionBase {

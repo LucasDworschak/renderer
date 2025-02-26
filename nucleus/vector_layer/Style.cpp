@@ -115,6 +115,8 @@ void Style::load()
                 s.outline_dash = parse_dasharray(paintObject.value(key).toArray());
             } else if (key == "line-offset") {
                 // might be needed
+            } else if (key == "fill-translate" || key == "line-translate-anchor") {
+                // currentley not supported
             } else if (key == "fill-pattern") {
                 // currently not supported -> causes errors when parsed
                 invalid = true;
@@ -321,7 +323,7 @@ uint32_t Style::parse_color(const QJsonValue& value)
 
         uint8_t a = 255;
         if (matches.size() == 5 && matches[4].length() > 0) {
-            a = std::stod(matches[4]) * 255.0;
+            a = stringToFloat(matches[4]) * 255.0;
         }
 
         // formula from https://www.rapidtables.com/convert/color/hsl-to-rgb.html

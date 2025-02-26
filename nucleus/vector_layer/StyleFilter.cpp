@@ -45,14 +45,25 @@ std::vector<std::pair<uint32_t, uint32_t>> StyleFilter::indices(unsigned zoom, c
     auto styles = std::vector<std::pair<uint32_t, uint32_t>>();
 
     for (const auto& values : m_filter.at(zoom)) {
+        // qDebug() << (std::get<2>(values) == nullptr);
         if (std::get<2>(values) == nullptr) // no filter is here -> we assume that every feature with layername and zoom is valid
         {
-            assert(m_filter.at(zoom).size() == 1); // if there is no filter -> there should only be one valid value
+            // if (m_filter.at(zoom).size() > 1) {
+            //     qDebug() << "more than one filter is applicable: " << m_filter.at(zoom).size();
+            //     qDebug() << std::get<0>(values);
+            //     qDebug() << std::get<1>(values);
+            // }
+            // assert(m_filter.at(zoom).size() == 1); // if there is no filter -> there should only be one valid value
             styles.push_back(std::make_pair(std::get<0>(values), std::get<1>(values)));
+            // if (m_filter.at(zoom).size() > 1) {
+            //     qDebug() << "why not working?: " << m_filter.at(zoom).size();
+            // }
         } else if (std::get<2>(values)->matches(type, properties)) {
-            styles.push_back(std::make_pair(std::get<0>(values), std::get<1>(values))); // first filter that matches returns the indices
+            styles.push_back(std::make_pair(std::get<0>(values), std::get<1>(values)));
         }
     }
+
+    // qDebug() << "return style!";
 
     return styles;
 }

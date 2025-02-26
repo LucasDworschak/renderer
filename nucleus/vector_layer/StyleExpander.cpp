@@ -172,8 +172,9 @@ SubLayerInfo generate_expanded_filters(const QJsonObject& paint, const QJsonArra
             }
         }
     } else {
-        // no all -> only save the current instance as the sub filter
-        sub_filter.push_back(filter);
+        // no all -> only save the current instance as the sub filter (only if there is a filter)
+        if (!filter.isEmpty())
+            sub_filter.push_back(filter);
 
         if (filter.contains("in")) {
             in_filter_index = 0;
@@ -296,7 +297,9 @@ SubLayerInfo generate_expanded_filters(const QJsonObject& paint, const QJsonArra
 
 QJsonArray rejoin_filter(std::vector<QJsonArray> filters)
 {
-    assert(filters.size() > 0);
+    if (filters.size() == 0) {
+        return {};
+    }
 
     if (filters.size() == 1) {
         // just one element -> we can just use it without changing anything
