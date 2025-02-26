@@ -108,6 +108,8 @@ namespace details {
 
     std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
 
+    std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(std::vector<std::pair<uint32_t, uint32_t>> styles, const std::vector<glm::u32vec4> style_buffer);
+
     /**
      * 96 bits -> rgb32UI
      * 2*3*13=78 bits for all coordinate values

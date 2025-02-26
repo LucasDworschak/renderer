@@ -62,6 +62,39 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
 } // namespace nucleus::vector_layer
 namespace nucleus::vector_layer::details {
 
+std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(std::vector<std::pair<uint32_t, uint32_t>> style_indices, const std::vector<glm::u32vec4> style_buffer)
+{
+    // we get multiple styles that may have full opacity and the same width
+    // creating render calls for both does not make sense -> we only want to draw the top layer
+    // this function simplifys all the styles so that only the styles which actually have a change to be rendered will remain
+
+    // order the styles so that we look at layer in descending order
+    std::sort(style_indices.begin(), style_indices.end(), [](std::pair<uint32_t, uint32_t> a, std::pair<uint32_t, uint32_t> b) { return a.second > b.second; });
+
+    std::vector<std::pair<uint32_t, uint32_t>> out_styles;
+    int accummulative_opacity = 0;
+    float width = 0.0;
+
+    for (const auto& indices : style_indices) {
+        const auto style_data = style_buffer[indices.first];
+        const float current_width = float(style_data.z) / float(constants::style_precision);
+        const int current_opacity = style_data.x & 255;
+
+        if (width < current_width) {
+            // reset opacity
+            accummulative_opacity = 0;
+            width = current_width;
+        }
+
+        if (accummulative_opacity < 255) {
+            accummulative_opacity += current_opacity;
+            out_styles.push_back(indices);
+        }
+    }
+
+    return out_styles;
+}
+
 std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
 {
     const auto d = vector_tile_data.toStdString();
@@ -93,9 +126,10 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
             const auto feature = mapbox::vector_tile::feature(layer.getFeature(i), layer);
 
             const auto type = (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) ? "line" : "fill";
-            auto styles = style.indices(layer_name, type, id.zoom_level, feature);
+            auto style_indices = style.indices(layer_name, type, id.zoom_level, feature);
+            style_indices = simplify_styles(style_indices, style_buffer);
 
-            if (styles.size() == 0) // no styles found -> we do not visualize it
+            if (style_indices.size() == 0) // no styles found -> we do not visualize it
                 continue;
 
             if (feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
@@ -114,7 +148,7 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
 
                 // TODO performance -> might be more efficient to find out if the style is the same and the alpha is full -> only visualize the higher layer_index
 
-                for (const auto& style : styles)
+                for (const auto& style : style_indices)
                     data.emplace_back(vertices, extent, style.first, style.second, true, all_edges, 0);
                 // data.emplace_back(std::vector<glm::vec2>(vertices), extent, styles[0].first, styles[0].second, true, std::vector<glm::ivec2>(edges), 0);
                 // data.push_back({ vertices, extent, styles[0].first, styles[0].second, true, all_edges, 0 });
@@ -131,7 +165,7 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
 
                     // TODO performance -> instead of duplicating the vertice data we only want to duplicate the index data
 
-                    for (const auto& style : styles) {
+                    for (const auto& style : style_indices) {
                         const auto line_width = float(style_buffer[style.first].z) / float(constants::style_precision);
                         data.emplace_back(vertices, extent, style.first, style.second, false, no_edges, line_width);
                     }
