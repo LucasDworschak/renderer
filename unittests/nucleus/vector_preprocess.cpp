@@ -137,13 +137,10 @@ TEST_CASE("nucleus/vector_preprocess")
     SECTION("Triangle to Grid")
     {
         constexpr auto extent = 64u;
-        const std::vector<glm::vec2> triangle_left_hypo = { glm::vec2(10, 30), glm::vec2(30, 5), glm::vec2(50, 50) };
-        const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5, 5), glm::vec2(25, 10), glm::vec2(5, 15) };
+        const std::vector<std::vector<glm::vec2>> triangle_left_hypo = { { glm::vec2(10, 30), glm::vec2(30, 5), glm::vec2(50, 50) } };
+        const std::vector<std::vector<glm::vec2>> triangle_right_hypo = { { glm::vec2(5, 5), glm::vec2(25, 10), glm::vec2(5, 15) } };
 
-        std::vector<nucleus::vector_layer::details::GeometryData> tile_data {
-            { triangle_left_hypo, extent, 1, 1, true, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_left_hypo.size()), 0 },
-            { triangle_right_hypo, extent, 1, 1, true, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_right_hypo.size()), 0 }
-        };
+        std::vector<nucleus::vector_layer::details::GeometryData> tile_data { { triangle_left_hypo, extent, 1, 1, true, 0 }, { triangle_right_hypo, extent, 1, 1, true, 0 } };
 
         auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data);
 
@@ -203,13 +200,10 @@ TEST_CASE("nucleus/vector_preprocess")
         // this would still mean that we have to redo the below data every time we chang the grid scale -> but it isn't too problematic for now
         constexpr auto extent = 64u;
 
-        const std::vector<glm::vec2> triangle_left_hypo = { glm::vec2(-10, 30), glm::vec2(30, 5), glm::vec2(50, 80) };
-        const std::vector<glm::vec2> triangle_right_hypo = { glm::vec2(5, -5), glm::vec2(90, 10), glm::vec2(5, 15) };
+        const std::vector<std::vector<glm::vec2>> triangle_left_hypo = { { glm::vec2(-10, 30), glm::vec2(30, 5), glm::vec2(50, 80) } };
+        const std::vector<std::vector<glm::vec2>> triangle_right_hypo = { { glm::vec2(5, -5), glm::vec2(90, 10), glm::vec2(5, 15) } };
 
-        std::vector<nucleus::vector_layer::details::GeometryData> tile_data {
-            { triangle_left_hypo, extent, 1, 1, true, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_left_hypo.size()), 0 },
-            { triangle_right_hypo, extent, 1, 1, true, nucleus::utils::rasterizer::generate_neighbour_edges(triangle_right_hypo.size()), 0 }
-        };
+        std::vector<nucleus::vector_layer::details::GeometryData> tile_data { { triangle_left_hypo, extent, 1, 1, true, 0 }, { triangle_right_hypo, extent, 1, 1, true, 0 } };
 
         auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data);
 
@@ -264,9 +258,9 @@ TEST_CASE("nucleus/vector_preprocess")
     SECTION("Line to Grid")
     {
         constexpr auto extent = 64;
-        const std::vector<glm::vec2> line0 = { glm::vec2(10, 30), glm::vec2(30, 50), glm::vec2(50, 30) };
+        const std::vector<std::vector<glm::vec2>> line0 = { { glm::vec2(10, 30), glm::vec2(30, 50), glm::vec2(50, 30) } };
 
-        std::vector<nucleus::vector_layer::details::GeometryData> tile_data { { line0, extent, 1, 1, false, {}, 0 } };
+        std::vector<nucleus::vector_layer::details::GeometryData> tile_data { { line0, extent, 1, 1, false, 0 } };
 
         auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data);
 
@@ -355,10 +349,10 @@ TEST_CASE("nucleus/vector_preprocess")
 
     // SECTION("Tile exploration") // section mostly used for tile debugging -> not a real test
     // {
-    //     // const auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 4477 * 2, 2850 * 2 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+    //     const auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 4477 * 2, 2850 * 2 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap };
     //     // const auto id = nucleus::tile::Id { .zoom_level = 13, .coords = { 4477, 2850 }, .scheme = nucleus::tile::Scheme::SlippyMap };
     //     // const auto id = nucleus::tile::Id { .zoom_level = 15, .coords = { (4477 * 2 + 1) * 2, (2850 * 2 + 1) * 2 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-    //     const auto id = nucleus::tile::Id { .zoom_level = 19, .coords = { 285987, 181795 }, .scheme = nucleus::tile::Scheme::SlippyMap }; // bodensee
+    //     // const auto id = nucleus::tile::Id { .zoom_level = 19, .coords = { 285987, 181795 }, .scheme = nucleus::tile::Scheme::SlippyMap };
 
     //     QByteArray byte_data;
 
@@ -380,16 +374,16 @@ TEST_CASE("nucleus/vector_preprocess")
 
     //     auto tile_data = nucleus::vector_layer::details::parse_tile(id, byte_data, s);
 
-    //     size_t data_offset = 1;
+    //     size_t data_offset = 0;
     //     auto acceleration_grid = std::vector<std::set<uint32_t>>(nucleus::vector_layer::constants::grid_size * nucleus::vector_layer::constants::grid_size, std::set<uint32_t>());
 
     //     for (size_t i = 0; i < tile_data.size(); ++i) {
     //         if (tile_data[i].is_polygon) {
 
-    //             if (tile_data[i].style != 88u)
-    //                 continue;
+    //             // if (tile_data[i].style != 88u)
+    //             //     continue;
 
-    //             std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(tile_data[i].vertices, tile_data[i].edges, true);
+    //             std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(tile_data[i].vertices, true);
 
     //             std::cout << std::endl << "o pedestrian_area" << i << std::endl;
     //             for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
@@ -397,42 +391,42 @@ TEST_CASE("nucleus/vector_preprocess")
     //                 std::cout << "v " << triangle_points[j * 3 + 1].x << " 0 " << triangle_points[j * 3 + 1].y << std::endl;
     //                 std::cout << "v " << triangle_points[j * 3 + 2].x << " 0 " << triangle_points[j * 3 + 2].y << std::endl;
 
-    //                 auto f_ind = ((j + data_offset) * 3);
+    //                 auto f_ind = ((j + data_offset) * 3) + 1;
     //                 std::cout << "f " << f_ind << " " << (f_ind + 1) << " " << (f_ind + 2) << std::endl;
     //             }
 
     //             data_offset += triangle_points.size() / 3;
 
     //         } else {
-    //             continue;
+    //             // continue;
     //             // qDebug() << tile_data[i].style;
-    //             if (tile_data[i].style != 92u)
-    //                 continue;
-    //             const auto cell_writer = [&acceleration_grid, data_offset](glm::vec2 pos, int data_index) {
-    //                 // if in grid_size bounds and not already present -> than add index to vector
-    //                 if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(nucleus::vector_layer::constants::grid_size), pos))) {
-    //                     // last bit of index indicates that this is a line
-    //                     // !! IMPORTANT !! we have to use the lowest bit since set orders the input depending on key -> lines and polygons have to stay intermixed
-    //                     const auto index = ((data_index + data_offset) << 1); // | 0u;
-    //                     acceleration_grid[int(pos.x) + nucleus::vector_layer::constants::grid_size * int(pos.y)].insert(index);
-    //                 }
-    //             };
+    //             // if (tile_data[i].style != 92u)
+    //             //     continue;
+    //             // const auto cell_writer = [&acceleration_grid, data_offset](glm::vec2 pos, int data_index) {
+    //             //     // if in grid_size bounds and not already present -> than add index to vector
+    //             //     if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(nucleus::vector_layer::constants::grid_size), pos))) {
+    //             //         // last bit of index indicates that this is a line
+    //             //         // !! IMPORTANT !! we have to use the lowest bit since set orders the input depending on key -> lines and polygons have to stay intermixed
+    //             //         const auto index = ((data_index + data_offset) << 1); // | 0u;
+    //             //         acceleration_grid[int(pos.x) + nucleus::vector_layer::constants::grid_size * int(pos.y)].insert(index);
+    //             //     }
+    //             // };
 
-    //             std::cout << std::endl << "o road" << i << std::endl;
-    //             for (size_t j = 0; j < tile_data[i].vertices.size(); ++j) {
-    //                 std::cout << "v " << tile_data[i].vertices[j].x << " 0 " << tile_data[i].vertices[j].y << std::endl;
-    //             }
-    //             std::cout << "l ";
-    //             for (size_t j = 0; j < tile_data[i].vertices.size(); ++j) {
-    //                 std::cout << (j + data_offset) << " ";
-    //             }
+    //             // std::cout << std::endl << "o road" << i << std::endl;
+    //             // for (size_t j = 0; j < tile_data[i].vertices.size(); ++j) {
+    //             //     std::cout << "v " << tile_data[i].vertices[j].x << " 0 " << tile_data[i].vertices[j].y << std::endl;
+    //             // }
+    //             // std::cout << "l ";
+    //             // for (size_t j = 0; j < tile_data[i].vertices.size(); ++j) {
+    //             //     std::cout << (j + data_offset) << " ";
+    //             // }
 
-    //             std::cout << std::endl << std::endl;
+    //             // std::cout << std::endl << std::endl;
 
-    //             const auto scale = float(nucleus::vector_layer::constants::grid_size) / float(tile_data[i].extent);
-    //             nucleus::utils::rasterizer::rasterize_line(cell_writer, tile_data[i].vertices, tile_data[i].line_width * scale, scale);
+    //             // const auto scale = float(nucleus::vector_layer::constants::grid_size) / float(tile_data[i].extent);
+    //             // nucleus::utils::rasterizer::rasterize_line(cell_writer, tile_data[i].vertices, tile_data[i].line_width * scale, scale);
 
-    //             data_offset += tile_data[i].vertices.size();
+    //             // data_offset += tile_data[i].vertices.size();
     //         }
     //     }
 

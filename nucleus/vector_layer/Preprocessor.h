@@ -91,14 +91,13 @@ namespace details {
     };
 
     struct GeometryData {
-        std::vector<glm::vec2> vertices;
+        std::vector<std::vector<glm::vec2>> vertices;
         uint32_t extent;
         uint32_t style;
         uint32_t layer;
         bool is_polygon;
 
         // type dependent
-        std::vector<glm::ivec2> edges;
         float line_width;
     };
 

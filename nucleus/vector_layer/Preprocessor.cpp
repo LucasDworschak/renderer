@@ -21,8 +21,6 @@
 #include <QImage>
 #include <QString>
 
-#include <CDT.h>
-
 #include "nucleus/Raster.h"
 #include <nucleus/utils/bit_coding.h>
 
@@ -135,40 +133,15 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
             if (feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
                 PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
 
-                // construct edges from the current polygon and move them to the collection
-                std::vector<glm::vec2> vertices;
-                std::vector<glm::ivec2> all_edges;
-                for (size_t j = 0; j < geom.size(); ++j) {
-                    auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(geom[j].size(), vertices.size());
-                    all_edges.insert(all_edges.end(), edges.begin(), edges.end());
-                    vertices.insert(vertices.end(), geom[j].begin(), geom[j].end());
-                }
-
-                // qDebug() << layer_name << styles.size();
-
-                // TODO performance -> might be more efficient to find out if the style is the same and the alpha is full -> only visualize the higher layer_index
-
                 for (const auto& style : style_indices)
-                    data.emplace_back(vertices, extent, style.first, style.second, true, all_edges, 0);
-                // data.emplace_back(std::vector<glm::vec2>(vertices), extent, styles[0].first, styles[0].second, true, std::vector<glm::ivec2>(edges), 0);
-                // data.push_back({ vertices, extent, styles[0].first, styles[0].second, true, all_edges, 0 });
+                    data.emplace_back(std::vector<std::vector<glm::vec2>>(geom.begin(), geom.end()), extent, style.first, style.second, true, 0);
 
             } else if (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) {
                 PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
 
-                for (size_t j = 0; j < geom.size(); ++j) {
-                    // lines have to be split according to geom -> otherwise Bug #171
-                    std::vector<glm::vec2> vertices;
-                    vertices.insert(vertices.end(), geom[j].begin(), geom[j].end());
-
-                    constexpr std::vector<glm::ivec2> no_edges; // necessary for emplace_back
-
-                    // TODO performance -> instead of duplicating the vertice data we only want to duplicate the index data
-
-                    for (const auto& style : style_indices) {
-                        const auto line_width = float(style_buffer[style.first].z) / float(constants::style_precision);
-                        data.emplace_back(vertices, extent, style.first, style.second, false, no_edges, line_width);
-                    }
+                for (const auto& style : style_indices) {
+                    const auto line_width = float(style_buffer[style.first].z) / float(constants::style_precision);
+                    data.emplace_back(std::vector<std::vector<glm::vec2>>(geom.begin(), geom.end()), extent, style.first, style.second, false, line_width);
                 }
             }
         }
@@ -270,7 +243,7 @@ VectorLayerCollection preprocess_geometry(const std::vector<GeometryData>& data)
             // -> we may be able to reduce the data array, if we increase the index array (if neccessary)
 
             // polygon to ordered triangles
-            std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(data[i].vertices, data[i].edges, true);
+            std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(data[i].vertices, true);
 
             // add ordered triangles to collection
             for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
@@ -295,9 +268,11 @@ VectorLayerCollection preprocess_geometry(const std::vector<GeometryData>& data)
             data_offset += triangle_points.size() / 3u;
         } else {
             // polylines
-            for (size_t j = 0; j < data[i].vertices.size() - 1; ++j) {
-                auto packed = pack_line_data(data[i].vertices[j], data[i].vertices[j + 1], data[i].style);
-                layer_collection.vertex_buffer.push_back(packed);
+            for (size_t j = 0; j < data[i].vertices.size(); ++j) {
+                for (size_t k = 0; k < data[i].vertices[j].size() - 1; ++k) {
+                    auto packed = pack_line_data(data[i].vertices[j][k], data[i].vertices[j][k + 1], data[i].style);
+                    layer_collection.vertex_buffer.push_back(packed);
+                }
             }
 
             const auto cell_writer = [&layer_collection, data_offset](glm::vec2 pos, int data_index) {
@@ -311,10 +286,10 @@ VectorLayerCollection preprocess_geometry(const std::vector<GeometryData>& data)
             };
 
             const auto scale = float(constants::grid_size) / float(data[i].extent);
-
-            nucleus::utils::rasterizer::rasterize_line(cell_writer, data[i].vertices, data[i].line_width * scale, scale);
-
-            data_offset += data[i].vertices.size() - 1u;
+            for (size_t j = 0; j < data[i].vertices.size(); ++j) {
+                nucleus::utils::rasterizer::rasterize_line(cell_writer, data[i].vertices[j], data[i].line_width * scale, scale);
+                data_offset += data[i].vertices[j].size() - 1u;
+            }
         }
     }
 

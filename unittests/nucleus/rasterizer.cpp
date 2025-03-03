@@ -23,8 +23,6 @@
 #include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <CDT.h>
-
 #include "nucleus/Raster.h"
 #include "nucleus/tile/conversion.h"
 #include "nucleus/utils/rasterizer.h"
@@ -136,29 +134,6 @@ void rasterize_line_sdf(const PixelWriterFunction& pixel_writer, const std::vect
         }
     }
 }
-std::pair<CDT::TriangleVec, std::vector<CDT::V2d<double>>> triangulate(std::vector<glm::vec2> points, std::vector<glm::ivec2> edges, bool remove_duplicate_vertices)
-{
-
-    CDT::Triangulation<double> cdt;
-
-    if (remove_duplicate_vertices) {
-        CDT::RemoveDuplicatesAndRemapEdges<double>(
-            points,
-            [](const glm::vec2& p) { return p.x; },
-            [](const glm::vec2& p) { return p.y; },
-            edges.begin(),
-            edges.end(),
-            [](const glm::ivec2& p) { return p.x; },
-            [](const glm::ivec2& p) { return p.y; },
-            [](CDT::VertInd start, CDT::VertInd end) { return glm::ivec2 { start, end }; });
-    }
-
-    cdt.insertVertices(points.begin(), points.end(), [](const glm::vec2& p) { return p.x; }, [](const glm::vec2& p) { return p.y; });
-    cdt.insertEdges(edges.begin(), edges.end(), [](const glm::ivec2& p) { return p.x; }, [](const glm::ivec2& p) { return p.y; });
-    cdt.eraseOuterTrianglesAndHoles();
-
-    return std::make_pair(cdt.triangles, cdt.vertices);
-}
 
 QImage example_rasterizer_image(QString filename)
 {
@@ -183,126 +158,137 @@ TEST_CASE("nucleus/rasterizer")
         // 5 point polygon
         // basically a square where one side contains an inward facing triangle
         // a triangulation algorithm should be able to discern that 3 triangles are needed to construct this shape
-        const std::vector<glm::vec2> points = { glm::vec2(0, 0), glm::vec2(1, 1), glm::vec2(0, 2), glm::vec2(2, 2), glm::vec2(2, 0) };
-        const std::vector<glm::ivec2> edges = { glm::ivec2(0, 1), glm::ivec2(1, 2), glm::ivec2(2, 3), glm::ivec2(3, 4), glm::ivec2(4, 0) };
+        const std::vector<std::vector<glm::vec2>> points = { { glm::vec2(0, 0), glm::vec2(1, 1), glm::vec2(0, 2), glm::vec2(2, 2), glm::vec2(2, 0) } };
+        // const std::vector<glm::ivec2> edges = { glm::ivec2(0, 1), glm::ivec2(1, 2), glm::ivec2(2, 3), glm::ivec2(3, 4), glm::ivec2(4, 0) };
 
-        auto pair = triangulate(points, edges, false);
+        auto vertices = nucleus::utils::rasterizer::triangulize(points, false);
 
-        auto tri = pair.first;
-        auto vert = pair.second;
+        CHECK(vertices.size() == 9);
+        // while the triangles are the same, the order the triangles are send might be different between rasterizers
 
-        // check if only 3 triangles have been found
-        CHECK(tri.size() == 3);
+#ifdef ALP_RASTERIZER_CDT
 
-        // 1st triangle
-        CHECK(vert[tri[0].vertices[0]].x == 0.0);
-        CHECK(vert[tri[0].vertices[0]].y == 2.0);
-        CHECK(vert[tri[0].vertices[1]].x == 1.0);
-        CHECK(vert[tri[0].vertices[1]].y == 1.0);
-        CHECK(vert[tri[0].vertices[2]].x == 2.0);
-        CHECK(vert[tri[0].vertices[2]].y == 2.0);
+        // // 1st triangle
+        CHECK(vertices[0].x == 1.0);
+        CHECK(vertices[0].y == 1.0);
+        CHECK(vertices[1].x == 2.0);
+        CHECK(vertices[1].y == 2.0);
+        CHECK(vertices[2].x == 0.0);
+        CHECK(vertices[2].y == 2.0);
 
         // 2nd triangle
-        CHECK(vert[tri[1].vertices[0]].x == 1.0);
-        CHECK(vert[tri[1].vertices[0]].y == 1.0);
-        CHECK(vert[tri[1].vertices[1]].x == 2.0);
-        CHECK(vert[tri[1].vertices[1]].y == 0.0);
-        CHECK(vert[tri[1].vertices[2]].x == 2.0);
-        CHECK(vert[tri[1].vertices[2]].y == 2.0);
+        CHECK(vertices[3].x == 2.0);
+        CHECK(vertices[3].y == 0.0);
+        CHECK(vertices[4].x == 1.0);
+        CHECK(vertices[4].y == 1.0);
+        CHECK(vertices[5].x == 2.0);
+        CHECK(vertices[5].y == 2.0);
 
         // 3rd triangle
-        CHECK(vert[tri[2].vertices[0]].x == 1.0);
-        CHECK(vert[tri[2].vertices[0]].y == 1.0);
-        CHECK(vert[tri[2].vertices[1]].x == 0.0);
-        CHECK(vert[tri[2].vertices[1]].y == 0.0);
-        CHECK(vert[tri[2].vertices[2]].x == 2.0);
-        CHECK(vert[tri[2].vertices[2]].y == 0.0);
+        CHECK(vertices[6].x == 2.0);
+        CHECK(vertices[6].y == 0.0);
+        CHECK(vertices[7].x == 0.0);
+        CHECK(vertices[7].y == 0.0);
+        CHECK(vertices[8].x == 1.0);
+        CHECK(vertices[8].y == 1.0);
 
-        // DEBUG print out all the points of the triangles (to check what might have went wrong)
-        // for (std::size_t i = 0; i < tri.size(); i++) {
-        //     printf("Triangle points: [[%f, %f], [%f, %f], [%f, %f]]\n",
-        //         vert[tri[i].vertices[0]].x, // x0
-        //         vert[tri[i].vertices[0]].y, // y0
-        //         vert[tri[i].vertices[1]].x, // x1
-        //         vert[tri[i].vertices[1]].y, // y1
-        //         vert[tri[i].vertices[2]].x, // x2
-        //         vert[tri[i].vertices[2]].y // y2
-        //     );
-        // }
+#endif
+#ifdef ALP_RASTERIZER_EARCUT
+
+        // 1st triangle
+        CHECK(vertices[0].x == 2.0);
+        CHECK(vertices[0].y == 0.0);
+        CHECK(vertices[1].x == 0.0);
+        CHECK(vertices[1].y == 0.0);
+        CHECK(vertices[2].x == 1.0);
+        CHECK(vertices[2].y == 1.0);
+        // // 2nd triangle
+        CHECK(vertices[3].x == 1.0);
+        CHECK(vertices[3].y == 1.0);
+        CHECK(vertices[4].x == 2.0);
+        CHECK(vertices[4].y == 2.0);
+        CHECK(vertices[5].x == 0.0);
+        CHECK(vertices[5].y == 2.0);
+
+        // 3rd triangle
+        CHECK(vertices[6].x == 2.0);
+        CHECK(vertices[6].y == 0.0);
+        CHECK(vertices[7].x == 1.0);
+        CHECK(vertices[7].y == 1.0);
+        CHECK(vertices[8].x == 2.0);
+        CHECK(vertices[8].y == 2.0);
+
+#endif
     }
 
     SECTION("Triangulation - duplicate vertices")
     {
         // 6 point polygon
         // basically a square where two sides contains an inward facing triangle that meets at the same middle vertice (so esentially two triangles that mirror at top of bottom triangle)
-        // a triangulation algorithm should be able to discern that 3 triangles are needed to construct this shape
-        std::vector<glm::vec2> points = { glm::vec2(0, 0), glm::vec2(1, 1), glm::vec2(0, 2), glm::vec2(2, 2), glm::vec2(1, 1), glm::vec2(2, 0) };
-        std::vector<glm::ivec2> edges = { glm::ivec2(0, 1), glm::ivec2(1, 2), glm::ivec2(2, 3), glm::ivec2(3, 4), glm::ivec2(4, 5), glm::ivec2(5, 0) };
+        // a triangulation algorithm should be able to discern that 2 triangles are needed to construct this shape
+        std::vector<std::vector<glm::vec2>> points = { { glm::vec2(0, 0), glm::vec2(1, 1), glm::vec2(0, 2), glm::vec2(2, 2), glm::vec2(1, 1), glm::vec2(2, 0) } };
+        // std::vector<glm::ivec2> edges = { glm::ivec2(0, 1), glm::ivec2(1, 2), glm::ivec2(2, 3), glm::ivec2(3, 4), glm::ivec2(4, 5), glm::ivec2(5, 0) };
 
-        auto pair = triangulate(points, edges, true);
+        auto vertices = nucleus::utils::rasterizer::triangulize(points, true);
 
-        auto tri = pair.first;
-        auto vert = pair.second;
+        CHECK(vertices.size() == 6);
 
-        // check if only 3 triangles have been found
-        CHECK(tri.size() == 2);
-
+        // while the triangles are the same, the order the triangles are send might be different between rasterizers
+#ifdef ALP_RASTERIZER_CDT
         // 1st triangle
-        CHECK(vert[tri[0].vertices[0]].x == 0.0);
-        CHECK(vert[tri[0].vertices[0]].y == 2.0);
-        CHECK(vert[tri[0].vertices[1]].x == 1.0);
-        CHECK(vert[tri[0].vertices[1]].y == 1.0);
-        CHECK(vert[tri[0].vertices[2]].x == 2.0);
-        CHECK(vert[tri[0].vertices[2]].y == 2.0);
+        CHECK(vertices[0].x == 1.0);
+        CHECK(vertices[0].y == 1.0);
+        CHECK(vertices[1].x == 2.0);
+        CHECK(vertices[1].y == 2.0);
+        CHECK(vertices[2].x == 0.0);
+        CHECK(vertices[2].y == 2.0);
 
         // 2nd triangle
-        CHECK(vert[tri[1].vertices[0]].x == 1.0);
-        CHECK(vert[tri[1].vertices[0]].y == 1.0);
-        CHECK(vert[tri[1].vertices[1]].x == 0.0);
-        CHECK(vert[tri[1].vertices[1]].y == 0.0);
-        CHECK(vert[tri[1].vertices[2]].x == 2.0);
-        CHECK(vert[tri[1].vertices[2]].y == 0.0);
+        CHECK(vertices[3].x == 2.0);
+        CHECK(vertices[3].y == 0.0);
+        CHECK(vertices[4].x == 0.0);
+        CHECK(vertices[4].y == 0.0);
+        CHECK(vertices[5].x == 1.0);
+        CHECK(vertices[5].y == 1.0);
+#endif
+#ifdef ALP_RASTERIZER_EARCUT
 
-        // // DEBUG print out all the points of the triangles(to check what might have went wrong) for (std::size_t i = 0; i < tri.size(); i++)
-        // {
-        //     for (std::size_t i = 0; i < tri.size(); i++) {
-        //         printf("Triangle points: [[%f, %f], [%f, %f], [%f, %f]]\n",
-        //             vert[tri[i].vertices[0]].x, // x0
-        //             vert[tri[i].vertices[0]].y, // y0
-        //             vert[tri[i].vertices[1]].x, // x1
-        //             vert[tri[i].vertices[1]].y, // y1
-        //             vert[tri[i].vertices[2]].x, // x2
-        //             vert[tri[i].vertices[2]].y // y2
-        //         );
-        //     }
-        // }
+        // 1st triangle
+        CHECK(vertices[0].x == 2.0);
+        CHECK(vertices[0].y == 0.0);
+        CHECK(vertices[1].x == 0.0);
+        CHECK(vertices[1].y == 0.0);
+        CHECK(vertices[2].x == 1.0);
+        CHECK(vertices[2].y == 1.0);
+
+        // 2nd triangle
+        CHECK(vertices[3].x == 1.0);
+        CHECK(vertices[3].y == 1.0);
+        CHECK(vertices[4].x == 2.0);
+        CHECK(vertices[4].y == 2.0);
+        CHECK(vertices[5].x == 0.0);
+        CHECK(vertices[5].y == 2.0);
+#endif
     }
 
     SECTION("Triangle y ordering")
     {
         // make sure that the triangle_order function correctly orders the triangle points from lowest y to highest y value
-        const std::vector<glm::vec2> triangle_points_012 = { { glm::vec2(30, 10), glm::vec2(10, 30), glm::vec2(50, 50) } };
-        const std::vector<glm::vec2> triangle_points_021 = { glm::vec2(30, 10), glm::vec2(50, 50), glm::vec2(10, 30) };
-        const std::vector<glm::vec2> triangle_points_102 = { glm::vec2(10, 30), glm::vec2(30, 10), glm::vec2(50, 50) };
-        const std::vector<glm::vec2> triangle_points_201 = { glm::vec2(10, 30), glm::vec2(50, 50), glm::vec2(30, 10) };
-        const std::vector<glm::vec2> triangle_points_120 = { glm::vec2(50, 50), glm::vec2(30, 10), glm::vec2(10, 30) };
-        const std::vector<glm::vec2> triangle_points_210 = { glm::vec2(50, 50), glm::vec2(10, 30), glm::vec2(30, 10) };
+        const std::vector<std::vector<glm::vec2>> triangle_points_012 = { { glm::vec2(30, 10), glm::vec2(10, 30), glm::vec2(50, 50) } };
+        const std::vector<std::vector<glm::vec2>> triangle_points_021 = { { glm::vec2(30, 10), glm::vec2(50, 50), glm::vec2(10, 30) } };
+        const std::vector<std::vector<glm::vec2>> triangle_points_102 = { { glm::vec2(10, 30), glm::vec2(30, 10), glm::vec2(50, 50) } };
+        const std::vector<std::vector<glm::vec2>> triangle_points_201 = { { glm::vec2(10, 30), glm::vec2(50, 50), glm::vec2(30, 10) } };
+        const std::vector<std::vector<glm::vec2>> triangle_points_120 = { { glm::vec2(50, 50), glm::vec2(30, 10), glm::vec2(10, 30) } };
+        const std::vector<std::vector<glm::vec2>> triangle_points_210 = { { glm::vec2(50, 50), glm::vec2(10, 30), glm::vec2(30, 10) } };
 
         const std::vector<glm::vec2> correct = { { glm::vec2(30, 10), glm::vec2(10, 30), glm::vec2(50, 50) } };
 
-        const auto edges_012 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_012.size());
-        const auto edges_021 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_021.size());
-        const auto edges_102 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_102.size());
-        const auto edges_201 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_201.size());
-        const auto edges_120 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_120.size());
-        const auto edges_210 = nucleus::utils::rasterizer::generate_neighbour_edges(triangle_points_210.size());
-
-        CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_012, edges_012));
-        CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_021, edges_021));
-        CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_102, edges_102));
-        CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_201, edges_201));
-        CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_120, edges_120));
-        CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_210, edges_210));
+        CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_012));
+        CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_021));
+        CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_102));
+        CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_201));
+        CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_120));
+        CHECK(correct == nucleus::utils::rasterizer::triangulize(triangle_points_210));
     }
 
     SECTION("rasterize simple triangle - integer values")
@@ -310,7 +296,7 @@ TEST_CASE("nucleus/rasterizer")
         // simple triangle with integer vertice values
         // this tests if the visualization works with integer values
         // test was added, since there was a case where the second to last row was never rendered
-        const std::vector<glm::vec2> polygon_points = { glm::vec2(5, 1), glm::vec2(5, 5), glm::vec2(1, 5) };
+        const std::vector<std::vector<glm::vec2>> polygon_points = { { glm::vec2(5, 1), glm::vec2(5, 5), glm::vec2(1, 5) } };
 
         nucleus::Raster<uint8_t> output({ 7, 7 }, 0u);
         const auto pixel_writer = [&output](glm::ivec2 pos) { output.pixel(pos) = 255; };
@@ -326,19 +312,18 @@ TEST_CASE("nucleus/rasterizer")
 
     SECTION("rasterize Polygon")
     {
-        const std::vector<glm::vec2> polygon_points = {
+        const std::vector<std::vector<glm::vec2>> polygon_points = { {
             glm::vec2(10.5, 10.5),
             glm::vec2(30.5, 10.5),
             glm::vec2(50.5, 50.5),
             glm::vec2(10.5, 30.5),
-        };
+        } };
 
         nucleus::Raster<uint8_t> output({ 64, 64 }, 0u);
         const auto pixel_writer = [&output](glm::ivec2 pos) { output.pixel(pos) = 255; };
         nucleus::utils::rasterizer::rasterize_polygon(pixel_writer, polygon_points);
 
-        const auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points.size());
-        const auto triangles = nucleus::utils::rasterizer::triangulize(polygon_points, edges);
+        const auto triangles = nucleus::utils::rasterizer::triangulize(polygon_points);
         nucleus::Raster<uint8_t> output2({ 64, 64 }, 0u);
         auto pixel_writer2 = [&output2](glm::ivec2 pos) { output2.pixel(pos) = 255; };
         rasterize_triangle_sdf(pixel_writer2, triangles, 0);
@@ -611,23 +596,7 @@ TEST_CASE("nucleus/rasterizer")
         const std::vector<std::vector<glm::vec2>> polygon_points = { { glm::vec2(10.5, 10.5), glm::vec2(50.5, 10.5), glm::vec2(50.5, 50.5), glm::vec2(10.5, 50.5) },
             { glm::vec2(20.5, 20.5), glm::vec2(40.5, 20.5), glm::vec2(40.5, 40.5), glm::vec2(20.5, 40.5) } };
 
-        const std::vector<glm::ivec2> correct_edges
-            = { glm::ivec2(0, 1), glm::ivec2(1, 2), glm::ivec2(2, 3), glm::ivec2(3, 0), glm::ivec2(4, 5), glm::ivec2(5, 6), glm::ivec2(6, 7), glm::ivec2(7, 4) };
-
-        std::vector<glm::vec2> vertices;
-        std::vector<glm::ivec2> edges;
-
-        for (size_t i = 0; i < polygon_points.size(); i++) {
-            auto current_edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points[i].size(), vertices.size());
-            edges.insert(edges.end(), current_edges.begin(), current_edges.end());
-            vertices.insert(vertices.end(), polygon_points[i].begin(), polygon_points[i].end());
-        }
-
-        CHECK(edges.size() == correct_edges.size());
-
-        CHECK(edges == correct_edges);
-
-        auto triangles = nucleus::utils::rasterizer::triangulize(vertices, edges);
+        auto triangles = nucleus::utils::rasterizer::triangulize(polygon_points);
 
         nucleus::Raster<uint8_t> output({ 64, 64 }, 0u);
         const auto pixel_writer = [&output](glm::ivec2 pos) { output.pixel(pos) = 255; };
@@ -639,9 +608,9 @@ TEST_CASE("nucleus/rasterizer")
 
         CHECK(output.buffer() == output2.buffer());
 
-#ifdef WRITE_RASTERIZER_DEBUG_IMAGE
         auto image = nucleus::tile::conversion::u8raster_2_to_qimage(output, output2);
         image.save(QString("rasterizer_output_donut.png"));
+#ifdef WRITE_RASTERIZER_DEBUG_IMAGE
 #endif
     }
 
@@ -719,7 +688,9 @@ TEST_CASE("nucleus/rasterizer")
             { { 234.4, 241.6 }, { 233.2, 249.4 }, { 225.7, 245.4 } } };
 
         for (const auto& tri : polygon_points) {
-            nucleus::utils::rasterizer::rasterize_polygon(pixel_writer, tri);
+            // rasterize_polygon needs vector<vector<point>>
+            const auto tri_wrapper = std::vector<std::vector<glm::vec2>> { tri };
+            nucleus::utils::rasterizer::rasterize_polygon(pixel_writer, tri_wrapper);
 
             // DEBUG view the vertices in the image(uses different pixel intensity)
             // const auto pixel_writer_points = [&output](glm::ivec2 pos) { output.pixel(pos) = 125; };
@@ -1020,32 +991,28 @@ TEST_CASE("nucleus/utils/rasterizer benchmarks")
 
     BENCHMARK("triangulize polygons")
     {
-        const std::vector<glm::vec2> polygon_points = { glm::vec2(10.5, 10.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5), glm::vec2(10.5, 30.5) };
-        const auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points.size());
-        nucleus::utils::rasterizer::triangulize(polygon_points, edges);
+        const std::vector<std::vector<glm::vec2>> polygon_points = { { glm::vec2(10.5, 10.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5), glm::vec2(10.5, 30.5) } };
+        nucleus::utils::rasterizer::triangulize(polygon_points);
     };
 
     BENCHMARK("triangulize polygons 2")
     {
-        std::vector<glm::vec2> points = { glm::vec2(0, 0), glm::vec2(1, 1), glm::vec2(0, 2), glm::vec2(2, 2), glm::vec2(2, 0) };
-        std::vector<glm::ivec2> edges = { glm::ivec2(0, 1), glm::ivec2(1, 2), glm::ivec2(2, 3), glm::ivec2(3, 4), glm::ivec2(4, 0) };
+        std::vector<std::vector<glm::vec2>> points = { { glm::vec2(0, 0), glm::vec2(1, 1), glm::vec2(0, 2), glm::vec2(2, 2), glm::vec2(2, 0) } };
 
-        nucleus::utils::rasterizer::triangulize(points, edges);
+        nucleus::utils::rasterizer::triangulize(points);
     };
 
     BENCHMARK("triangulize polygons + remove duplicates (no duplicates)")
     {
-        std::vector<glm::vec2> points = { glm::vec2(0, 0), glm::vec2(1, 1), glm::vec2(0, 2), glm::vec2(2, 2), glm::vec2(2, 0) };
-        std::vector<glm::ivec2> edges = { glm::ivec2(0, 1), glm::ivec2(1, 2), glm::ivec2(2, 3), glm::ivec2(3, 4), glm::ivec2(4, 0) };
+        std::vector<std::vector<glm::vec2>> points = { { glm::vec2(0, 0), glm::vec2(1, 1), glm::vec2(0, 2), glm::vec2(2, 2), glm::vec2(2, 0) } };
 
-        nucleus::utils::rasterizer::triangulize(points, edges, true);
+        nucleus::utils::rasterizer::triangulize(points, true);
     };
     BENCHMARK("triangulize polygons + remove duplicates (with duplicates)")
     {
-        std::vector<glm::vec2> points = { glm::vec2(0, 0), glm::vec2(1, 1), glm::vec2(0, 2), glm::vec2(2, 2), glm::vec2(1, 1), glm::vec2(2, 0) };
-        std::vector<glm::ivec2> edges = { glm::ivec2(0, 1), glm::ivec2(1, 2), glm::ivec2(2, 3), glm::ivec2(3, 4), glm::ivec2(4, 5), glm::ivec2(5, 0) };
+        std::vector<std::vector<glm::vec2>> points = { { glm::vec2(0, 0), glm::vec2(1, 1), glm::vec2(0, 2), glm::vec2(2, 2), glm::vec2(1, 1), glm::vec2(2, 0) } };
 
-        nucleus::utils::rasterizer::triangulize(points, edges, true);
+        nucleus::utils::rasterizer::triangulize(points, true);
     };
 
     BENCHMARK("Rasterize triangle")

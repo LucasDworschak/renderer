@@ -487,6 +487,7 @@ namespace details {
 
 } // namespace details
 
+#ifdef ALP_RASTERIZER_CDT
 /*
  * generates edges of a polygon
  * this assumes that polygons neighbouring in the vector should form an edge and the first and last edge are also connected
@@ -494,13 +495,15 @@ namespace details {
  * that indicates by how much the vertice index has to be offset
  */
 std::vector<glm::ivec2> generate_neighbour_edges(size_t num_points, const size_t start_offset = 0);
-
+#endif
 /*
  * triangulizes polygons and orders the vertices by y position per triangle
  * output: top, middle, bottom, top, middle,...
  */
-std::vector<glm::vec2> triangulize(std::vector<glm::vec2> polygon_points, std::vector<glm::ivec2> edges, bool remove_duplicate_vertices = false);
 
+// std::vector<glm::vec2> triangulize(std::vector<glm::vec2> polygon_points, std::vector<glm::ivec2> edges, bool remove_duplicate_vertices = false);
+
+std::vector<glm::vec2> triangulize(std::vector<std::vector<glm::vec2>> polygon_points, bool remove_duplicate_vertices = false);
 /*
  * Rasterize a triangle
  * in this method every triangle is traversed only once, and it only accesses pixels it needs for itself.
@@ -557,10 +560,9 @@ void rasterize_line(const PixelWriterFunction& pixel_writer, const std::vector<g
  *      nucleus::utils::rasterizer::rasterize_polygon(pixel_writer, polygon_points);
  */
 template <PixelWriterFunctionConcept PixelWriterFunction>
-void rasterize_polygon(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& polygon_points, float distance = 0.0, float scale = 1.0)
+void rasterize_polygon(const PixelWriterFunction& pixel_writer, const std::vector<std::vector<glm::vec2>>& polygon_points, float distance = 0.0, float scale = 1.0)
 {
-    const auto edges = generate_neighbour_edges(polygon_points.size());
-    const auto triangles = triangulize(polygon_points, edges);
+    const auto triangles = triangulize(polygon_points);
 
     rasterize_triangle(pixel_writer, triangles, distance, scale);
 }
