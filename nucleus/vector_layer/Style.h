@@ -58,8 +58,14 @@ class Style : public QObject {
 public:
     Style(const QString& filename);
 
+    void parse_colors(const QJsonValue& value, std::vector<std::pair<uint8_t, uint32_t>>& colors);
+    void parse_opacities(const QJsonValue& value, std::vector<std::pair<uint8_t, uint8_t>>& opacities);
+    void parse_dashes(const QJsonValue& value, std::vector<std::pair<uint8_t, std::pair<uint8_t, uint8_t>>>& dashes);
+    void parse_line_widths(const QJsonValue& value, std::vector<std::pair<uint8_t, uint16_t>>& widths);
     uint32_t parse_color(const QJsonValue& value);
-    uint16_t parse_dasharray(const QJsonValue& dash_values);
+    uint8_t parse_opacity(const QJsonValue& value);
+    std::pair<uint8_t, uint8_t> parse_dash(const QJsonValue& value);
+    uint16_t parse_line_width(const QJsonValue& value);
 
     std::vector<std::pair<uint32_t, uint32_t>> indices(std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
 
@@ -74,9 +80,9 @@ signals:
 private:
     std::shared_ptr<const nucleus::Raster<glm::u32vec4>> m_styles;
 
-    uint8_t parse_opacity(const QJsonValue& value);
-
-    QJsonValue onlyLastStopValue(const QJsonValue& value);
+    template <typename T>
+    T interpolate(uint8_t zoom, std::pair<uint8_t, T> prev, std::pair<uint8_t, T> current);
+    std::pair<uint8_t, uint8_t> interpolate(uint8_t zoom, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> prev, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> current);
 
     std::unordered_map<std::string, StyleFilter> m_layer_to_style;
 

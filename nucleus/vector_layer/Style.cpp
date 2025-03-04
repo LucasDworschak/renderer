@@ -86,33 +86,35 @@ void Style::load()
 
         auto paintObject = obj.toObject().value("paint").toObject();
         auto filterData = obj.toObject().value("filter").toArray();
+        const auto layer_name = obj.toObject().value("source-layer").toString().toStdString() + "_" + obj.toObject().value("type").toString().toStdString();
 
-        LayerStyle s { 0, 0, 0, 0 };
+        std::vector<std::pair<uint8_t, uint32_t>> fill_colors;
+        std::vector<std::pair<uint8_t, uint32_t>> outline_colors;
+        std::vector<std::pair<uint8_t, uint16_t>> widths;
+        std::vector<std::pair<uint8_t, std::pair<uint8_t, uint8_t>>> dashes;
+        std::vector<std::pair<uint8_t, uint8_t>> opacities;
+
         std::shared_ptr<StyleExpressionBase> filter = StyleExpressionBase::create_filter_expression(filterData);
 
         bool invalid = false;
 
-        uint8_t opacity = 255u;
+        // uint8_t opacity = 255u;
 
         for (const QString& key : paintObject.keys()) {
 
             // fill-antialias ?
             if (key == "fill-color") {
-                s.fill_color = parse_color(paintObject.value(key));
+                parse_colors(paintObject.value(key), fill_colors);
             } else if (key == "line-color") {
-                s.fill_color = parse_color(paintObject.value(key));
+                parse_colors(paintObject.value(key), fill_colors);
             } else if (key == "fill-opacity" || key == "line-opacity") {
-                opacity = parse_opacity(paintObject.value(key));
+                parse_opacities(paintObject.value(key), opacities);
             } else if (key == "fill-outline-color") { // TODO visualize (only used for buildings)
-                s.outline_color = parse_color(paintObject.value(key));
+                parse_colors(paintObject.value(key), outline_colors);
             } else if (key == "line-width") { //  "line-gap-width"
-                if (paintObject.value(key).isObject() && paintObject.value(key).toObject().contains("stops")) {
-                    s.outline_width = uint16_t(onlyLastStopValue(paintObject.value(key)).toDouble() * constants::style_precision);
-                } else {
-                    s.outline_width = uint16_t(paintObject.value(key).toDouble() * constants::style_precision);
-                }
+                parse_line_widths(paintObject.value(key), widths);
             } else if (key == "line-dasharray") {
-                s.outline_dash = parse_dasharray(paintObject.value(key).toArray());
+                parse_dashes(paintObject.value(key).toArray(), dashes);
             } else if (key == "line-offset") {
                 // might be needed
             } else if (key == "fill-translate" || key == "line-translate-anchor") {
@@ -128,46 +130,119 @@ void Style::load()
             }
         }
 
-        if (opacity != 255u) {
-            s.fill_color &= 4294967040u; // bit mask that zeros out the opacity bits
-            s.fill_color |= opacity;
-
-            s.outline_color &= 4294967040u; // bit mask that zeros out the opacity bits
-            s.outline_color |= opacity;
-        }
-
         if (invalid)
             continue;
 
-        uint32_t style_index = -1u;
-
-        // insert styles if they aren't inserted yet
-        // and get the index of the style we want to use
-
-        if (!style_to_index.contains(s)) {
-            style_index = style_values.size();
-            style_to_index[s] = style_index;
-
-            // add the style to the raster
-            //  // float to uint32 representation // TODO this does not work for release build
-            style_values.push_back({ s.fill_color, s.outline_color, s.outline_width, s.outline_dash });
-        } else {
-            style_index = style_to_index[s];
-        }
-
+        // determine zoom range defined in style.json (or fall back to [8-20] range
         glm::uvec2 zoom_range(8u, 20u);
         if (obj.toObject().contains("minzoom"))
             zoom_range.x = obj.toObject().value("minzoom").toInt();
         if (obj.toObject().contains("maxzoom"))
             zoom_range.y = obj.toObject().value("maxzoom").toInt();
 
-        const auto layer_name = obj.toObject().value("source-layer").toString().toStdString() + "_" + obj.toObject().value("type").toString().toStdString();
-        if (!m_layer_to_style.contains(layer_name))
-            m_layer_to_style[layer_name] = StyleFilter();
-        m_layer_to_style[layer_name].add_filter(style_index, layer_index, filter, zoom_range);
+        { // determine style for every zoom level within range
+            // fill arrays with default (max zoom, 0 value) if they are empty
+            if (fill_colors.empty())
+                fill_colors.push_back({ 255, 0 });
+            if (outline_colors.empty())
+                outline_colors.push_back({ 255, 0 });
+            if (widths.empty())
+                widths.push_back({ 255, 0 });
+            if (dashes.empty())
+                dashes.push_back({ 255, { 0, 0 } });
+            if (opacities.empty())
+                opacities.push_back({ 255, 255 });
 
-        // auto id = obj.toObject().value("id").toString(); // DEBUG -> what layers with what index are used
-        // qDebug() << style_index << id;
+            // use the first value of each array to determine the prev/current values
+            std::pair<uint8_t, uint32_t> fill_colors_previous_value = fill_colors.front();
+            std::pair<uint8_t, uint32_t> outline_colors_previous_value = outline_colors.front();
+            std::pair<uint8_t, uint16_t> widths_previous_value = widths.front();
+            std::pair<uint8_t, std::pair<uint8_t, uint8_t>> dashes_previous_value = dashes.front();
+            std::pair<uint8_t, uint8_t> opacities_previous_value = opacities.front();
+
+            std::pair<uint8_t, uint32_t> fill_colors_current_value = fill_colors.front();
+            std::pair<uint8_t, uint32_t> outline_colors_current_value = outline_colors.front();
+            std::pair<uint8_t, uint16_t> widths_current_value = widths.front();
+            std::pair<uint8_t, std::pair<uint8_t, uint8_t>> dashes_current_value = dashes.front();
+            std::pair<uint8_t, uint8_t> opacities_current_value = opacities.front();
+
+            uint8_t fill_colors_index = 0;
+            uint8_t outline_colors_index = 0;
+            uint8_t widths_index = 0;
+            uint8_t dashes_index = 0;
+            uint8_t opacities_index = 0;
+
+            for (unsigned zoom = zoom_range.x; zoom < zoom_range.y + 1; zoom++) {
+
+                // determine if we have to change current / prev values
+                if (fill_colors_current_value.first < zoom) {
+                    fill_colors_previous_value = fill_colors_current_value;
+                    fill_colors_current_value = fill_colors[++fill_colors_index];
+                }
+                if (outline_colors_current_value.first < zoom) {
+                    outline_colors_previous_value = outline_colors_current_value;
+                    outline_colors_current_value = outline_colors[++outline_colors_index];
+                }
+                if (widths_current_value.first < zoom) {
+                    widths_previous_value = widths_current_value;
+                    widths_current_value = widths[++widths_index];
+                }
+                if (dashes_current_value.first < zoom) {
+                    dashes_previous_value = dashes_current_value;
+                    dashes_current_value = dashes[++dashes_index];
+                }
+                if (opacities_current_value.first < zoom) {
+                    opacities_previous_value = opacities_current_value;
+                    opacities_current_value = opacities[++opacities_index];
+                }
+
+                // interpolate between previous and current values
+                auto fill_color = interpolate<uint32_t>(zoom, fill_colors_previous_value, fill_colors_current_value);
+                auto outline_color = interpolate<uint32_t>(zoom, outline_colors_previous_value, outline_colors_current_value);
+                auto width = interpolate<uint16_t>(zoom, widths_previous_value, widths_current_value);
+                std::pair<uint8_t, uint8_t> dash = interpolate(zoom, dashes_previous_value, dashes_current_value);
+                auto opacity = interpolate<uint8_t>(zoom, opacities_previous_value, opacities_current_value);
+
+                // merge opacity with colors
+                if (opacity != 255u) {
+                    // if opacity is set it overrides any opacity from the color
+
+                    fill_color &= 4294967040u; // bit mask that zeros out the opacity bits
+                    fill_color |= opacity;
+
+                    outline_color &= 4294967040u; // bit mask that zeros out the opacity bits
+                    outline_color |= opacity;
+                }
+
+                const uint16_t merged_dash = (dash.first << 8) | dash.second;
+
+                LayerStyle s { fill_color, outline_color, width, merged_dash };
+
+                uint32_t style_index = -1u;
+                // insert styles if they aren't inserted yet
+                // and get the index of the style we want to use
+                if (!style_to_index.contains(s)) {
+                    style_index = style_values.size();
+                    style_to_index[s] = style_index;
+
+                    // add the style to the raster
+                    //  // float to uint32 representation // TODO this does not work for release build
+                    style_values.push_back({ s.fill_color, s.outline_color, s.outline_width, s.outline_dash });
+                } else {
+                    style_index = style_to_index[s];
+                }
+
+                if (!m_layer_to_style.contains(layer_name))
+                    m_layer_to_style[layer_name] = StyleFilter();
+
+                // TODO somehow store both this value and the next style_index value so that we can interpolate between both
+
+                m_layer_to_style[layer_name].add_filter(style_index, layer_index, filter, zoom);
+
+                // auto id = obj.toObject().value("id").toString(); // DEBUG -> what layers with what index are used
+                // qDebug() << style_index << id;
+            }
+        }
 
         layer_index++;
     }
@@ -213,46 +288,87 @@ float stringToFloat(const std::string& value)
     return full + double(decimals / pow(10, value.substr(index + 1).size()));
 }
 
-/*
- * Note so far no useful documentation was found for dash-array and how they are structured/constructed
- * -> therefore verify that we are using this correctly
- * Currently: we only support 2 values for dash array -> dash and gap
- * we assume that index 0 is the dash size and index 1 is the gap size.
- * https://docs.mapbox.com/android/maps/api/10.2.0/mapbox-maps-android/com.mapbox.maps.plugin.annotation.generated/-polyline-annotation-manager/line-dasharray.html
- * declares that those values are multiplied by line width to the actual size
- * we store the ratio between both values and the sum of both values in one uint32_t value
- * this currently wastes a bit of space -> two 8bit values should suffice here
- * but we are also not quite clear about all the possible values
- * -> THEREFORE TODO veryfy the assumptions of this method
- */
-uint16_t Style::parse_dasharray(const QJsonValue&)
+// uses https://github.com/maplibre/maplibre-style-spec/blob/main/src/expression/definitions/interpolate.ts -> exponentialInterpolation()
+template <typename T>
+T Style::interpolate(uint8_t zoom, std::pair<uint8_t, T> prev, std::pair<uint8_t, T> current)
 {
-    // TODO there are also values with more than two values
-    // currently only 2 values are allowed here
-    // assert(dash_values.size() == 2);
+    const auto diff = current.first - prev.first;
 
-    return 0ul; // TODO implement this correctly
+    if (diff == 0) // both values are the same
+        return current.second;
 
-    // double sum = dash_values[0].toDouble() + dash_values[1].toDouble();
+    const auto progress = zoom - diff;
 
-    // uint16_t dash_gap_ratio = dash_values[0].toDouble() / sum * 65535.f;
+    float t = float(progress) / float(diff);
 
-    // return dash_gap_ratio << 16 | uint16_t(sum);
+    return prev.second * (1.0 - t) + current.second * t;
 }
 
-// in style.json files we often encounter stops that are arrays of zoom/value pairs -> with this method we extract the value of the last zoom/value pair
-// ideally we would extract everything here, and determine the actual value dynamically by calculating the zoom, but this would mean that we need to extract far more styles per zoom level, which might
-// be a bit overkill if e.g. the color only slightly changes
-// nevertheless @TODO reevaluate if we want to extract and interpolate the stops
-QJsonValue Style::onlyLastStopValue(const QJsonValue& value) { return value.toObject().value("stops").toArray().last().toArray().last(); }
+// interpolate with pairs (for dashes)
+std::pair<uint8_t, uint8_t> Style::interpolate(uint8_t zoom, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> prev, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> current)
+{
+    const auto diff = current.first - prev.first;
+    const auto progress = zoom - diff;
+
+    float t = float(progress) / float(diff);
+
+    return { prev.second.first * (1.0 - t) + current.second.first * t, prev.second.second * (1.0 - t) + current.second.second * t };
+}
+
+void Style::parse_colors(const QJsonValue& value, std::vector<std::pair<uint8_t, uint32_t>>& colors)
+{
+    assert(colors.size() == 0); // make sure that we only parse attribute once
+    if (value.isObject() && value.toObject().contains("stops")) {
+        auto v = value.toObject().value("stops").toArray().last().toArray().last();
+        // TODO iterate over all values
+        colors.push_back({ 255, parse_color(v) });
+    } else {
+        // only one value -> add element with highest zoom value
+        colors.push_back({ 255, parse_color(value) });
+    }
+}
+void Style::parse_opacities(const QJsonValue& value, std::vector<std::pair<uint8_t, uint8_t>>& opacities)
+{
+    assert(opacities.size() == 0); // make sure that we only parse attribute once
+    if (value.isObject() && value.toObject().contains("stops")) {
+        auto v = value.toObject().value("stops").toArray().last().toArray().last();
+        // TODO iterate over all values
+        opacities.push_back({ 255, parse_opacity(v) });
+    } else {
+        // only one value -> add element with highest zoom value
+        opacities.push_back({ 255, parse_opacity(value) });
+    }
+}
+void Style::parse_dashes(const QJsonValue& value, std::vector<std::pair<uint8_t, std::pair<uint8_t, uint8_t>>>& dashes)
+{
+    assert(dashes.size() == 0); // make sure that we only parse attribute once
+    if (value.isObject() && value.toObject().contains("stops")) {
+        auto v = value.toObject().value("stops").toArray().last().toArray().last();
+        // TODO iterate over all values
+        dashes.push_back({ 255, parse_dash(v) });
+    } else {
+        // only one value -> add element with highest zoom value
+        dashes.push_back({ 255, parse_dash(value) });
+    }
+}
+void Style::parse_line_widths(const QJsonValue& value, std::vector<std::pair<uint8_t, uint16_t>>& widths)
+{
+    assert(widths.size() == 0); // make sure that we only parse attribute once
+    if (value.isObject() && value.toObject().contains("stops")) {
+        auto v = value.toObject().value("stops").toArray().last().toArray().last();
+        // TODO iterate over all values
+        widths.push_back({ 255, parse_line_width(v) });
+    } else {
+        // only one value -> add element with highest zoom value
+        widths.push_back({ 255, parse_line_width(value) });
+    }
+}
 
 uint32_t Style::parse_color(const QJsonValue& value)
 {
     std::string colorValue;
     if (value.isString()) {
         colorValue = value.toString().toStdString();
-    } else if (value.isObject() && value.toObject().contains("stops")) {
-        colorValue = onlyLastStopValue(value).toString().toStdString();
     } else {
         qDebug() << "cannot parse color value: " << value;
         assert(false);
@@ -354,20 +470,55 @@ uint32_t Style::parse_color(const QJsonValue& value)
 
 uint8_t Style::parse_opacity(const QJsonValue& value)
 {
-    QJsonValue opacityValue;
-    if (value.isObject() && value.toObject().contains("stops")) {
-        opacityValue = onlyLastStopValue(value);
-    } else {
-        opacityValue = value;
+
+    if (value.isDouble() && value.toDouble() <= 1.0) {
+        return value.toDouble() * 255;
     }
 
-    if (opacityValue.isDouble() && opacityValue.toDouble() <= 1.0) {
-        return opacityValue.toDouble() * 255;
-    }
-
-    qDebug() << "unhandled opacity value" << opacityValue;
+    qDebug() << "unhandled opacity value" << value;
     assert(false);
     return 255;
+}
+
+/*
+ * Note so far no useful documentation was found for dash-array and how they are structured/constructed
+ * -> therefore verify that we are using this correctly
+ * Currently: we only support 2 values for dash array -> dash and gap
+ * we assume that index 0 is the dash size and index 1 is the gap size.
+ * https://docs.mapbox.com/android/maps/api/10.2.0/mapbox-maps-android/com.mapbox.maps.plugin.annotation.generated/-polyline-annotation-manager/line-dasharray.html
+ * declares that those values are multiplied by line width to the actual size
+ * we store the ratio between both values and the sum of both values in one uint32_t value
+ * this currently wastes a bit of space -> two 8bit values should suffice here
+ * but we are also not quite clear about all the possible values
+ * -> THEREFORE TODO veryfy the assumptions of this method
+ */
+std::pair<uint8_t, uint8_t> Style::parse_dash(const QJsonValue&)
+{
+
+    // TODO there are also values with more than two values
+    // currently only 2 values are allowed here
+    // assert(dash_values.size() == 2);
+
+    // TODO implement
+
+    return { 0, 0 };
+
+    // double sum = dash_values[0].toDouble() + dash_values[1].toDouble();
+
+    // uint16_t dash_gap_ratio = dash_values[0].toDouble() / sum * 65535.f;
+
+    // return dash_gap_ratio << 16 | uint16_t(sum);
+}
+
+uint16_t Style::parse_line_width(const QJsonValue& value)
+{
+    if (value.isDouble()) {
+        return uint16_t(value.toDouble() * constants::style_precision);
+    }
+
+    qDebug() << "unhandled line width value" << value;
+    assert(false);
+    return 0;
 }
 
 } // namespace nucleus::vector_layer

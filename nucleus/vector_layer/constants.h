@@ -35,6 +35,6 @@ constexpr auto tile_extent = 4096;
 constexpr auto style_buffer_size = 64; // if you make this value higher -> you have to also adapt preprocessor.all_style_bits
 
 // number is used to multiply float numbers in style to get int values for storage ( e.g. style_precision:100 means 1.253 -> 125 -> 1.250)
-constexpr uint8_t style_precision = 100;
+constexpr uint16_t style_precision = 100;
 
 } // namespace nucleus::vector_layer::constants
