@@ -28,6 +28,7 @@
 #include "nucleus/vector_layer/StyleExpression.h"
 #include "nucleus/vector_layer/constants.h"
 
+#include <cmath>
 #include <regex>
 
 namespace nucleus::vector_layer {
@@ -94,27 +95,33 @@ void Style::load()
         std::vector<std::pair<uint8_t, std::pair<uint8_t, uint8_t>>> dashes;
         std::vector<std::pair<uint8_t, uint8_t>> opacities;
 
+        // "stop" expressions may have a "base" value. this base value is used to manipulate the interpolation between values
+        float fill_color_interpolation_base = 1;
+        float outline_color_interpolation_base = 1;
+        float width_interpolation_base = 1;
+        float dash_interpolation_base = 1;
+        float opacity_interpolation_base = 1;
+
         std::shared_ptr<StyleExpressionBase> filter = StyleExpressionBase::create_filter_expression(filterData);
 
         bool invalid = false;
 
-        // uint8_t opacity = 255u;
 
         for (const QString& key : paintObject.keys()) {
 
             // fill-antialias ?
             if (key == "fill-color") {
-                parse_colors(paintObject.value(key), fill_colors);
+                parse_colors(paintObject.value(key), fill_colors, fill_color_interpolation_base);
             } else if (key == "line-color") {
-                parse_colors(paintObject.value(key), fill_colors);
+                parse_colors(paintObject.value(key), fill_colors, fill_color_interpolation_base);
             } else if (key == "fill-opacity" || key == "line-opacity") {
-                parse_opacities(paintObject.value(key), opacities);
+                parse_opacities(paintObject.value(key), opacities, opacity_interpolation_base);
             } else if (key == "fill-outline-color") { // TODO visualize (only used for buildings)
-                parse_colors(paintObject.value(key), outline_colors);
+                parse_colors(paintObject.value(key), outline_colors, outline_color_interpolation_base);
             } else if (key == "line-width") { //  "line-gap-width"
-                parse_line_widths(paintObject.value(key), widths);
+                parse_line_widths(paintObject.value(key), widths, width_interpolation_base);
             } else if (key == "line-dasharray") {
-                parse_dashes(paintObject.value(key).toArray(), dashes);
+                parse_dashes(paintObject.value(key).toArray(), dashes, dash_interpolation_base);
             } else if (key == "line-offset") {
                 // might be needed
             } else if (key == "fill-translate" || key == "line-translate-anchor") {
@@ -197,11 +204,11 @@ void Style::load()
                 }
 
                 // interpolate between previous and current values
-                auto fill_color = interpolate<uint32_t>(zoom, fill_colors_previous_value, fill_colors_current_value);
-                auto outline_color = interpolate<uint32_t>(zoom, outline_colors_previous_value, outline_colors_current_value);
-                auto width = interpolate<uint16_t>(zoom, widths_previous_value, widths_current_value);
-                std::pair<uint8_t, uint8_t> dash = interpolate(zoom, dashes_previous_value, dashes_current_value);
-                auto opacity = interpolate<uint8_t>(zoom, opacities_previous_value, opacities_current_value);
+                auto fill_color = interpolate<uint32_t>(zoom, fill_color_interpolation_base, fill_colors_previous_value, fill_colors_current_value);
+                auto outline_color = interpolate<uint32_t>(zoom, outline_color_interpolation_base, outline_colors_previous_value, outline_colors_current_value);
+                auto width = interpolate<uint16_t>(zoom, width_interpolation_base, widths_previous_value, widths_current_value);
+                std::pair<uint8_t, uint8_t> dash = interpolate(zoom, dash_interpolation_base, dashes_previous_value, dashes_current_value);
+                auto opacity = interpolate<uint8_t>(zoom, opacity_interpolation_base, opacities_previous_value, opacities_current_value);
 
                 // merge opacity with colors
                 if (opacity != 255u) {
@@ -214,6 +221,7 @@ void Style::load()
                     outline_color |= opacity;
                 }
 
+                // dashes consist of gap / dash -> we combine them into one single value that is split again on the shader
                 const uint16_t merged_dash = (dash.first << 8) | dash.second;
 
                 LayerStyle s { fill_color, outline_color, width, merged_dash };
@@ -290,35 +298,47 @@ float stringToFloat(const std::string& value)
 
 // uses https://github.com/maplibre/maplibre-style-spec/blob/main/src/expression/definitions/interpolate.ts -> exponentialInterpolation()
 template <typename T>
-T Style::interpolate(uint8_t zoom, std::pair<uint8_t, T> prev, std::pair<uint8_t, T> current)
+T Style::interpolate(uint8_t zoom, float base, std::pair<uint8_t, T> prev, std::pair<uint8_t, T> current)
 {
     const auto diff = current.first - prev.first;
+    const auto progress = zoom - diff;
 
     if (diff == 0) // both values are the same
         return current.second;
 
-    const auto progress = zoom - diff;
-
-    float t = float(progress) / float(diff);
+    float t = 0;
+    if (base == 1)
+        t = float(progress) / float(diff);
+    else
+        t = (pow(base, progress) - 1) / (pow(base, diff) - 1);
 
     return prev.second * (1.0 - t) + current.second * t;
 }
 
 // interpolate with pairs (for dashes)
-std::pair<uint8_t, uint8_t> Style::interpolate(uint8_t zoom, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> prev, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> current)
+std::pair<uint8_t, uint8_t> Style::interpolate(uint8_t zoom, float base, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> prev, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> current)
 {
     const auto diff = current.first - prev.first;
     const auto progress = zoom - diff;
 
-    float t = float(progress) / float(diff);
+    if (diff == 0) // both values are the same
+        return current.second;
+
+    float t = 0;
+    if (base == 1)
+        t = float(progress) / float(diff);
+    else
+        t = (pow(base, progress) - 1) / (pow(base, diff) - 1);
 
     return { prev.second.first * (1.0 - t) + current.second.first * t, prev.second.second * (1.0 - t) + current.second.second * t };
 }
 
-void Style::parse_colors(const QJsonValue& value, std::vector<std::pair<uint8_t, uint32_t>>& colors)
+void Style::parse_colors(const QJsonValue& value, std::vector<std::pair<uint8_t, uint32_t>>& colors, float& base)
 {
     assert(colors.size() == 0); // make sure that we only parse attribute once
     if (value.isObject() && value.toObject().contains("stops")) {
+        if (value.toObject().contains("base"))
+            base = value.toObject().value("base").toDouble(1);
         auto v = value.toObject().value("stops").toArray().last().toArray().last();
         // TODO iterate over all values
         colors.push_back({ 255, parse_color(v) });
@@ -327,10 +347,12 @@ void Style::parse_colors(const QJsonValue& value, std::vector<std::pair<uint8_t,
         colors.push_back({ 255, parse_color(value) });
     }
 }
-void Style::parse_opacities(const QJsonValue& value, std::vector<std::pair<uint8_t, uint8_t>>& opacities)
+void Style::parse_opacities(const QJsonValue& value, std::vector<std::pair<uint8_t, uint8_t>>& opacities, float& base)
 {
     assert(opacities.size() == 0); // make sure that we only parse attribute once
     if (value.isObject() && value.toObject().contains("stops")) {
+        if (value.toObject().contains("base"))
+            base = value.toObject().value("base").toDouble(1);
         auto v = value.toObject().value("stops").toArray().last().toArray().last();
         // TODO iterate over all values
         opacities.push_back({ 255, parse_opacity(v) });
@@ -339,10 +361,12 @@ void Style::parse_opacities(const QJsonValue& value, std::vector<std::pair<uint8
         opacities.push_back({ 255, parse_opacity(value) });
     }
 }
-void Style::parse_dashes(const QJsonValue& value, std::vector<std::pair<uint8_t, std::pair<uint8_t, uint8_t>>>& dashes)
+void Style::parse_dashes(const QJsonValue& value, std::vector<std::pair<uint8_t, std::pair<uint8_t, uint8_t>>>& dashes, float& base)
 {
     assert(dashes.size() == 0); // make sure that we only parse attribute once
     if (value.isObject() && value.toObject().contains("stops")) {
+        if (value.toObject().contains("base"))
+            base = value.toObject().value("base").toDouble(1);
         auto v = value.toObject().value("stops").toArray().last().toArray().last();
         // TODO iterate over all values
         dashes.push_back({ 255, parse_dash(v) });
@@ -351,10 +375,12 @@ void Style::parse_dashes(const QJsonValue& value, std::vector<std::pair<uint8_t,
         dashes.push_back({ 255, parse_dash(value) });
     }
 }
-void Style::parse_line_widths(const QJsonValue& value, std::vector<std::pair<uint8_t, uint16_t>>& widths)
+void Style::parse_line_widths(const QJsonValue& value, std::vector<std::pair<uint8_t, uint16_t>>& widths, float& base)
 {
     assert(widths.size() == 0); // make sure that we only parse attribute once
     if (value.isObject() && value.toObject().contains("stops")) {
+        if (value.toObject().contains("base"))
+            base = value.toObject().value("base").toDouble(1);
         auto v = value.toObject().value("stops").toArray().last().toArray().last();
         // TODO iterate over all values
         widths.push_back({ 255, parse_line_width(v) });
