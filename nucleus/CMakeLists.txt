@@ -22,7 +22,7 @@
 project(alpine-renderer-nucleus LANGUAGES CXX)
 
 alp_add_git_repository(stb_slim URL https://github.com/AlpineMapsOrgDependencies/stb_slim.git COMMITISH 547fade2a12793e1bea4733d59646b4f436e25a4)
-alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 5718519002b26cdd54030e3ec227d27f46f79a64 NOT_SYSTEM)
+alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH d1fd1f75ebcfd560d8ad2ec8633ef8430c4976e7 NOT_SYSTEM)
 alp_add_git_repository(tl_expected URL https://github.com/TartanLlama/expected.git COMMITISH v1.1.0 DO_NOT_ADD_SUBPROJECT)
 alp_add_git_repository(zppbits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.4.25 DO_NOT_ADD_SUBPROJECT)
 if(ALP_ENABLE_LABELS)
@@ -127,6 +127,7 @@ qt_add_library(nucleus STATIC
     tile/GeometryScheduler.h tile/GeometryScheduler.cpp
     utils/error.h
     utils/lang.h
+    tile/SchedulerDirector.h tile/SchedulerDirector.cpp
     vector_layer/Preprocessor.h vector_layer/Preprocessor.cpp
     vector_layer/setup.h
     vector_layer/Scheduler.h vector_layer/Scheduler.cpp
@@ -198,11 +199,6 @@ qt_add_resources(nucleus "nucleus_fonts"
     PREFIX "/fonts"
     FILES
     ${alpineapp_fonts_SOURCE_DIR}/Roboto/Roboto-Bold.ttf
-)
-qt_add_resources(nucleus "charset"
-    PREFIX "/charset"
-    BASE ${CMAKE_SOURCE_DIR}/app/
-    FILES ${CMAKE_SOURCE_DIR}/app/charset.txt
 )
 
 qt_add_resources(nucleus "vectorlayerstyles"

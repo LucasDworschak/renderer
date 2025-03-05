@@ -1,6 +1,6 @@
 /*****************************************************************************
- * AlpineMaps.org
- * Copyright (C) 2023 Gerald Kimmersdorfer
+ * Alpine Terrain Renderer
+ * Copyright (C) 2025 Adam Celarek
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,27 +18,6 @@
 
 #pragma once
 
-#include "TimerInterface.h"
-#include "chrono"
-
-namespace nucleus::timing {
-
-/// The CpuTimer class measures times on the c++ side using the std::chronos library
-class CpuTimer : public TimerInterface {
-public:
-    CpuTimer(const QString& name, const QString& group, int queue_size, float average_weight);
-
-protected:
-    // starts front-buffer query
-    void _start() override;
-    // stops front-buffer query and toggles indices
-    void _stop() override;
-    // fetches back-buffer query
-    float _fetch_result() override;
-
-private:
-    std::chrono::time_point<std::chrono::high_resolution_clock> m_ticks[2];
-};
-
-}
-
+namespace gl_engine {
+enum class DepthBufferClipType { MinusOneToOne, ZeroToOne };
+} // namespace gl_engine

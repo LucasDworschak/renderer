@@ -76,6 +76,8 @@ void GpuArrayHelper::set_quad_limit(unsigned int new_limit)
 
 unsigned GpuArrayHelper::size() const { return unsigned(m_array.size()); }
 
+unsigned GpuArrayHelper::n_occupied() const { return unsigned(m_id_to_array_layer.size()); }
+
 GpuArrayHelper::Dictionary GpuArrayHelper::generate_dictionary() const
 {
     const auto hash_to_pixel = [](uint16_t hash) { return glm::uvec2(hash & 255, hash >> 8); };

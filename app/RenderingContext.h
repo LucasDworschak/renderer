@@ -43,6 +43,7 @@ class Scheduler;
 namespace nucleus::tile {
 class GeometryScheduler;
 class TextureScheduler;
+class SchedulerDirector;
 }
 namespace nucleus::tile::utils {
 class AabbDecorator;
@@ -80,6 +81,7 @@ public:
     [[nodiscard]] nucleus::map_label::Scheduler* map_label_scheduler() const;
     [[nodiscard]] nucleus::vector_layer::Scheduler* vector_layer_scheduler() const;
     [[nodiscard]] nucleus::tile::TextureScheduler* ortho_scheduler() const;
+    [[nodiscard]] nucleus::tile::SchedulerDirector* scheduler_director() const;
 
 signals:
     void initialised();

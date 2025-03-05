@@ -35,6 +35,7 @@
 #include <nucleus/map_label/setup.h>
 #include <nucleus/picker/PickerManager.h>
 #include <nucleus/tile/GeometryScheduler.h>
+#include <nucleus/tile/SchedulerDirector.h>
 #include <nucleus/tile/TextureScheduler.h>
 #include <nucleus/tile/TileLoadService.h>
 #include <nucleus/tile/setup.h>
@@ -63,6 +64,7 @@ struct RenderingContext::Data {
     std::shared_ptr<nucleus::map_label::Filter> label_filter;
     std::shared_ptr<nucleus::picker::PickerManager> picker_manager;
     std::shared_ptr<nucleus::tile::utils::AabbDecorator> aabb_decorator;
+    std::unique_ptr<nucleus::tile::SchedulerDirector> scheduler_director;
 };
 
 RenderingContext::RenderingContext(QObject* parent)
@@ -77,6 +79,8 @@ RenderingContext::RenderingContext(QObject* parent)
     m->scheduler_thread->setObjectName("scheduler_thread");
 #endif
 
+    m->scheduler_director = std::make_unique<nucleus::tile::SchedulerDirector>();
+
     //    m->ortho_service.reset(new TileLoadService("https://tiles.bergfex.at/styles/bergfex-osm/", TileLoadService::UrlPattern::ZXY_yPointingSouth,
     //    ".jpeg")); m->ortho_service.reset(new TileLoadService("https://alpinemaps.cg.tuwien.ac.at/tiles/ortho/",
     //    TileLoadService::UrlPattern::ZYX_yPointingSouth, ".jpeg"));
@@ -85,32 +89,27 @@ RenderingContext::RenderingContext(QObject* parent)
     //                                           ".jpeg",
     //                                           {"", "1", "2", "3", "4"}));
     m->aabb_decorator = nucleus::tile::setup::aabb_decorator();
-    m->geometry = nucleus::tile::setup::geometry_scheduler("geometry",
-        std::make_unique<TileLoadService>("https://alpinemaps.cg.tuwien.ac.at/tiles/at_dtm_alpinemaps/", TilePattern::ZXY, ".png"),
-        m->aabb_decorator,
-        m->scheduler_thread.get()); // TODO currently hardcoded change to dtm model, but probably need to change this dynamically
-    // "geometry", std::make_unique<TileLoadService>("https://alpinemaps.cg.tuwien.ac.at/tiles/alpine_png/", TilePattern::ZXY, ".png"), m->aabb_decorator, m->scheduler_thread.get());
-    m->data_querier = std::make_shared<DataQuerier>(&m->geometry.scheduler->ram_cache());
 
-    m->ortho_texture = nucleus::tile::setup::texture_scheduler(
-        "ortho", std::make_unique<TileLoadService>("https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/", TilePattern::ZYX_yPointingSouth, ".jpeg"), m->aabb_decorator, m->scheduler_thread.get());
+    {
+        auto geometry_service = std::make_unique<TileLoadService>("https://alpinemaps.cg.tuwien.ac.at/tiles/at_dtm_alpinemaps/", TilePattern::ZXY, ".png");
+        // auto geometry_service = std::make_unique<TileLoadService>("https://alpinemaps.cg.tuwien.ac.at/tiles/alpine_png/", TilePattern::ZXY, ".png");
+        m->geometry = nucleus::tile::setup::geometry_scheduler(std::move(geometry_service), m->aabb_decorator, m->scheduler_thread.get());
+        m->scheduler_director->check_in("geometry", m->geometry.scheduler);
+        m->data_querier = std::make_shared<DataQuerier>(&m->geometry.scheduler->ram_cache());
+        auto ortho_service = std::make_unique<TileLoadService>("https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/", TilePattern::ZYX_yPointingSouth, ".jpeg");
+        m->ortho_texture = nucleus::tile::setup::texture_scheduler(std::move(ortho_service), m->aabb_decorator, m->scheduler_thread.get());
+        m->scheduler_director->check_in("ortho", m->ortho_texture.scheduler);
+        auto map_label_service = std::make_unique<TileLoadService>("https://osm.cg.tuwien.ac.at/vector_tiles/poi_v1/", TilePattern::ZXY_yPointingSouth, "");
+        m->map_label = nucleus::map_label::setup::scheduler(std::move(map_label_service), m->aabb_decorator, m->data_querier, m->scheduler_thread.get());
+        m->scheduler_director->check_in("map_label", m->map_label.scheduler);
 
-    m->map_label = nucleus::map_label::setup::scheduler("map_label",
-        std::make_unique<TileLoadService>("https://osm.cg.tuwien.ac.at/vector_tiles/poi_v1/", TilePattern::ZXY_yPointingSouth, ""),
-        m->aabb_decorator,
-        m->data_querier,
-        m->scheduler_thread.get());
+        auto vector_layer_service = std::make_unique<TileLoadService>("https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/", TilePattern::ZXY_yPointingSouth, "");
+        m->vector_layer = nucleus::vector_layer::setup::scheduler(std::move(vector_layer_service), m->aabb_decorator, m->scheduler_thread.get());
+        m->scheduler_director->check_in("map_label", m->map_label.scheduler);
+    }
     m->map_label.scheduler->set_geometry_ram_cache(&m->geometry.scheduler->ram_cache());
-    m->geometry.scheduler->set_dataquerier(m->data_querier);
-
-    m->vector_layer = nucleus::vector_layer::setup::scheduler("vector_layer",
-        std::make_unique<TileLoadService>("https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/", TilePattern::ZXY_yPointingSouth, ""),
-        // std::make_unique<TileLoadService>("http://localhost:3000/getmvt/", TilePattern::ZXY_yPointingSouth, ""),
-        // std::make_unique<TileLoadService>("http://localhost:8080/data/openmaptiles/", TilePattern::ZXY_yPointingSouth, ".pbf"),
-        // std::make_unique<TileLoadService>("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/tile/", TilePattern::ZYX_yPointingSouth, ".pbf"),
-        m->aabb_decorator,
-        m->scheduler_thread.get());
     m->vector_layer.scheduler->set_geometry_ram_cache(&m->geometry.scheduler->ram_cache());
+    m->geometry.scheduler->set_dataquerier(m->data_querier);
 
     m->picker_manager = std::make_shared<PickerManager>();
     m->label_filter = std::make_shared<Filter>();
@@ -280,4 +279,10 @@ nucleus::tile::TextureScheduler* RenderingContext::ortho_scheduler() const
 {
     QMutexLocker locker(&m->shared_ptr_mutex);
     return m->ortho_texture.scheduler.get();
+}
+
+SchedulerDirector* RenderingContext::scheduler_director() const
+{
+    QMutexLocker locker(&m->shared_ptr_mutex);
+    return m->scheduler_director.get();
 }

@@ -43,9 +43,9 @@ struct SchedulerHolder {
     TileLoadServicePtr tile_service;
 };
 
-SchedulerHolder scheduler(std::string name, TileLoadServicePtr tile_service, const tile::utils::AabbDecoratorPtr& aabb_decorator, QThread* thread = nullptr)
+SchedulerHolder scheduler(TileLoadServicePtr tile_service, const tile::utils::AabbDecoratorPtr& aabb_decorator, QThread* thread = nullptr)
 {
-    auto scheduler = std::make_unique<nucleus::vector_layer::Scheduler>(std::move(name));
+    auto scheduler = std::make_unique<nucleus::vector_layer::Scheduler>();
     scheduler->read_disk_cache();
     scheduler->set_gpu_quad_limit(512);
     scheduler->set_ram_quad_limit(12000);

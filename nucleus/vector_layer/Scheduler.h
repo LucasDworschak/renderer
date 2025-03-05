@@ -28,7 +28,7 @@ namespace nucleus::vector_layer {
 class Scheduler : public nucleus::tile::Scheduler {
     Q_OBJECT
 public:
-    explicit Scheduler(std::string name, QObject* parent = nullptr);
+    explicit Scheduler(QObject* parent = nullptr);
     ~Scheduler() override;
 
     void set_geometry_ram_cache(nucleus::tile::MemoryCache* new_geometry_ram_cache);

@@ -1,7 +1,6 @@
 /*****************************************************************************
  * AlpineMaps.org
- * Copyright (C) 2024 Adam Celarek
- * Copyright (C) 2025 Lucas Dworschak
+ * Copyright (C) 2025 Adam Celarek
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,31 +18,30 @@
 
 #pragma once
 
-#include "types.h"
-#include <nucleus/Raster.h>
+#include <QObject>
+#include <memory>
+#include <unordered_map>
 
 namespace nucleus::tile {
+class Scheduler;
 
-class GpuArrayHelper {
+class SchedulerDirector : public QObject {
+    Q_OBJECT
 public:
-    struct Dictionary {
-        nucleus::Raster<glm::u32vec2> packed_ids;
-        nucleus::Raster<uint16_t> array_layers;
-    };
-    GpuArrayHelper();
+    explicit SchedulerDirector();
+    bool check_in(QString name, std::shared_ptr<Scheduler> scheduler);
 
-    /// returns index in texture array
-    uint16_t add_tile(const tile::Id& tile_id, bool add_to_array = true, uint8_t additonal_info = 0, uint8_t additional_info_bitshift = 16);
-    void remove_tile(const tile::Id& tile_id);
-    bool contains_tile(const tile::Id& tile_id);
-    void set_quad_limit(unsigned new_limit);
-    unsigned size() const;
-    unsigned int n_occupied() const;
-    Dictionary generate_dictionary() const;
+    template <typename Functor> void visit(Functor fun)
+    {
+        for (const auto& [key, value] : m_schedulers) {
+            fun(value.get());
+        }
+    }
+
+signals:
 
 private:
-    std::vector<tile::Id> m_array;
-    tile::IdMap<uint16_t> m_id_to_array_layer;
+    std::unordered_map<QString, std::shared_ptr<Scheduler>> m_schedulers;
 };
 
 } // namespace nucleus::tile

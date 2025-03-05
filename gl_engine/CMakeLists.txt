@@ -42,6 +42,7 @@ qt_add_library(gl_engine STATIC
     TileGeometry.h TileGeometry.cpp
     TextureLayer.h TextureLayer.cpp
     VectorLayer.h VectorLayer.cpp
+    types.h
 )
 
 if(ALP_ENABLE_LABELS)

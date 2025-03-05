@@ -78,6 +78,7 @@ TerrainRendererItem::TerrainRendererItem(QQuickItem* parent)
     m_url_modifier = std::make_shared<nucleus::utils::UrlModifier>();
 
     m_settings = new AppSettings(this, m_url_modifier);
+    m_tile_statistics = new TileStatistics(this);
     connect(m_settings, &AppSettings::datetime_changed, this, &TerrainRendererItem::datetime_changed);
     connect(m_settings, &AppSettings::gl_sundir_date_link_changed, this, &TerrainRendererItem::gl_sundir_date_link_changed);
     connect(m_settings, &AppSettings::render_quality_changed, this, &TerrainRendererItem::schedule_update);
@@ -114,6 +115,10 @@ QQuickFramebufferObject::Renderer* TerrainRendererItem::createRenderer() const
 
     auto* r = new TerrainRenderer();
     connect(r->glWindow(), &nucleus::AbstractRenderWindow::update_requested, this, &TerrainRendererItem::schedule_update);
+    connect(r->glWindow(), &gl_engine::Window::tile_stats_ready, this->m_tile_statistics, &TileStatistics::set_gpu_stats);
+    connect(ctx->geometry_scheduler(), &nucleus::tile::Scheduler::stats_ready, this->m_tile_statistics, &TileStatistics::update_scheduler_stats);
+    connect(ctx->map_label_scheduler(), &nucleus::tile::Scheduler::stats_ready, this->m_tile_statistics, &TileStatistics::update_scheduler_stats);
+    connect(ctx->ortho_scheduler(), &nucleus::tile::Scheduler::stats_ready, this->m_tile_statistics, &TileStatistics::update_scheduler_stats);
     connect(m_update_timer, &QTimer::timeout, this, &QQuickFramebufferObject::update);
 
     connect(this, &TerrainRendererItem::touch_made, r->controller(), &nucleus::camera::Controller::touch);
@@ -157,7 +162,7 @@ QQuickFramebufferObject::Renderer* TerrainRendererItem::createRenderer() const
     connect(ctx->picker_manager().get(), &nucleus::picker::PickerManager::pick_evaluated, this, &TerrainRendererItem::set_picked_feature);
 
 #ifdef ALP_ENABLE_DEV_TOOLS
-    connect(r->glWindow(), &gl_engine::Window::report_measurements, TimerFrontendManager::instance(), &TimerFrontendManager::receive_measurements);
+    connect(r->glWindow(), &gl_engine::Window::timer_measurements_ready, TimerFrontendManager::instance(), &TimerFrontendManager::receive_measurements);
 #endif
 
     // We now have to initialize everything based on the url, but we need to do this on the thread this instance
@@ -408,45 +413,6 @@ void TerrainRendererItem::set_selected_camera_position_index(unsigned value) {
         return;
     schedule_update();
     emit camera_definition_set_by_user(nucleus::camera::PositionStorage::instance()->get_by_index(value));
-}
-
-unsigned int TerrainRendererItem::in_flight_tiles() const
-{
-    return m_in_flight_tiles;
-}
-
-void TerrainRendererItem::set_in_flight_tiles(unsigned int new_in_flight_tiles)
-{
-    if (m_in_flight_tiles == new_in_flight_tiles)
-        return;
-    m_in_flight_tiles = new_in_flight_tiles;
-    emit in_flight_tiles_changed(m_in_flight_tiles);
-}
-
-unsigned int TerrainRendererItem::queued_tiles() const
-{
-    return m_queued_tiles;
-}
-
-void TerrainRendererItem::set_queued_tiles(unsigned int new_queued_tiles)
-{
-    if (m_queued_tiles == new_queued_tiles)
-        return;
-    m_queued_tiles = new_queued_tiles;
-    emit queued_tiles_changed(m_queued_tiles);
-}
-
-unsigned int TerrainRendererItem::cached_tiles() const
-{
-    return m_cached_tiles;
-}
-
-void TerrainRendererItem::set_cached_tiles(unsigned int new_cached_tiles)
-{
-    if (m_cached_tiles == new_cached_tiles)
-        return;
-    m_cached_tiles = new_cached_tiles;
-    emit cached_tiles_changed(m_cached_tiles);
 }
 
 unsigned int TerrainRendererItem::tile_cache_size() const

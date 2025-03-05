@@ -25,6 +25,7 @@
 #include <QNetworkInformation>
 #include <QStandardPaths>
 #include <QTimer>
+#include <QVariantMap>
 #include <nucleus/DataQuerier.h>
 #include <nucleus/tile/utils.h>
 #include <radix/quad_tree.h>
@@ -33,12 +34,10 @@
 
 using namespace nucleus::tile;
 
-Scheduler::Scheduler(std::string name, unsigned int tile_resolution, QObject* parent)
+Scheduler::Scheduler(unsigned int tile_resolution, QObject* parent)
     : QObject { parent }
-    , m_name(std::move(name))
     , m_tile_resolution(tile_resolution)
 {
-    setObjectName(m_name + "_scheduler");
     m_update_timer = std::make_unique<QTimer>(this);
     m_update_timer->setSingleShot(true);
     connect(m_update_timer.get(), &QTimer::timeout, this, &Scheduler::send_quad_requests);
@@ -78,14 +77,17 @@ void Scheduler::receive_quad(const DataQuad& new_quad)
 #else
     switch (new_quad.network_info().status) {
     case Status::Good:
-    case Status::NotFound:
+    case Status::NotFound: {
         m_ram_cache.insert(new_quad);
+        QVariantMap stats;
+        stats["n_quads_ram"] = m_ram_cache.n_cached_objects();
+        emit stats_ready(m_name, stats);
         schedule_purge();
         schedule_update();
         schedule_persist();
         emit quad_received(new_quad.id);
-        update_stats();
         break;
+    }
     case Status::NetworkError:
         // do not persist the tile.
         // do not reschedule retrieval (wait for user input or a reconnect signal).
@@ -154,14 +156,19 @@ void Scheduler::update_gpu_quads()
     });
 
     transform_and_emit(gpu_candidates, { superfluous_ids.cbegin(), superfluous_ids.cend() });
-    update_stats();
 }
 
 void Scheduler::send_quad_requests()
 {
     if (!m_network_requests_enabled)
         return;
-    emit quads_requested(missing_quads_for_current_camera());
+    auto quads = missing_quads_for_current_camera();
+    QVariantMap stats;
+    stats["n_quads_ram"] = m_ram_cache.n_cached_objects();
+    stats["n_quads_ram_max"] = m_ram_quad_limit;
+    stats["n_quads_requested"] = unsigned(quads.size());
+    emit stats_ready(m_name, stats);
+    emit quads_requested(std::move(quads));
 }
 
 void Scheduler::purge_ram_cache()
@@ -173,11 +180,19 @@ void Scheduler::purge_ram_cache()
     const auto should_refine = tile::utils::refineFunctor(m_current_camera, m_aabb_decorator, m_permissible_screen_space_error, m_tile_resolution);
     m_ram_cache.visit([&should_refine](const DataQuad& quad) { return should_refine(quad.id); });
     m_ram_cache.purge(m_ram_quad_limit);
-    update_stats();
+
+    QVariantMap stats;
+    stats["n_quads_ram"] = m_ram_cache.n_cached_objects();
+    stats["n_quads_ram_max"] = m_ram_quad_limit;
+    emit stats_ready(m_name, stats);
 }
 
-void Scheduler::persist_tiles()
+tl::expected<void, QString> Scheduler::persist_tiles()
 {
+    if (m_name == "unnamed" || m_name.isEmpty()) {
+        return tl::unexpected(QString("Not persisitng tiles as the scheduler is not named, and this would cause name conflicts in the file system."
+                                      "Name your scheduler, e.g., by using the scheduler director."));
+    }
     const auto start = std::chrono::steady_clock::now();
     const auto r = m_ram_cache.write_to_disk(disk_cache_path());
     const auto diff = std::chrono::steady_clock::now() - start;
@@ -191,6 +206,7 @@ void Scheduler::persist_tiles()
         qDebug() << QString("Writing tiles to disk into %1 failed: %2. Removing all files.").arg(QString::fromStdString(disk_cache_path().string())).arg(r.error());
         std::filesystem::remove_all(disk_cache_path());
     }
+    return r;
 }
 
 void Scheduler::schedule_update()
@@ -216,25 +232,34 @@ void Scheduler::schedule_persist()
     }
 }
 
-void Scheduler::update_stats()
+const QString& Scheduler::name() const { return m_name; }
+
+void Scheduler::set_name(const QString& new_name)
 {
-    m_statistics.n_tiles_in_ram_cache = m_ram_cache.n_cached_objects();
-    m_statistics.n_tiles_in_gpu_cache = m_gpu_cached.n_cached_objects();
-    emit statistics_updated(m_statistics);
+    setObjectName(QString("%1_scheduler").arg(new_name));
+    m_name = new_name;
 }
 
-void Scheduler::read_disk_cache()
+tl::expected<void, QString> Scheduler::read_disk_cache()
 {
+    if (m_name == "unnamed" || m_name.isEmpty()) {
+        return tl::unexpected(QString("Not reading tiles as the scheduler is not named, and this would cause name conflicts in the file system."
+                                      "Name your scheduler, e.g., by using the scheduler director."));
+    }
     const auto r = m_ram_cache.read_from_disk(disk_cache_path());
     if (r.has_value()) {
-        update_stats();
+        QVariantMap stats;
+        stats["n_quads_ram"] = m_ram_cache.n_cached_objects();
+        stats["n_quads_ram_max"] = m_ram_quad_limit;
+        emit stats_ready(m_name, stats);
     } else {
         qDebug() << QString("Reading tiles from disk cache (%1) failed: \n%2\nRemoving all files.").arg(QString::fromStdString(disk_cache_path().string())).arg(r.error());
         std::filesystem::remove_all(disk_cache_path());
     }
+    return r;
 }
 
-std::vector<Id> Scheduler::tiles_for_current_camera_position() const
+std::vector<Id> Scheduler::quads_for_current_camera_position() const
 {
     std::vector<Id> all_inner_nodes;
     const auto all_leaves = radix::quad_tree::onTheFlyTraverse(
@@ -251,7 +276,7 @@ const utils::AabbDecoratorPtr& Scheduler::aabb_decorator() const { return m_aabb
 
 std::vector<Id> Scheduler::missing_quads_for_current_camera() const
 {
-    auto tiles = tiles_for_current_camera_position();
+    auto tiles = quads_for_current_camera_position();
     const auto current_time = nucleus::utils::time_since_epoch();
     std::erase_if(
         tiles, [this, current_time](const tile::Id& id) { return m_ram_cache.contains(id) && m_ram_cache.peak_at(id).network_info().timestamp + m_retirement_age_for_tile_cache > current_time; });
@@ -290,7 +315,7 @@ std::filesystem::path Scheduler::disk_cache_path()
 {
     const auto base_path = std::filesystem::path(QStandardPaths::writableLocation(QStandardPaths::CacheLocation).toStdString());
     std::filesystem::create_directories(base_path);
-    return base_path / ("tile_cache_" + m_name);
+    return base_path / ("tile_cache_" + m_name.toStdString());
 }
 
 void Scheduler::set_purge_timeout(unsigned int new_purge_timeout)
