@@ -182,33 +182,51 @@ void Style::load()
             for (unsigned zoom = zoom_range.x; zoom < zoom_range.y + 1; zoom++) {
 
                 // determine if we have to change current / prev values
-                if (fill_colors_current_value.first < zoom) {
+                while (fill_colors_current_value.first < zoom) {
                     fill_colors_previous_value = fill_colors_current_value;
                     fill_colors_current_value = fill_colors[++fill_colors_index];
                 }
-                if (outline_colors_current_value.first < zoom) {
+                while (outline_colors_current_value.first < zoom) {
                     outline_colors_previous_value = outline_colors_current_value;
                     outline_colors_current_value = outline_colors[++outline_colors_index];
                 }
-                if (widths_current_value.first < zoom) {
+                while (widths_current_value.first < zoom) {
                     widths_previous_value = widths_current_value;
                     widths_current_value = widths[++widths_index];
                 }
-                if (dashes_current_value.first < zoom) {
+                while (dashes_current_value.first < zoom) {
                     dashes_previous_value = dashes_current_value;
                     dashes_current_value = dashes[++dashes_index];
                 }
-                if (opacities_current_value.first < zoom) {
+                while (opacities_current_value.first < zoom) {
                     opacities_previous_value = opacities_current_value;
                     opacities_current_value = opacities[++opacities_index];
                 }
 
                 // interpolate between previous and current values
-                auto fill_color = interpolate<uint32_t>(zoom, fill_color_interpolation_base, fill_colors_previous_value, fill_colors_current_value);
-                auto outline_color = interpolate<uint32_t>(zoom, outline_color_interpolation_base, outline_colors_previous_value, outline_colors_current_value);
-                auto width = interpolate<uint16_t>(zoom, width_interpolation_base, widths_previous_value, widths_current_value);
-                std::pair<uint8_t, uint8_t> dash = interpolate(zoom, dash_interpolation_base, dashes_previous_value, dashes_current_value);
-                auto opacity = interpolate<uint8_t>(zoom, opacity_interpolation_base, opacities_previous_value, opacities_current_value);
+                auto interpolation_factor_fill_color = 1.0;
+                auto interpolation_factor_outline_color = 1.0;
+                auto interpolation_factor_width = 1.0;
+                auto interpolation_factor_dash = 1.0;
+                auto interpolation_factor_opacity = 1.0;
+
+                if (fill_colors_previous_value.second != fill_colors_current_value.second)
+                    interpolation_factor_fill_color = interpolation_factor(zoom, fill_color_interpolation_base, fill_colors_previous_value.first, fill_colors_current_value.first);
+                if (outline_colors_previous_value.second != outline_colors_current_value.second)
+                    interpolation_factor_outline_color = interpolation_factor(zoom, outline_color_interpolation_base, outline_colors_previous_value.first, outline_colors_current_value.first);
+                if (widths_previous_value.second != widths_current_value.second)
+                    interpolation_factor_width = interpolation_factor(zoom, width_interpolation_base, widths_previous_value.first, widths_current_value.first);
+                if (dashes_previous_value.second != dashes_current_value.second)
+                    interpolation_factor_dash = interpolation_factor(zoom, dash_interpolation_base, dashes_previous_value.first, dashes_current_value.first);
+                if (opacities_previous_value.second != opacities_current_value.second)
+                    interpolation_factor_opacity = interpolation_factor(zoom, opacity_interpolation_base, opacities_previous_value.first, opacities_current_value.first);
+
+                uint32_t fill_color = interpolate_color(interpolation_factor_fill_color, fill_colors_previous_value.second, fill_colors_current_value.second);
+                uint32_t outline_color = interpolate_color(interpolation_factor_outline_color, outline_colors_previous_value.second, outline_colors_current_value.second);
+                uint16_t width = widths_previous_value.second * (1.0 - interpolation_factor_width) + widths_current_value.second * interpolation_factor_width;
+                std::pair<uint8_t, uint8_t> dash = { dashes_previous_value.second.first * (1.0 - interpolation_factor_dash) + dashes_current_value.second.first * interpolation_factor_dash,
+                    dashes_previous_value.second.second * (1.0 - interpolation_factor_dash) + dashes_current_value.second.second * interpolation_factor_dash };
+                uint8_t opacity = opacities_previous_value.second * (1.0 - interpolation_factor_opacity) + opacities_current_value.second * interpolation_factor_opacity;
 
                 // merge opacity with colors
                 if (opacity != 255u) {
@@ -234,7 +252,6 @@ void Style::load()
                     style_to_index[s] = style_index;
 
                     // add the style to the raster
-                    //  // float to uint32 representation // TODO this does not work for release build
                     style_values.push_back({ s.fill_color, s.outline_color, s.outline_width, s.outline_dash });
                 } else {
                     style_index = style_to_index[s];
@@ -247,7 +264,8 @@ void Style::load()
 
                 m_layer_to_style[layer_name].add_filter(style_index, layer_index, filter, zoom);
 
-                // auto id = obj.toObject().value("id").toString(); // DEBUG -> what layers with what index are used
+                //  DEBUG -> style_index to layername
+                // auto id = obj.toObject().value("id").toString();
                 // qDebug() << style_index << id;
             }
         }
@@ -285,7 +303,7 @@ std::shared_ptr<const nucleus::Raster<glm::u32vec4>> Style::styles() const { ret
 // we could also temporarily change the locale and change it back afterwards
 // but changing the locale might cause performance problems or other unexpected problems
 // snippet from: https://stackoverflow.com/a/78993592 -> also talks about possible multi thread issues with changing locale
-float stringToFloat(const std::string& value)
+float Style::stringToFloat(const std::string& value)
 {
     auto index = value.find(".");
     if (index == std::string::npos) {
@@ -296,42 +314,84 @@ float stringToFloat(const std::string& value)
     return full + double(decimals / pow(10, value.substr(index + 1).size()));
 }
 
+float Style::rgb2linear(uint8_t channel)
+{ // https://stackoverflow.com/a/21010385
+    float s = channel / 255.0f;
+
+    return s <= 0.04045 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4);
+}
+uint8_t Style::linear2rgb(float linear)
+{ // https://stackoverflow.com/a/21010385
+    float s = linear <= 0.0031308 ? linear * 12.92 : 1.055 * pow(linear, 1.0 / 2.4) - 0.055;
+    return (uint8_t)(s * 255);
+}
+
+uint32_t Style::interpolate_color(float t, uint32_t color1, uint32_t color2)
+{ // https://stackoverflow.com/a/21010385
+    uint32_t interpolated = 0;
+    for (int i = 0; i < 4; ++i) {
+        const auto channel_bits = ((3 - i) * 8);
+        float c1 = rgb2linear((color1 >> channel_bits) & 255);
+        float c2 = rgb2linear((color2 >> channel_bits) & 255);
+
+        interpolated |= linear2rgb((c2 - c1) * t + c1) << channel_bits;
+    }
+
+    return interpolated;
+}
+
 // uses https://github.com/maplibre/maplibre-style-spec/blob/main/src/expression/definitions/interpolate.ts -> exponentialInterpolation()
-template <typename T>
-T Style::interpolate(uint8_t zoom, float base, std::pair<uint8_t, T> prev, std::pair<uint8_t, T> current)
+float Style::interpolation_factor(uint8_t zoom, float base, uint8_t zoom1, uint8_t zoom2)
 {
-    const auto diff = current.first - prev.first;
-    const auto progress = zoom - diff;
+    const auto diff = zoom2 - zoom1;
+    uint8_t progress = 0;
+    if (zoom > zoom1) // make sure that progress is a positive number or keep at 0
+        progress = zoom - zoom1;
 
     if (diff == 0) // both values are the same
-        return current.second;
+        return 0;
 
-    float t = 0;
     if (base == 1)
-        t = float(progress) / float(diff);
+        return std::clamp((double(progress) / double(diff)), 0.0, 1.0);
     else
-        t = (pow(base, progress) - 1) / (pow(base, diff) - 1);
-
-    return prev.second * (1.0 - t) + current.second * t;
+        return std::clamp((pow(base, progress) - 1) / (pow(base, diff) - 1), 0.0, 1.0);
 }
 
-// interpolate with pairs (for dashes)
-std::pair<uint8_t, uint8_t> Style::interpolate(uint8_t zoom, float base, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> prev, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> current)
-{
-    const auto diff = current.first - prev.first;
-    const auto progress = zoom - diff;
+// template <typename T>
+// T Style::interpolate(uint8_t zoom, float base, std::pair<uint8_t, T> prev, std::pair<uint8_t, T> current)
+// {
+//     const auto diff = current.first - prev.first;
+//     const auto progress = zoom - diff;
 
-    if (diff == 0) // both values are the same
-        return current.second;
+//     if (diff == 0) // both values are the same
+//         return current.second;
 
-    float t = 0;
-    if (base == 1)
-        t = float(progress) / float(diff);
-    else
-        t = (pow(base, progress) - 1) / (pow(base, diff) - 1);
+//     float t = 0;
+//     if (base == 1)
+//         t = float(progress) / float(diff);
+//     else
+//         t = (pow(base, progress) - 1) / (pow(base, diff) - 1);
 
-    return { prev.second.first * (1.0 - t) + current.second.first * t, prev.second.second * (1.0 - t) + current.second.second * t };
-}
+//     return prev.second * (1.0 - t) + current.second * t;
+// }
+
+// // interpolate with pairs (for dashes)
+// std::pair<uint8_t, uint8_t> Style::interpolate(uint8_t zoom, float base, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> prev, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> current)
+// {
+//     const auto diff = current.first - prev.first;
+//     const auto progress = zoom - diff;
+
+//     if (diff == 0) // both values are the same
+//         return current.second;
+
+//     float t = 0;
+//     if (base == 1)
+//         t = float(progress) / float(diff);
+//     else
+//         t = (pow(base, progress) - 1) / (pow(base, diff) - 1);
+
+//     return { prev.second.first * (1.0 - t) + current.second.first * t, prev.second.second * (1.0 - t) + current.second.second * t };
+// }
 
 void Style::parse_colors(const QJsonValue& value, std::vector<std::pair<uint8_t, uint32_t>>& colors, float& base)
 {
@@ -339,9 +399,15 @@ void Style::parse_colors(const QJsonValue& value, std::vector<std::pair<uint8_t,
     if (value.isObject() && value.toObject().contains("stops")) {
         if (value.toObject().contains("base"))
             base = value.toObject().value("base").toDouble(1);
-        auto v = value.toObject().value("stops").toArray().last().toArray().last();
-        // TODO iterate over all values
-        colors.push_back({ 255, parse_color(v) });
+
+        const auto stops = value.toObject().value("stops").toArray();
+        for (qsizetype i = 0; i < stops.size(); i++) {
+            const auto stop = stops[i].toArray();
+            colors.push_back({ stop[0].toInt(), parse_color(stop[1]) });
+        }
+
+        // last value repeats the last value and sets zoom to max
+        colors.push_back({ 255, colors.back().second });
     } else {
         // only one value -> add element with highest zoom value
         colors.push_back({ 255, parse_color(value) });
@@ -353,9 +419,16 @@ void Style::parse_opacities(const QJsonValue& value, std::vector<std::pair<uint8
     if (value.isObject() && value.toObject().contains("stops")) {
         if (value.toObject().contains("base"))
             base = value.toObject().value("base").toDouble(1);
-        auto v = value.toObject().value("stops").toArray().last().toArray().last();
-        // TODO iterate over all values
-        opacities.push_back({ 255, parse_opacity(v) });
+
+        const auto stops = value.toObject().value("stops").toArray();
+        for (qsizetype i = 0; i < stops.size(); i++) {
+            const auto stop = stops[i].toArray();
+            assert(stop[0].isDouble()); // value is not a number -> take a closer look
+            opacities.push_back({ uint8_t(stop[0].toDouble()), parse_opacity(stop[1]) });
+        }
+
+        // last value repeats the last value and sets zoom to max
+        opacities.push_back({ 255, opacities.back().second });
     } else {
         // only one value -> add element with highest zoom value
         opacities.push_back({ 255, parse_opacity(value) });
@@ -367,9 +440,15 @@ void Style::parse_dashes(const QJsonValue& value, std::vector<std::pair<uint8_t,
     if (value.isObject() && value.toObject().contains("stops")) {
         if (value.toObject().contains("base"))
             base = value.toObject().value("base").toDouble(1);
-        auto v = value.toObject().value("stops").toArray().last().toArray().last();
-        // TODO iterate over all values
-        dashes.push_back({ 255, parse_dash(v) });
+
+        const auto stops = value.toObject().value("stops").toArray();
+        for (qsizetype i = 0; i < stops.size(); i++) {
+            const auto stop = stops[i].toArray();
+            dashes.push_back({ stop[0].toInt(), parse_dash(stop[1]) });
+        }
+
+        // last value repeats the last value and sets zoom to max
+        dashes.push_back({ 255, dashes.back().second });
     } else {
         // only one value -> add element with highest zoom value
         dashes.push_back({ 255, parse_dash(value) });
@@ -381,9 +460,15 @@ void Style::parse_line_widths(const QJsonValue& value, std::vector<std::pair<uin
     if (value.isObject() && value.toObject().contains("stops")) {
         if (value.toObject().contains("base"))
             base = value.toObject().value("base").toDouble(1);
-        auto v = value.toObject().value("stops").toArray().last().toArray().last();
-        // TODO iterate over all values
-        widths.push_back({ 255, parse_line_width(v) });
+
+        const auto stops = value.toObject().value("stops").toArray();
+        for (qsizetype i = 0; i < stops.size(); i++) {
+            const auto stop = stops[i].toArray();
+            widths.push_back({ stop[0].toInt(), parse_line_width(stop[1]) });
+        }
+
+        // last value repeats the last value and sets zoom to max
+        widths.push_back({ 255, widths.back().second });
     } else {
         // only one value -> add element with highest zoom value
         widths.push_back({ 255, parse_line_width(value) });

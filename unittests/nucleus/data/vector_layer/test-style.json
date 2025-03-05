@@ -1,0 +1,50 @@
+{
+    "layers":
+    [
+        {
+            "comment": "opacity outside of zoom range",
+            "id": "road_minor_casing",
+            "type": "line",
+            "source-layer": "transportation",
+            "minzoom": 13,
+            "maxzoom": 15,
+            "paint":
+            {
+                "line-color": "#bbbbbb",
+                "line-width":
+                {
+                    "base": 1.2,
+                    "stops":
+                    [
+                        [
+                            13,
+                            3
+                        ],
+                        [
+                            14,
+                            5
+                        ],
+                        [
+                            15,
+                            6
+                        ]
+                    ]
+                },
+                "line-opacity":
+                {
+                    "stops":
+                    [
+                        [
+                            10,
+                            0
+                        ],
+                        [
+                            12.5,
+                            1
+                        ]
+                    ]
+                }
+            }
+        }
+    ]
+}

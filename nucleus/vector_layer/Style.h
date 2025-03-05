@@ -80,9 +80,12 @@ signals:
 private:
     std::shared_ptr<const nucleus::Raster<glm::u32vec4>> m_styles;
 
-    template <typename T>
-    T interpolate(uint8_t zoom, float base, std::pair<uint8_t, T> prev, std::pair<uint8_t, T> current);
-    std::pair<uint8_t, uint8_t> interpolate(uint8_t zoom, float base, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> prev, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> current);
+    float interpolation_factor(uint8_t zoom, float base, uint8_t zoom1, uint8_t zoom2);
+    uint32_t interpolate_color(float t, uint32_t color1, uint32_t color2);
+
+    float stringToFloat(const std::string& value);
+    float rgb2linear(uint8_t channel);
+    uint8_t linear2rgb(float linear);
 
     std::unordered_map<std::string, StyleFilter> m_layer_to_style;
 
