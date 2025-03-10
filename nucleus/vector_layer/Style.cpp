@@ -35,9 +35,14 @@ namespace nucleus::vector_layer {
 
 // https://maplibre.org/maplibre-style-spec/
 
+// TODO add flag if two subsequent styles should be blended (also if they shouldnt be blended you can reuse style)
+
 Style::Style(const QString& filename)
     : m_filename(filename)
 {
+    // make sure that style_bits and style_buffer_size are correctly matched -> changing one means you also need to change the other
+    // -1 because one bit is used to signal if it should blend with next style or not
+    assert(((constants::style_buffer_size * constants::style_buffer_size) >> (constants::style_bits - 1)) == 1);
 }
 
 void Style::load()
@@ -60,7 +65,7 @@ void Style::load()
 
     std::vector<glm::u32vec4> style_values;
 
-    std::unordered_map<LayerStyle, uint32_t, Hasher> style_to_index;
+    // std::unordered_map<LayerStyle, uint32_t, Hasher> style_to_index;
 
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonArray layers = style_expander::expand(doc.object().value("layers").toArray());
@@ -242,20 +247,23 @@ void Style::load()
                 // dashes consist of gap / dash -> we combine them into one single value that is split again on the shader
                 const uint16_t merged_dash = (dash.first << 8) | dash.second;
 
-                LayerStyle s { fill_color, outline_color, width, merged_dash };
+                // previous way of creating the style -> reuses styles that are already used
+                // not viable anymore since we want to blend styles that are next to each other
+                // LayerStyle s { fill_color, outline_color, width, merged_dash };
+                // uint32_t style_index = -1u;
+                // // insert styles if they aren't inserted yet and get the index of the style we want to use
+                // if (!style_to_index.contains(s)) {
+                //     style_index = style_values.size();
+                //     style_to_index[s] = style_index;
 
-                uint32_t style_index = -1u;
-                // insert styles if they aren't inserted yet
-                // and get the index of the style we want to use
-                if (!style_to_index.contains(s)) {
-                    style_index = style_values.size();
-                    style_to_index[s] = style_index;
+                //     // add the style to the raster
+                //     style_values.push_back({ s.fill_color, s.outline_color, s.outline_width, s.outline_dash });
+                // } else {
+                //     style_index = style_to_index[s];
+                // }
 
-                    // add the style to the raster
-                    style_values.push_back({ s.fill_color, s.outline_color, s.outline_width, s.outline_dash });
-                } else {
-                    style_index = style_to_index[s];
-                }
+                uint32_t style_index = style_values.size();
+                style_values.push_back({ fill_color, outline_color, width, merged_dash });
 
                 if (!m_layer_to_style.contains(layer_name))
                     m_layer_to_style[layer_name] = StyleFilter();
@@ -272,6 +280,10 @@ void Style::load()
 
         layer_index++;
     }
+    // qDebug() << "style_values: " << style_values.size();
+
+    // make sure that layer_index also fits into style_bits (we use this in preprocess)
+    assert(layer_index < ((1u << constants::style_bits) - 1u));
 
     // make sure that the style values are within the buffer size; resize them to this size and create the raster images
     assert(style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
@@ -624,7 +636,7 @@ std::pair<uint8_t, uint8_t> Style::parse_dash(const QJsonValue&)
 uint16_t Style::parse_line_width(const QJsonValue& value)
 {
     if (value.isDouble()) {
-        return uint16_t(value.toDouble() * constants::style_precision);
+        return uint16_t(constants::line_width_multiplier * value.toDouble() * constants::style_precision);
     }
 
     qDebug() << "unhandled line width value" << value;

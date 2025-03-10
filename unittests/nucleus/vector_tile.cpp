@@ -78,8 +78,6 @@ TEST_CASE("nucleus/vector_tiles")
             CHECK(tile.network_info.status == nucleus::tile::NetworkInfo::Status::Good);
             CHECK(nucleus::utils::time_since_epoch() - tile.network_info.timestamp < 10'000);
 
-            qDebug() << tile.data->isEmpty() << tile.data->size();
-
             REQUIRE(tile.data->size() > 0);
             CHECK(tile.data->size() > 2000);
         }

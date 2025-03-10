@@ -18,7 +18,6 @@
 
 #pragma once
 
-#include <set>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -36,21 +35,16 @@ namespace details {
     /////////////////////////////////////////////
     // constants for data packing/unpacking
     // coordinates 14 bits
-    // style 12 bits
     //
     constexpr int all_bits = 32;
     constexpr int coordinate_bits = 14;
 
     constexpr int style_bits_per_coord = all_bits - (2 * coordinate_bits);
-    constexpr int all_style_bits = (style_bits_per_coord * 3);
 
     constexpr int coordinate_shift1 = all_bits - coordinate_bits;
     constexpr int coordinate_shift2 = all_bits - (2 * coordinate_bits);
-    constexpr int style_shift1 = all_style_bits - style_bits_per_coord;
-    constexpr int style_shift2 = all_style_bits - (2 * style_bits_per_coord);
 
     constexpr uint32_t coordinate_bitmask = (1u << coordinate_bits) - 1u;
-    constexpr uint32_t style_bitmask = (1u << style_bits_per_coord) - 1u;
     //
     // end constants for data packing/unpacking
     /////////////////////////////////////////////
@@ -70,7 +64,7 @@ namespace details {
     template <class T> inline void hash_combine(std::size_t& seed, T const& v) { seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2); }
 
     struct Hasher {
-        size_t operator()(const std::set<uint32_t>& seq) const
+        size_t operator()(const std::vector<uint32_t>& seq) const
         {
             size_t seed = 0;
             for (const uint32_t& i : seq) {
@@ -81,7 +75,7 @@ namespace details {
         }
     };
 
-    using VectorLayerGrid = std::vector<std::set<uint32_t>>;
+    using VectorLayerGrid = std::vector<std::map<uint32_t, uint32_t>>;
 
     struct VectorLayerCollection {
     public:
@@ -93,15 +87,11 @@ namespace details {
     struct GeometryData {
         std::vector<std::vector<glm::vec2>> vertices;
         uint32_t extent;
-        uint32_t style;
-        uint32_t layer;
+        std::vector<std::pair<uint32_t, uint32_t>> style_and_layer_indices;
         bool is_polygon;
-
-        // type dependent
-        float line_width;
     };
 
-    VectorLayerCollection preprocess_geometry(const std::vector<GeometryData>& data);
+    VectorLayerCollection preprocess_geometry(const std::vector<GeometryData>& data, const std::vector<glm::u32vec4> style_buffer);
 
     GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& layer_collection);
 
@@ -109,15 +99,11 @@ namespace details {
 
     std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(std::vector<std::pair<uint32_t, uint32_t>> styles, const std::vector<glm::u32vec4> style_buffer);
 
-    /**
-     * 96 bits -> rgb32UI
-     * 2*3*13=78 bits for all coordinate values
-     * 14 bits for style
-     * 78+14 bits = 92 -> 4 bits remain
-     */
-    glm::uvec3 pack_triangle_data(glm::vec2 a, glm::vec2 b, glm::vec2 c, uint32_t style_index);
-    glm::uvec3 pack_line_data(glm::vec2 a, glm::vec2 b, uint32_t style_index);
-    std::tuple<glm::vec2, glm::vec2, glm::vec2, uint32_t> unpack_triangle_data(glm::uvec3 packed);
+    uint32_t pack_index_buffer(uint32_t geometry_index, uint32_t style_index, bool polygon);
+
+    glm::uvec3 pack_triangle_data(glm::vec2 a, glm::vec2 b, glm::vec2 c);
+    glm::uvec3 pack_line_data(glm::vec2 a, glm::vec2 b);
+    std::tuple<glm::vec2, glm::vec2, glm::vec2> unpack_triangle_data(glm::uvec3 packed);
 } // namespace details
 
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style);

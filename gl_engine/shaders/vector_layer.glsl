@@ -22,7 +22,6 @@ struct VectorLayerData{
     highp ivec2 a;
     highp ivec2 b;
     highp ivec2 c;
-    highp uint style_index;
 };
 
 /////////////////////////////////////////////
@@ -31,15 +30,11 @@ const lowp int all_bits = 32;
 const lowp int coordinate_bits = 14;
 
 const lowp int style_bits_per_coord = all_bits - (2 * coordinate_bits);
-const lowp int all_style_bits = (style_bits_per_coord * 3);
 
 const lowp int coordinate_shift1 = all_bits - coordinate_bits;
 const lowp int coordinate_shift2 = all_bits - (2 * coordinate_bits);
-const lowp int style_shift1 = all_style_bits - style_bits_per_coord;
-const lowp int style_shift2 = all_style_bits - (2 * style_bits_per_coord);
 
 const highp uint coordinate_bitmask = (1u << coordinate_bits) - 1u;
-const highp uint style_bitmask = (1u << style_bits_per_coord) - 1u;
 // end constants for data packing/unpacking
 /////////////////////////////////////////////
 
@@ -62,10 +57,6 @@ highp uvec3 pack_vectorlayer_data(VectorLayerData data) {
     packed_data.z = uint(data.c.x) << coordinate_shift1;
     packed_data.z = packed_data.z | ((uint(data.c.y) & coordinate_bitmask) << coordinate_shift2);
 
-    packed_data.x = packed_data.x | ((data.style_index >> style_shift1) & style_bitmask);
-    packed_data.y = packed_data.y | ((data.style_index >> style_shift2) & style_bitmask);
-    packed_data.z = packed_data.z | ((data.style_index & style_bitmask));
-
     return packed_data;
 }
 
@@ -78,10 +69,6 @@ VectorLayerData unpack_vectorlayer_data(highp uvec3 packed_data) {
     unpacked_data.b.y = int((packed_data.y & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
     unpacked_data.c.x = int((packed_data.z & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
     unpacked_data.c.y = int((packed_data.z & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
-
-    unpacked_data.style_index = (packed_data.x & style_bitmask) << style_shift1;
-    unpacked_data.style_index = unpacked_data.style_index | (packed_data.y & style_bitmask) << style_shift2;
-    unpacked_data.style_index = unpacked_data.style_index | (packed_data.z & style_bitmask);
 
     // move the values back to the correct coordinates
     unpacked_data.a -= ivec2(tile_extent);

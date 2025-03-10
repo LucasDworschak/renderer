@@ -19,12 +19,13 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <stdint.h>
 
 namespace nucleus::vector_layer::constants {
 // sizes are all only one side -> and have to be squared to get the actual amount of data stored in the buffer
 // if values here change -> you also need to change them in the shader
-constexpr auto grid_size = 64; // 64
+constexpr auto grid_size = 64;
 constexpr auto data_size = std::array<uint32_t, 4> { 64u, 128u, 256u, 512u }; // needs to be in ascending order
 constexpr auto index_buffer_size_multiplier = 2.0; // index buffer can be bigger by this multiplier than the vertex buffer
 // how many array layers quads per data size
@@ -32,9 +33,15 @@ constexpr auto index_buffer_size_multiplier = 2.0; // index buffer can be bigger
 // IMPORTANT: only set -1u for the first values since those values will be combined to only one array_helper
 constexpr auto array_layer_quad_amount = std::array<uint32_t, 4> { -1u, -1u, 256u, 32u };
 constexpr auto tile_extent = 4096;
-constexpr auto style_buffer_size = 64; // if you make this value higher -> you have to also adapt preprocessor.all_style_bits
+
+// if you change one of the following setting you also need to change the other (that they match is asserted in style.cpp)
+// one bit is used to signal if it should blend with next style or not
+constexpr auto style_bits = 13;
+constexpr auto style_buffer_size = 64;
 
 // number is used to multiply float numbers in style to get int values for storage ( e.g. style_precision:100 means 1.253 -> 125 -> 1.250)
 constexpr uint16_t style_precision = 100;
+
+constexpr uint8_t line_width_multiplier = 5;
 
 } // namespace nucleus::vector_layer::constants

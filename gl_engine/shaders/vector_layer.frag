@@ -82,9 +82,12 @@ const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 
 const lowp float style_precision = 100.0;
 
+const lowp int style_bits = 13;
+
 ///////////////////////////////////////////////
 
 const highp uint bit_mask_ones = uint(-1u);
+const highp uint style_bit_mask = (1u << style_bits) -1u;
 
 
 highp float calculate_falloff(highp float dist, highp float from, highp float to) {
@@ -158,24 +161,42 @@ lowp ivec2 to_dict_pixel(mediump uint hash) {
     return ivec2(int(hash & 255u), int(hash >> 8u));
 }
 
-highp uint index_sample(lowp uint sampler_index, highp uint pixel_index, highp uint texture_layer)
+struct DrawData
+{
+    highp uint geometry_index;
+    highp uint style_index;
+    bool is_polygon;
+};
+
+DrawData parse_index_data(highp uint data)
+{
+    DrawData parsed_data;
+
+    parsed_data.geometry_index = data >> (style_bits + 1);
+    parsed_data.style_index = (data >> 1) & style_bit_mask;
+    parsed_data.is_polygon = (data & 1u) == 1u;
+
+    return parsed_data;
+}
+
+DrawData index_sample(lowp uint sampler_index, highp uint pixel_index, highp uint texture_layer)
 {
     // NOTE index sample currently have double the size of vertex buffer -> we need to double the dict_pixel lookups
     if(sampler_index == 0u)
     {
-        return texelFetch(index_buffer_sampler_0, ivec3(to_dict_pixel_128(pixel_index), texture_layer), 0).r;
+        return parse_index_data(texelFetch(index_buffer_sampler_0, ivec3(to_dict_pixel_128(pixel_index), texture_layer), 0).r);
     }
     else if(sampler_index == 1u)
     {
-        return texelFetch(index_buffer_sampler_1, ivec3(to_dict_pixel_256(pixel_index), texture_layer), 0).r;
+        return parse_index_data(texelFetch(index_buffer_sampler_1, ivec3(to_dict_pixel_256(pixel_index), texture_layer), 0).r);
     }
     else if(sampler_index == 2u)
     {
-        return texelFetch(index_buffer_sampler_2, ivec3(to_dict_pixel_512(pixel_index), texture_layer), 0).r;
+        return parse_index_data(texelFetch(index_buffer_sampler_2, ivec3(to_dict_pixel_512(pixel_index), texture_layer), 0).r);
     }
     else
     {
-        return texelFetch(index_buffer_sampler_3, ivec3(to_dict_pixel_1024(pixel_index), texture_layer), 0).r;
+        return parse_index_data(texelFetch(index_buffer_sampler_3, ivec3(to_dict_pixel_1024(pixel_index), texture_layer), 0).r);
     }
 }
 
@@ -199,6 +220,8 @@ VectorLayerData vertex_sample(lowp uint sampler_index, highp uint index, highp u
         return unpack_vectorlayer_data(texelFetch(vertex_buffer_sampler_3, ivec3(to_dict_pixel_512(index), texture_layer), 0).rgb);
     }
 }
+
+
 
 bool find_tile(inout highp uvec3 tile_id, out lowp ivec2 dict_px, inout highp vec2 uv) {
     uvec2 missing_packed_tile_id = uvec2((-1u) & 65535u, (-1u) & 65535u);
@@ -397,28 +420,17 @@ void main() {
                 {
 
                     debug_draw_calls = debug_draw_calls + 1;
-                    highp uint index = index_sample(sampler_buffer_index, i, texture_layer.y);
-                    bool is_polygon = (index & 1u) == 1u;
-                    index = index >> 1;
+                    DrawData draw_data = index_sample(sampler_buffer_index, i, texture_layer.y);
 
                     highp float d = 0.0;
-                    highp uint style_index = -1u;
 
-                    if(is_polygon)
+                    if(draw_data.is_polygon)
                     {
-                        VectorLayerData triangle_data = vertex_sample(sampler_buffer_index, index, texture_layer.y);
+                        VectorLayerData triangle_data = vertex_sample(sampler_buffer_index, draw_data.geometry_index, texture_layer.y);
 
-                        const highp vec2 vec2_tile_extent = vec2(tile_extent);
-
-                        // highp vec2 v0 = vec2(300.0, 300.0);
-                        // highp vec2 v1 = vec2(3700.0, 300.0);
-                        // highp vec2 v2 = vec2(2000.0, 3700.0);
-                        highp vec2 v0 = vec2(triangle_data.a);
-                        highp vec2 v1 = vec2(triangle_data.b);
-                        highp vec2 v2 = vec2(triangle_data.c);
-                        v0 = v0 / vec2_tile_extent;
-                        v1 = v1 / vec2_tile_extent;
-                        v2 = v2 / vec2_tile_extent;
+                        highp vec2 v0 = vec2(triangle_data.a) / vec2(tile_extent);
+                        highp vec2 v1 = vec2(triangle_data.b) / vec2(tile_extent);
+                        highp vec2 v2 = vec2(triangle_data.c) / vec2(tile_extent);
 
                         highp float thickness = 0.0;
                         d = sdTriangle(uv, v0, v1, v2) - thickness;
@@ -431,19 +443,19 @@ void main() {
                             continue;
 
                         // calling it here prevents getting the layerstyle if we do not need it yet
-                        bool check_next_geometry = prepare_layer_style(triangle_data.style_index, layer_style, pixel_color);
+                        bool check_next_geometry = prepare_layer_style(draw_data.style_index, layer_style, pixel_color);
                         if(check_next_geometry)
                             continue;
                     }
                     else
                     {
-                        VectorLayerData line_data = vertex_sample(sampler_buffer_index, index, texture_layer.y);
+                        VectorLayerData line_data = vertex_sample(sampler_buffer_index, draw_data.geometry_index, texture_layer.y);
 
                         highp vec2 v0 = vec2(line_data.a) / vec2(tile_extent);
                         highp vec2 v1 = vec2(line_data.b) / vec2(tile_extent);
 
                         // needs to be applied here to get the thickness of the line
-                        bool check_next_geometry = prepare_layer_style(line_data.style_index, layer_style, pixel_color);
+                        bool check_next_geometry = prepare_layer_style(draw_data.style_index, layer_style, pixel_color);
                         if(check_next_geometry)
                             continue;
 
