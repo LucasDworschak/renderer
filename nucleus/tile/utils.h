@@ -229,10 +229,44 @@ namespace utils {
         return refine;
     }
 
-    inline auto refineFunctor(const nucleus::camera::Definition& camera,
-        const AabbDecoratorPtr& aabb_decorator,
-        float error_threshold_px,
-        double tile_size = 256)
+    inline auto refineFunctor_max(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
+    {
+        constexpr auto sqrt2 = 1.414213562373095;
+        const auto camera_frustum = camera.frustum();
+        auto refine = [&camera, camera_frustum, error_threshold_px, tile_size, aabb_decorator](const tile::Id& tile) {
+            if (tile.zoom_level >= 18)
+                return false;
+
+            const auto aabb = aabb_decorator->aabb(tile);
+            if (!tile::utils::camera_frustum_contains_tile(camera_frustum, aabb))
+                return false;
+
+            const auto camera_position = camera.position();
+            // glm::dvec3 max_corner = { camera_position.x < (aabb.min.x + aabb.max.x) / 2.0 ? aabb.max.x : aabb.min.x,
+            //     camera_position.y < (aabb.min.y + aabb.max.y) / 2.0 ? aabb.max.y : aabb.min.y,
+            //     camera_position.z < (aabb.min.z + aabb.max.z) / 2.0 ? aabb.max.z : aabb.min.z };
+            // const auto delta = max_corner - camera_position;
+            // const auto distance = float(sqrt(delta.x * delta.x + delta.y * delta.y + 0));
+
+            float distance_squared = 0;
+            for (int i = 0; i < 2; ++i) {
+                float value = 0;
+                if (camera_position[i] < aabb.min[i])
+                    value = aabb.max[i] - camera_position[i];
+                else if (camera_position[i] > aabb.max[i])
+                    value = camera_position[i] - aabb.min[i];
+                distance_squared += value * value;
+            }
+            const auto distance = std::sqrt(distance_squared);
+
+            const auto pixel_size = float(sqrt2 * aabb.size().x / tile_size);
+
+            return camera.to_screen_space(pixel_size, distance) >= error_threshold_px;
+        };
+        return refine;
+    }
+
+    inline auto refineFunctor_min(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
     {
         constexpr auto sqrt2 = 1.414213562373095;
         const auto camera_frustum = camera.frustum();

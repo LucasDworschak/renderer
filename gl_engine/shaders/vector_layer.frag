@@ -321,6 +321,9 @@ void main() {
     // highp float depth = depthWSEncode2n8(length(var_pos_cws));
     highp float depth = length(var_pos_cws);
 
+    highp vec2 float_zoom = vec2(0,0);
+
+
 
 
     lowp vec3 debug_cacscade_layer = vec3(0,0,0);// DEBUG -> which cascade is being used
@@ -330,6 +333,7 @@ void main() {
     lowp vec3 debug_index_buffer_size = vec3(0.0f, 0.0, 0.0f); // DEBUG
     lowp vec3 debug_texture_layer = vec3(0.0f, 0.0, 0.0f); // DEBUG
     lowp int debug_draw_calls = 0; // DEBUG
+
 
 
 
@@ -352,6 +356,8 @@ void main() {
 
 
     if (find_tile(tile_id, dict_px, uv)) {
+
+        // float_zoom = vec2(uv, 0.0);
 
 
         highp uvec2 texture_layer = texelFetch(array_index_sampler, dict_px, 0).xy;
@@ -535,7 +541,6 @@ void main() {
                 // texout_albedo = debug_cacscade_layer;// DEBUG
                 // texout_albedo = debug_cell_size;// DEBUG
                 // texout_albedo = mix(texout_albedo, color_from_id_hash(texture_layer.y), 0.2);
-
             }
             else
             {
@@ -562,6 +567,8 @@ void main() {
             case 205u: overlay_color = debug_index_buffer_size;break;
             case 206u: overlay_color = debug_texture_layer;break;
             case 207u: overlay_color = vec3(pixel_alpha, 0.0, 0.0);break;
+            // case 208u: handled below;
+            case 209u: overlay_color = vec3(float_zoom, 0.0);break;
             default: overlay_color = vertex_color;
         }
         texout_albedo = mix(texout_albedo, overlay_color, conf.overlay_strength);
