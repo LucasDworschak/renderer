@@ -22,12 +22,12 @@
 
 namespace nucleus::vector_layer {
 
-void StyleFilter::add_filter(uint32_t style_index, uint32_t layer_index, std::shared_ptr<StyleExpressionBase> filter, uint8_t zoom)
+void StyleFilter::add_filter(FilterInfo filter_info, uint8_t zoom)
 {
     if (!m_filter.contains(zoom)) {
-        m_filter[zoom] = std::vector<std::tuple<uint32_t, uint32_t, std::shared_ptr<StyleExpressionBase>>>();
+        m_filter[zoom] = std::vector<FilterInfo>();
     }
-    m_filter[zoom].push_back(std::make_tuple(style_index, layer_index, filter));
+    m_filter[zoom].push_back(filter_info);
 }
 
 std::vector<std::pair<uint32_t, uint32_t>> StyleFilter::indices(unsigned zoom, const mapbox::vector_tile::feature& feature) const
@@ -42,13 +42,13 @@ std::vector<std::pair<uint32_t, uint32_t>> StyleFilter::indices(unsigned zoom, c
 
     auto styles = std::vector<std::pair<uint32_t, uint32_t>>();
 
-    for (const auto& values : m_filter.at(zoom)) {
-        if (std::get<2>(values) == nullptr) // no filter is here -> we assume that every feature with layername and zoom is valid
+    for (const auto& filter_info : m_filter.at(zoom)) {
+        if (filter_info.filter == nullptr) // no filter is here -> we assume that every feature with layername and zoom is valid
         {
-            styles.push_back(std::make_pair(std::get<0>(values), std::get<1>(values)));
+            styles.push_back(std::make_pair(filter_info.style_index, filter_info.layer_index));
 
-        } else if (std::get<2>(values)->matches(type, properties)) {
-            styles.push_back(std::make_pair(std::get<0>(values), std::get<1>(values)));
+        } else if (filter_info.filter->matches(type, properties)) {
+            styles.push_back(std::make_pair(filter_info.style_index, filter_info.layer_index));
         }
     }
 

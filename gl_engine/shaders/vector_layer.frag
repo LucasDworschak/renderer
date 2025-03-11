@@ -166,6 +166,7 @@ struct DrawData
     highp uint geometry_index;
     highp uint style_index;
     bool is_polygon;
+    bool should_blend;
 };
 
 DrawData parse_index_data(highp uint data)
@@ -173,7 +174,9 @@ DrawData parse_index_data(highp uint data)
     DrawData parsed_data;
 
     parsed_data.geometry_index = data >> (style_bits + 1);
-    parsed_data.style_index = (data >> 1) & style_bit_mask;
+    highp uint style_and_blend = (data >> 1) & style_bit_mask;
+    parsed_data.style_index = style_and_blend >> 1;
+    parsed_data.should_blend = (style_and_blend & 1u) == 1u;
     parsed_data.is_polygon = (data & 1u) == 1u;
 
     return parsed_data;

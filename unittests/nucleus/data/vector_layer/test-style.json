@@ -45,6 +45,38 @@
                     ]
                 }
             }
+        },
+        {
+            "comment": "reuse style if no blending",
+            "id": "road_minor_casing",
+            "type": "line",
+            "source-layer": "transportation",
+            "minzoom": 11,
+            "maxzoom": 15,
+            "paint":
+            {
+                "line-color": "#aaaaaa",
+                "line-width":
+                {
+                    "base": 1.2,
+                    "stops":
+                    [
+                        [
+                            13,
+                            8
+                        ],
+                        [
+                            14,
+                            9
+                        ],
+                        [
+                            15,
+                            10
+                        ]
+                    ]
+                }
+                
+            }
         }
     ]
 }

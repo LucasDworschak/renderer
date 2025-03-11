@@ -145,6 +145,10 @@ void Style::load()
         if (invalid)
             continue;
 
+        // we now know that we have valid styles -> create a new StyleFilter for this layer
+        if (!m_layer_to_style.contains(layer_name))
+            m_layer_to_style[layer_name] = StyleFilter();
+
         // determine zoom range defined in style.json (or fall back to [8-20] range
         glm::uvec2 zoom_range(8u, 20u);
         if (obj.toObject().contains("minzoom"))
@@ -184,8 +188,11 @@ void Style::load()
             uint8_t dashes_index = 0;
             uint8_t opacities_index = 0;
 
-            for (unsigned zoom = zoom_range.x; zoom < zoom_range.y + 1; zoom++) {
+            LayerStyle last_style { 0, 0, 0, 0 };
+            uint32_t last_style_index = -1u;
+            std::vector<uint8_t> zooms_with_same_style;
 
+            for (unsigned zoom = zoom_range.x; zoom < zoom_range.y + 1; zoom++) {
                 // determine if we have to change current / prev values
                 while (fill_colors_current_value.first < zoom) {
                     fill_colors_previous_value = fill_colors_current_value;
@@ -247,34 +254,42 @@ void Style::load()
                 // dashes consist of gap / dash -> we combine them into one single value that is split again on the shader
                 const uint16_t merged_dash = (dash.first << 8) | dash.second;
 
-                // previous way of creating the style -> reuses styles that are already used
-                // not viable anymore since we want to blend styles that are next to each other
-                // LayerStyle s { fill_color, outline_color, width, merged_dash };
-                // uint32_t style_index = -1u;
-                // // insert styles if they aren't inserted yet and get the index of the style we want to use
-                // if (!style_to_index.contains(s)) {
-                //     style_index = style_values.size();
-                //     style_to_index[s] = style_index;
+                LayerStyle current_style { fill_color, outline_color, width, merged_dash };
+                if (last_style != current_style) {
+                    // new style should be used
 
-                //     // add the style to the raster
-                //     style_values.push_back({ s.fill_color, s.outline_color, s.outline_width, s.outline_dash });
-                // } else {
-                //     style_index = style_to_index[s];
-                // }
+                    if (!zooms_with_same_style.empty()) {
+                        assert(last_style_index != -1u);
+                        // but first add the previous StyleFilters per zoom
+                        for (size_t i = 0; i < zooms_with_same_style.size() - 1; i++) {
+                            m_layer_to_style[layer_name].add_filter({ last_style_index, layer_index, filter }, zooms_with_same_style[i]);
+                        }
+                        // the last zoom needs to indicate that it should blend with the subsequent style
+                        m_layer_to_style[layer_name].add_filter({ last_style_index | 1, layer_index, filter }, zooms_with_same_style.back());
+                    }
+                    // TODO we now shifted style by one and added blend flag -> also do this in shader and style unittest
+                    last_style_index = style_values.size() << 1; // move style index by 1 for the "blend" flag
+                    last_style = current_style;
+                    style_values.push_back({ fill_color, outline_color, width, merged_dash });
 
-                uint32_t style_index = style_values.size();
-                style_values.push_back({ fill_color, outline_color, width, merged_dash });
-
-                if (!m_layer_to_style.contains(layer_name))
-                    m_layer_to_style[layer_name] = StyleFilter();
-
-                // TODO somehow store both this value and the next style_index value so that we can interpolate between both
-
-                m_layer_to_style[layer_name].add_filter(style_index, layer_index, filter, zoom);
+                    // renew the vector
+                    zooms_with_same_style.clear();
+                    zooms_with_same_style.emplace_back(zoom);
+                } else {
+                    // remember that this zoom level uses this style
+                    zooms_with_same_style.emplace_back(zoom);
+                }
 
                 //  DEBUG -> style_index to layername
                 // auto id = obj.toObject().value("id").toString();
-                // qDebug() << style_index << id;
+                // qDebug() << last_style_index << id;
+            }
+
+            // add all the styles // this time there is no blending necessary since all the styles are the same
+            if (!zooms_with_same_style.empty()) {
+                for (size_t i = 0; i < zooms_with_same_style.size(); i++) {
+                    m_layer_to_style[layer_name].add_filter({ last_style_index, layer_index, filter }, zooms_with_same_style[i]);
+                }
             }
         }
 

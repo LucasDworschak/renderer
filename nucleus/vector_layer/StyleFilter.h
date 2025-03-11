@@ -32,17 +32,23 @@ class feature;
 
 namespace nucleus::vector_layer {
 
+struct FilterInfo {
+    uint32_t style_index;
+    uint32_t layer_index;
+    std::shared_ptr<StyleExpressionBase> filter;
+};
+
 class StyleFilter {
 public:
     StyleFilter() { }
 
-    void add_filter(uint32_t style_index, uint32_t layer_index, std::shared_ptr<StyleExpressionBase> filter, uint8_t zoom);
+    void add_filter(FilterInfo filter_info, uint8_t zoom);
 
     std::vector<std::pair<uint32_t, uint32_t>> indices(unsigned zoom, const mapbox::vector_tile::feature& feature) const;
 
 private:
-    // zoom level -> vector<style_index,StyleExpression>
-    std::unordered_map<unsigned, std::vector<std::tuple<uint32_t, uint32_t, std::shared_ptr<StyleExpressionBase>>>> m_filter;
+    // zoom level -> vector<FilterInfo>
+    std::unordered_map<unsigned, std::vector<FilterInfo>> m_filter;
 };
 
 } // namespace nucleus::vector_layer

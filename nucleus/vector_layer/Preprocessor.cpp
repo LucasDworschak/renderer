@@ -32,15 +32,11 @@
 
 namespace nucleus::vector_layer {
 
-// TODOs
-// - line visualization
-
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
 {
-    // qDebug() << id.coords.x << ", " << id.coords.y << " z: " << id.zoom_level;
     if (vector_tile_data.isEmpty())
         return {};
-    // qDebug() << "b";
+    // qDebug() << id.coords.x << ", " << id.coords.y << " z: " << id.zoom_level;
 
     // DEBUG polygons
     // const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5 / 64.0 * constants::grid_size, 30.5 / 64.0 * constants::grid_size),
@@ -75,7 +71,7 @@ std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(std::vector<std::pair
     float width = 0.0;
 
     for (const auto& indices : style_and_layer_indices) {
-        const auto style_data = style_buffer[indices.first];
+        const auto style_data = style_buffer[indices.first >> 1];
         const float current_width = float(style_data.z) / float(constants::style_precision);
         const int current_opacity = style_data.x & 255;
 
@@ -258,7 +254,7 @@ VectorLayerCollection preprocess_geometry(const std::vector<GeometryData>& data,
             }
 
             for (const auto& style_layer : data[i].style_and_layer_indices) {
-                const auto line_width = float(style_buffer[style_layer.first].z) / float(constants::style_precision);
+                const auto line_width = float(style_buffer[style_layer.first >> 1].z) / float(constants::style_precision);
 
                 const auto cell_writer = [&layer_collection, data_offset, style_layer](glm::vec2 pos, int data_index) {
                     // if in grid_size bounds and not already present -> than add index to vector

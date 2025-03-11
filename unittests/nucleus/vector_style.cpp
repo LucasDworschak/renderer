@@ -90,14 +90,15 @@ std::map<std::string, uint32_t> parse_tile(
             int index = 0;
 
             for (const auto& style : style_indices) {
+                uint32_t style_index = style.first >> 1; // we do not need blending flag
                 std::string indexed_key = key + "_" + std::to_string(index);
                 if (feature_to_style.contains(indexed_key)) // make sure that all features with the same key share the style (if not we have to expand how we generate the key)
                 {
-                    if (feature_to_style[indexed_key] != style.first)
+                    if (feature_to_style[indexed_key] != style_index)
                         qDebug() << "key does already exist with diferent value: " << indexed_key;
-                    CHECK(feature_to_style[indexed_key] == style.first);
+                    CHECK(feature_to_style[indexed_key] == style_index);
                 } else
-                    feature_to_style[indexed_key] = style.first; // add the style to the map
+                    feature_to_style[indexed_key] = style_index; // add the style to the map
 
                 index++;
             }
@@ -156,6 +157,13 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[0].x == 0xbbbbbbff);
         CHECK(style_buffer[1].x == 0xbbbbbbff);
         CHECK(style_buffer[2].x == 0xbbbbbbff);
+
+        const auto line_multipliers = nucleus::vector_layer::constants::line_width_multiplier * nucleus::vector_layer::constants::style_precision;
+        // reuse style if no blending
+        CHECK(style_buffer[3].x == 0xaaaaaaff); // make sure that we are in the right style instruction here (not using above style)
+        CHECK(style_buffer[3].z == 8 * line_multipliers);
+        CHECK(style_buffer[4].z == 9 * line_multipliers);
+        CHECK(style_buffer[5].z == 10 * line_multipliers);
     }
 
     SECTION("Style expand openstreetmap")
