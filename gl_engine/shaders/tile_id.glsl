@@ -16,6 +16,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+const highp float pi = 3.1415926535897932384626433;
+const highp float cEarthCircumference = 40075016.685578486;
+const highp float cOriginShift = 20037508.342789244;
+
 mediump uint hash_tile_id(mediump uvec3 id) {
     mediump uint z = id.z * 46965u + 10859u;
     mediump uint x = id.x * 60197u + 12253u;
@@ -63,4 +67,12 @@ void decrease_zoom_level_until(inout highp uvec3 id, inout highp vec2 uv, in low
     id.x = id.x >> z_delta;
     id.y = id.y >> z_delta;
     uv = uv / float(1u << z_delta) + vec2(x_border, y_border);
+}
+
+highp vec4 tile_bounds(highp uvec3 tile_id)
+{
+    highp float tiles_for_zoom = float(1 << tile_id.z);
+    highp float width_of_a_tile = cEarthCircumference / tiles_for_zoom;
+    highp float height_of_a_tile = cEarthCircumference / tiles_for_zoom;
+    return vec4(float(tile_id.x) * width_of_a_tile - cOriginShift, float(tile_id.y) * height_of_a_tile  - cOriginShift, float(tile_id.x + 1u) * width_of_a_tile - cOriginShift, float(tile_id.y + 1u) * height_of_a_tile  - cOriginShift);
 }

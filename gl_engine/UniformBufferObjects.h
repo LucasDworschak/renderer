@@ -133,7 +133,7 @@ struct uboCameraConfig {
     glm::vec2 viewport_size;
     // the distance scaling factor of the camera
     float distance_scaling_factor;
-    float buffer2;
+    float error_threshold_px;
 };
 
 struct uboShadowConfig {
