@@ -150,7 +150,7 @@ void Style::load()
             m_layer_to_style[layer_name] = StyleFilter();
 
         // determine zoom range defined in style.json (or fall back to [8-20] range
-        glm::uvec2 zoom_range(8u, 20u);
+        glm::uvec2 zoom_range(8u, constants::max_zoom);
         if (obj.toObject().contains("minzoom"))
             zoom_range.x = obj.toObject().value("minzoom").toInt();
         if (obj.toObject().contains("maxzoom"))
@@ -191,6 +191,7 @@ void Style::load()
             LayerStyle last_style { 0, 0, 0, 0 };
             uint32_t last_style_index = -1u;
             std::vector<uint8_t> zooms_with_same_style;
+            bool has_blending = false;
 
             for (unsigned zoom = zoom_range.x; zoom < zoom_range.y + 1; zoom++) {
                 // determine if we have to change current / prev values
@@ -259,15 +260,30 @@ void Style::load()
                     // new style should be used
 
                     if (!zooms_with_same_style.empty()) {
+                        // new style was encountered and we already had previous styles
+                        // -> add all the previous styles and set teh blend flag for the last style
                         assert(last_style_index != -1u);
                         // but first add the previous StyleFilters per zoom
                         for (size_t i = 0; i < zooms_with_same_style.size() - 1; i++) {
-                            m_layer_to_style[layer_name].add_filter({ last_style_index, layer_index, filter }, zooms_with_same_style[i]);
+                            m_layer_to_style[layer_name].add_filter({ last_style_index | (has_blending ? 1 : 0), layer_index, filter }, zooms_with_same_style[i]);
+
+                            if (has_blending) {
+                                // we have to make sure that we create new styles for each individual step (although they are similar)
+                                // this is necessary for multi style blending
+                                // styles added here are inserted at next loop or as last
+                                last_style_index = style_values.size() << 1; // move style index by 1 for the "blend" flag
+                                style_values.push_back({ last_style.fill_color, last_style.outline_color, last_style.outline_width, last_style.outline_dash });
+                            }
                         }
-                        // the last zoom needs to indicate that it should blend with the subsequent style
+                        // the last zoom always blends with subsequent styles
                         m_layer_to_style[layer_name].add_filter({ last_style_index | 1, layer_index, filter }, zooms_with_same_style.back());
+                        // from now on make sure that we are always blending / create new styles
+                        has_blending = true;
                     }
-                    // TODO we now shifted style by one and added blend flag -> also do this in shader and style unittest
+                    // else {
+                    //     // first style no need to do anything special
+                    // }
+
                     last_style_index = style_values.size() << 1; // move style index by 1 for the "blend" flag
                     last_style = current_style;
                     style_values.push_back({ fill_color, outline_color, width, merged_dash });
@@ -285,11 +301,20 @@ void Style::load()
                 // qDebug() << last_style_index << id;
             }
 
-            // add all the styles // this time there is no blending necessary since all the styles are the same
+            // add all the remaining styles to maxzoom
             if (!zooms_with_same_style.empty()) {
-                for (size_t i = 0; i < zooms_with_same_style.size(); i++) {
-                    m_layer_to_style[layer_name].add_filter({ last_style_index, layer_index, filter }, zooms_with_same_style[i]);
+                for (size_t i = 0; i < zooms_with_same_style.size() - 1; i++) {
+                    m_layer_to_style[layer_name].add_filter({ last_style_index | (has_blending ? 1 : 0), layer_index, filter }, zooms_with_same_style[i]);
+                    if (has_blending) {
+                        // we have to make sure that we create new styles for each individual step (although they are similar)
+                        // this is necessary for multi style blending
+                        // styles added here are inserted at next loop or as last
+                        last_style_index = style_values.size() << 1; // move style index by 1 for the "blend" flag
+                        style_values.push_back({ last_style.fill_color, last_style.outline_color, last_style.outline_width, last_style.outline_dash });
+                    }
                 }
+                // last style does no blending
+                m_layer_to_style[layer_name].add_filter({ last_style_index | 0, layer_index, filter }, zooms_with_same_style.back());
             }
         }
 

@@ -85,6 +85,7 @@ const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 const lowp float style_precision = 100.0;
 
 const lowp int style_bits = 13;
+const lowp int max_zoom = 18;
 
 ///////////////////////////////////////////////
 
@@ -228,28 +229,21 @@ VectorLayerData vertex_sample(lowp uint sampler_index, highp uint index, highp u
 
 mediump float float_zoom_interpolation(highp uvec3 tile_id, highp float depth)
 {
-    const highp float error_threshold_px = 1.0 / 0.1; // TODO move to camera_config
+    // TODO move error_threshold_px to camera_config
+    // const highp float error_threshold_px = 1.0 / 0.1;
+    const highp float error_threshold_px = 1.0 / 0.5;
+    // const highp float error_threshold_px = 1.0 / 2.0;
+
     const highp float sqrt2 = 1.414213562373095;
+    const highp float cEarthCircumference = 40075016.685578486;
     const highp float tile_size = 512.0;
 
-    highp vec4 bounds_ws = tile_bounds(tile_id);
-    highp float tile_width = bounds_ws.z - bounds_ws.x;
+    highp float camera_factors = camera.viewport_size.y * 0.5 * camera.distance_scaling_factor;
+    highp float static_factors = camera_factors * sqrt2 * cEarthCircumference / tile_size;
+    highp float z = log2(static_factors / depth / error_threshold_px);
 
-    highp float tile_world_space_size = sqrt2 * tile_width / tile_size; // tile_size is declared in scheduler -> set through uniform or constant?
-
-    // formula uses cpp functions nucleus::tile::utils::refineFunctor_max and nucleus::camera::Definition::to_screen_space
-    // but we want to calculate the threshold between two zoom levels (when we will change to the next level)
-    // highp float max_dist = camera.viewport_size.y * 0.5 * tile_world_space_size * camera.distance_scaling_factor / error_threshold_px;
-    // max_dist -> the border between current and lower zoom
-    // min_dist -> the border between current and higher zoom
-    // highp float min_dist = max_dist / 2.0;
-
-    highp float px_error = camera.viewport_size.y * 0.5 * tile_world_space_size * camera.distance_scaling_factor / depth;
-
-    return px_error/error_threshold_px;
+    return z;
 }
-
-
 
 bool find_tile(inout highp uvec3 tile_id, out lowp ivec2 dict_px, inout highp vec2 uv) {
     uvec2 missing_packed_tile_id = uvec2((-1u) & 65535u, (-1u) & 65535u);
@@ -605,6 +599,16 @@ void main() {
         }
     }
 
+    lowp vec4 zoom_color = vec4(1.0,1.0,1.0, 1.0);
+    zoom_color = vec4(color_from_id_hash(uint(float_zoom+2u)), 1.0);
+
+    // lowp float test_zoom = 9.0;
+
+    // if(float_zoom > test_zoom && float_zoom < test_zoom + 1.0)
+    // {
+    //     zoom_color = vec4(1.0,0.0,0.0,1.0);
+    // }
+
 
     if (conf.overlay_mode > 199u && conf.overlay_mode < 300u) {
         lowp vec3 overlay_color = vec3(0.0);
@@ -618,7 +622,8 @@ void main() {
             case 206u: overlay_color = debug_texture_layer;break;
             case 207u: overlay_color = vec3(pixel_alpha, 0.0, 0.0);break;
             // case 208u: handled below;
-            case 209u: overlay_color = vec3(float_zoom, 0.0, 0.0);break;
+            // case 209u: overlay_color = vec3(float_zoom, 0.0, 0.0);break;
+            case 209u: overlay_color = zoom_color.rgb;break;
             default: overlay_color = vertex_color;
         }
         texout_albedo = mix(texout_albedo, overlay_color, conf.overlay_strength);
@@ -634,6 +639,8 @@ void main() {
                 texout_albedo = vec3(0.0, float(debug_draw_calls) / upper_limit, 0.0);
         }
     }
+
+     // texout_albedo = mix(texout_albedo, vertex_color, conf.overlay_strength);
 
 
 

@@ -53,4 +53,16 @@ void main() {
         case 4u: vertex_color = color_from_id_hash(uint(gl_VertexID)); break;
         case 5u: vertex_color = vec3(texture(height_tex_sampler, vec3(var_uv, height_texture_layer)).rrr) / 65535.0; break;
     }
+
+    vertex_color = color_from_id_hash(uint(var_tile_id.z)); // TODO @lucas remove me again
+    // if(var_tile_id.z == 11u)
+    // {
+    //     vertex_color = vec3(0.0, 1.0, 0.0); // TODO @lucas remove me again
+
+    // }
+    // else if(var_tile_id.z == 12u)
+    // {
+    //     vertex_color = vec3(1.0, 1.0, 0.0);
+    // }
+
 }

@@ -43,5 +43,6 @@ constexpr auto style_buffer_size = 64;
 constexpr uint16_t style_precision = 100;
 
 constexpr uint8_t line_width_multiplier = 5;
+constexpr uint8_t max_zoom = 18u;
 
 } // namespace nucleus::vector_layer::constants

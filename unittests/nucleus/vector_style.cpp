@@ -154,16 +154,22 @@ TEST_CASE("nucleus/vector_style")
         const auto style_buffer = s.styles()->buffer();
 
         // "opacity outside of zoom range"
-        CHECK(style_buffer[0].x == 0xbbbbbbff);
-        CHECK(style_buffer[1].x == 0xbbbbbbff);
-        CHECK(style_buffer[2].x == 0xbbbbbbff);
+        CHECK(style_buffer[0].x == 0xbbbbbbff); // z 13
+        CHECK(style_buffer[1].x == 0xbbbbbbff); // z 14
+        CHECK(style_buffer[2].x == 0xbbbbbbff); // z 15
+        CHECK(style_buffer[3].x == 0xbbbbbbff); // z 16
+        CHECK(style_buffer[4].x == 0xbbbbbbff); // z 17
+        CHECK(style_buffer[5].x == 0xbbbbbbff); // z 18
 
         const auto line_multipliers = nucleus::vector_layer::constants::line_width_multiplier * nucleus::vector_layer::constants::style_precision;
         // reuse style if no blending
-        CHECK(style_buffer[3].x == 0xaaaaaaff); // make sure that we are in the right style instruction here (not using above style)
-        CHECK(style_buffer[3].z == 8 * line_multipliers);
-        CHECK(style_buffer[4].z == 9 * line_multipliers);
-        CHECK(style_buffer[5].z == 10 * line_multipliers);
+        CHECK(style_buffer[6].x == 0xaaaaaaff); // make sure that we are in the right style instruction here (not using above style)
+        CHECK(style_buffer[6].z == 8 * line_multipliers); // z 11, 12, 13
+        CHECK(style_buffer[7].z == 9 * line_multipliers); // z 14
+        CHECK(style_buffer[8].z == 10 * line_multipliers); // z 15
+        CHECK(style_buffer[9].z == 10 * line_multipliers); // z 16
+        CHECK(style_buffer[10].z == 10 * line_multipliers); // z 17
+        CHECK(style_buffer[11].z == 10 * line_multipliers); // z 18
     }
 
     SECTION("Style expand openstreetmap")

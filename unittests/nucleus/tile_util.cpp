@@ -88,6 +88,52 @@ TEST_CASE("tile/utils/refine_functor")
     };
 }
 
+TEST_CASE("tile/utils/refine_functor_max")
+{
+    // tests if the method to determine the max position in an aabb is correct
+    auto camera = nucleus::camera::stored_positions::stephansdom_closeup();
+    QFile file(":/map/height_data.atb");
+    const auto open = file.open(QIODeviceBase::OpenModeFlag::ReadOnly);
+    assert(open);
+    Q_UNUSED(open);
+    const QByteArray data = file.readAll();
+    const auto decorator = AabbDecorator::make(radix::TileHeights::deserialise(data));
+
+    // const auto refine_functor = utils::refineFunctor_max(camera, decorator, 1.0);
+    const auto all_leaves = quad_tree::onTheFlyTraverse(Id { 0, { 0, 0 } }, [](const Id& v) { return v.zoom_level < 6; }, [](const Id& v) { return v.children(); });
+
+    for (const auto& id : all_leaves) {
+
+        const auto aabb = decorator->aabb(id);
+
+        // code from refine_functor START
+        const auto camera_position = camera.position();
+        glm::dvec3 max_corner = { camera_position.x < (aabb.min.x + aabb.max.x) / 2.0 ? aabb.max.x : aabb.min.x,
+            camera_position.y < (aabb.min.y + aabb.max.y) / 2.0 ? aabb.max.y : aabb.min.y,
+            camera_position.z < (aabb.min.z + aabb.max.z) / 2.0 ? aabb.max.z : aabb.min.z };
+        const auto delta = max_corner - camera_position;
+        // const auto distance = float(sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z));
+        const auto distance = float(sqrt(delta.x * delta.x + delta.y * delta.y + 0));
+        // code from refine_functor END
+
+        std::array<glm::dvec3, 8> all_corners = { glm::dvec3(aabb.min.x, aabb.min.y, aabb.min.z),
+            glm::dvec3(aabb.min.x, aabb.min.y, aabb.max.z),
+            glm::dvec3(aabb.min.x, aabb.max.y, aabb.min.z),
+            glm::dvec3(aabb.min.x, aabb.max.y, aabb.max.z),
+            glm::dvec3(aabb.max.x, aabb.min.y, aabb.min.z),
+            glm::dvec3(aabb.max.x, aabb.min.y, aabb.max.z),
+            glm::dvec3(aabb.max.x, aabb.max.y, aabb.min.z),
+            glm::dvec3(aabb.max.x, aabb.max.y, aabb.max.z) };
+
+        for (const auto& corner : all_corners) {
+            const auto curr_delta = corner - camera_position;
+            const auto curr_distance = float(sqrt(curr_delta.x * curr_delta.x + curr_delta.y * curr_delta.y + curr_delta.z * curr_delta.z));
+
+            CHECK(curr_distance <= distance);
+        }
+    }
+}
+
 TEST_CASE("tile/utils/camera_frustum_contains_tile")
 {
     using nucleus::tile::utils::camera_frustum_contains_tile;
