@@ -46,11 +46,12 @@
                 }
             }
         },
+
         {
             "comment": "reuse style if no blending",
             "id": "road_minor_casing",
             "type": "line",
-            "source-layer": "transportation",
+            "source-layer": "transportation2",
             "minzoom": 11,
             "maxzoom": 15,
             "paint":

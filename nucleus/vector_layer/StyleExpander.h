@@ -25,21 +25,17 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
-namespace nucleus::vector_layer::style_expander::details {
+#include <radix/hasher.h>
 
-template <class T>
-inline void hash_combine(std::size_t& seed, T const& v)
-{
-    seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-}
+namespace nucleus::vector_layer::style_expander::details {
 
 struct PairHasher {
     size_t operator()(const std::pair<QJsonValue, QJsonValue>& pair) const
     {
         size_t seed = 0;
 
-        hash_combine<size_t>(seed, qHash(pair.first));
-        hash_combine<size_t>(seed, qHash(pair.second));
+        radix::hasher::hash_combine<size_t>(seed, qHash(pair.first));
+        radix::hasher::hash_combine<size_t>(seed, qHash(pair.second));
 
         return seed;
     }

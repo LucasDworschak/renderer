@@ -41,6 +41,8 @@ public:
     StyleExpressionBase() { }
     virtual ~StyleExpressionBase() { }
 
+    virtual size_t hash() = 0;
+
     /**
      * checks if the supplied feature matches the expression that was initialized
      */
@@ -53,6 +55,8 @@ public:
 class StyleExpression : public StyleExpressionBase {
 public:
     StyleExpression(QJsonArray data);
+
+    size_t hash() override;
 
     /**
      * checks if the supplied feature matches the expression that was initialized
@@ -76,6 +80,8 @@ private:
 class StyleExpressionCollection : public StyleExpressionBase {
 public:
     StyleExpressionCollection(QJsonArray data);
+
+    size_t hash() override;
 
     /**
      * checks if the supplied feature matches the expression of all/any of the expression it holds

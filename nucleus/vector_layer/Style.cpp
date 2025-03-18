@@ -70,8 +70,14 @@ void Style::load()
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonArray layers = style_expander::expand(doc.object().value("layers").toArray());
 
-    uint32_t layer_index = 0;
+    // pair is <layer_id, filter>
+    // layerid: source_layer+_+type (e.g. transportation_line)
+    auto layerid_filter_to_layer_indices = std::map<std::pair<std::string, std::shared_ptr<StyleExpressionBase>>, std::vector<uint32_t>, Hasher>();
+    // each entry in this vector is a different layer_index
+    auto zoom_to_style = std::vector<std::map<uint8_t, LayerStyle>>();
 
+    auto current_style_map = std::map<uint8_t, LayerStyle>();
+    auto previous_layer_filter = std::pair<std::string, std::shared_ptr<StyleExpressionBase>>();
     for (const QJsonValue& obj : layers) {
 
         if (obj.toObject().value("type").toString() != "line" && obj.toObject().value("type").toString() != "fill") {
@@ -90,8 +96,8 @@ void Style::load()
         // qDebug() << obj.toObject().value("source-layer").toString();
         // qDebug() << obj.toObject().value("id").toString();
 
-        auto paintObject = obj.toObject().value("paint").toObject();
-        auto filterData = obj.toObject().value("filter").toArray();
+        auto paint_object = obj.toObject().value("paint").toObject();
+        auto filter_data = obj.toObject().value("filter").toArray();
         const auto layer_name = obj.toObject().value("source-layer").toString().toStdString() + "_" + obj.toObject().value("type").toString().toStdString();
 
         std::vector<std::pair<uint8_t, uint32_t>> fill_colors;
@@ -107,26 +113,43 @@ void Style::load()
         float dash_interpolation_base = 1;
         float opacity_interpolation_base = 1;
 
-        std::shared_ptr<StyleExpressionBase> filter = StyleExpressionBase::create_filter_expression(filterData);
+        std::shared_ptr<StyleExpressionBase> filter = StyleExpressionBase::create_filter_expression(filter_data);
+
+        const auto current_layer_filter = std::make_pair(layer_name, filter);
+
+        if (previous_layer_filter.first.empty()) {
+            // first time -> only set the previous_layer_filter
+            previous_layer_filter = current_layer_filter;
+        } else {
+            // only increase layer_index if filter and or name is different
+            // by doing this we prevent edge cases like https://github.com/AlpineMapsOrg/renderer/issues/151#issuecomment-2723695519 from overriding styles
+            if (current_layer_filter != previous_layer_filter) {
+                // add the previous values to the data structures
+                layerid_filter_to_layer_indices[previous_layer_filter].push_back(zoom_to_style.size());
+                zoom_to_style.push_back(std::move(current_style_map));
+                // renew the current style map
+                current_style_map = std::map<uint8_t, LayerStyle>();
+                previous_layer_filter = current_layer_filter;
+            }
+        }
 
         bool invalid = false;
 
-
-        for (const QString& key : paintObject.keys()) {
+        for (const QString& key : paint_object.keys()) {
 
             // fill-antialias ?
             if (key == "fill-color") {
-                parse_colors(paintObject.value(key), fill_colors, fill_color_interpolation_base);
+                parse_colors(paint_object.value(key), fill_colors, fill_color_interpolation_base);
             } else if (key == "line-color") {
-                parse_colors(paintObject.value(key), fill_colors, fill_color_interpolation_base);
+                parse_colors(paint_object.value(key), fill_colors, fill_color_interpolation_base);
             } else if (key == "fill-opacity" || key == "line-opacity") {
-                parse_opacities(paintObject.value(key), opacities, opacity_interpolation_base);
+                parse_opacities(paint_object.value(key), opacities, opacity_interpolation_base);
             } else if (key == "fill-outline-color") { // TODO visualize (only used for buildings)
-                parse_colors(paintObject.value(key), outline_colors, outline_color_interpolation_base);
+                parse_colors(paint_object.value(key), outline_colors, outline_color_interpolation_base);
             } else if (key == "line-width") { //  "line-gap-width"
-                parse_line_widths(paintObject.value(key), widths, width_interpolation_base);
+                parse_line_widths(paint_object.value(key), widths, width_interpolation_base);
             } else if (key == "line-dasharray") {
-                parse_dashes(paintObject.value(key).toArray(), dashes, dash_interpolation_base);
+                parse_dashes(paint_object.value(key).toArray(), dashes, dash_interpolation_base);
             } else if (key == "line-offset") {
                 // might be needed
             } else if (key == "fill-translate" || key == "line-translate-anchor") {
@@ -145,185 +168,174 @@ void Style::load()
         if (invalid)
             continue;
 
-        // we now know that we have valid styles -> create a new StyleFilter for this layer
-        if (!m_layer_to_style.contains(layer_name))
-            m_layer_to_style[layer_name] = StyleFilter();
-
-        // determine zoom range defined in style.json (or fall back to [8-20] range
+        // determine zoom range defined in style.json (or fall back to [8-maxzoom] range (if maxzoom in style is bigger than constants::max_zoom, than choose the lower value
         glm::uvec2 zoom_range(8u, constants::max_zoom);
         if (obj.toObject().contains("minzoom"))
             zoom_range.x = obj.toObject().value("minzoom").toInt();
-        if (obj.toObject().contains("maxzoom"))
+        if (obj.toObject().contains("maxzoom") && uint8_t(obj.toObject().value("maxzoom").toInt()) < zoom_range.y)
             zoom_range.y = obj.toObject().value("maxzoom").toInt();
 
-        { // determine style for every zoom level within range
-            // fill arrays with default (max zoom, 0 value) if they are empty
-            if (fill_colors.empty())
-                fill_colors.push_back({ 255, 0 });
-            if (outline_colors.empty())
-                outline_colors.push_back({ 255, 0 });
-            if (widths.empty())
-                widths.push_back({ 255, 0 });
-            if (dashes.empty())
-                dashes.push_back({ 255, { 0, 0 } });
-            if (opacities.empty())
-                opacities.push_back({ 255, 255 });
+        // determine style for every zoom level within range
+        // fill arrays with default (max zoom, 0 value) if they are empty
+        if (fill_colors.empty())
+            fill_colors.push_back({ 255, 0 });
+        if (outline_colors.empty())
+            outline_colors.push_back({ 255, 0 });
+        if (widths.empty())
+            widths.push_back({ 255, 0 });
+        if (dashes.empty())
+            dashes.push_back({ 255, { 0, 0 } });
+        if (opacities.empty())
+            opacities.push_back({ 255, 255 });
 
-            // use the first value of each array to determine the prev/current values
-            std::pair<uint8_t, uint32_t> fill_colors_previous_value = fill_colors.front();
-            std::pair<uint8_t, uint32_t> outline_colors_previous_value = outline_colors.front();
-            std::pair<uint8_t, uint16_t> widths_previous_value = widths.front();
-            std::pair<uint8_t, std::pair<uint8_t, uint8_t>> dashes_previous_value = dashes.front();
-            std::pair<uint8_t, uint8_t> opacities_previous_value = opacities.front();
+        // use the first value of each array to determine the prev/current values
+        std::pair<uint8_t, uint32_t> fill_colors_previous_value = fill_colors.front();
+        std::pair<uint8_t, uint32_t> outline_colors_previous_value = outline_colors.front();
+        std::pair<uint8_t, uint16_t> widths_previous_value = widths.front();
+        std::pair<uint8_t, std::pair<uint8_t, uint8_t>> dashes_previous_value = dashes.front();
+        std::pair<uint8_t, uint8_t> opacities_previous_value = opacities.front();
 
-            std::pair<uint8_t, uint32_t> fill_colors_current_value = fill_colors.front();
-            std::pair<uint8_t, uint32_t> outline_colors_current_value = outline_colors.front();
-            std::pair<uint8_t, uint16_t> widths_current_value = widths.front();
-            std::pair<uint8_t, std::pair<uint8_t, uint8_t>> dashes_current_value = dashes.front();
-            std::pair<uint8_t, uint8_t> opacities_current_value = opacities.front();
+        std::pair<uint8_t, uint32_t> fill_colors_current_value = fill_colors.front();
+        std::pair<uint8_t, uint32_t> outline_colors_current_value = outline_colors.front();
+        std::pair<uint8_t, uint16_t> widths_current_value = widths.front();
+        std::pair<uint8_t, std::pair<uint8_t, uint8_t>> dashes_current_value = dashes.front();
+        std::pair<uint8_t, uint8_t> opacities_current_value = opacities.front();
 
-            uint8_t fill_colors_index = 0;
-            uint8_t outline_colors_index = 0;
-            uint8_t widths_index = 0;
-            uint8_t dashes_index = 0;
-            uint8_t opacities_index = 0;
+        uint8_t fill_colors_index = 0;
+        uint8_t outline_colors_index = 0;
+        uint8_t widths_index = 0;
+        uint8_t dashes_index = 0;
+        uint8_t opacities_index = 0;
 
-            LayerStyle last_style { 0, 0, 0, 0 };
-            uint32_t last_style_index = -1u;
-            std::vector<uint8_t> zooms_with_same_style;
-            bool has_blending = false;
-
-            for (unsigned zoom = zoom_range.x; zoom < zoom_range.y + 1; zoom++) {
-                // determine if we have to change current / prev values
-                while (fill_colors_current_value.first < zoom) {
-                    fill_colors_previous_value = fill_colors_current_value;
-                    fill_colors_current_value = fill_colors[++fill_colors_index];
-                }
-                while (outline_colors_current_value.first < zoom) {
-                    outline_colors_previous_value = outline_colors_current_value;
-                    outline_colors_current_value = outline_colors[++outline_colors_index];
-                }
-                while (widths_current_value.first < zoom) {
-                    widths_previous_value = widths_current_value;
-                    widths_current_value = widths[++widths_index];
-                }
-                while (dashes_current_value.first < zoom) {
-                    dashes_previous_value = dashes_current_value;
-                    dashes_current_value = dashes[++dashes_index];
-                }
-                while (opacities_current_value.first < zoom) {
-                    opacities_previous_value = opacities_current_value;
-                    opacities_current_value = opacities[++opacities_index];
-                }
-
-                // interpolate between previous and current values
-                auto interpolation_factor_fill_color = 1.0;
-                auto interpolation_factor_outline_color = 1.0;
-                auto interpolation_factor_width = 1.0;
-                auto interpolation_factor_dash = 1.0;
-                auto interpolation_factor_opacity = 1.0;
-
-                if (fill_colors_previous_value.second != fill_colors_current_value.second)
-                    interpolation_factor_fill_color = interpolation_factor(zoom, fill_color_interpolation_base, fill_colors_previous_value.first, fill_colors_current_value.first);
-                if (outline_colors_previous_value.second != outline_colors_current_value.second)
-                    interpolation_factor_outline_color = interpolation_factor(zoom, outline_color_interpolation_base, outline_colors_previous_value.first, outline_colors_current_value.first);
-                if (widths_previous_value.second != widths_current_value.second)
-                    interpolation_factor_width = interpolation_factor(zoom, width_interpolation_base, widths_previous_value.first, widths_current_value.first);
-                if (dashes_previous_value.second != dashes_current_value.second)
-                    interpolation_factor_dash = interpolation_factor(zoom, dash_interpolation_base, dashes_previous_value.first, dashes_current_value.first);
-                if (opacities_previous_value.second != opacities_current_value.second)
-                    interpolation_factor_opacity = interpolation_factor(zoom, opacity_interpolation_base, opacities_previous_value.first, opacities_current_value.first);
-
-                uint32_t fill_color = interpolate_color(interpolation_factor_fill_color, fill_colors_previous_value.second, fill_colors_current_value.second);
-                uint32_t outline_color = interpolate_color(interpolation_factor_outline_color, outline_colors_previous_value.second, outline_colors_current_value.second);
-                uint16_t width = widths_previous_value.second * (1.0 - interpolation_factor_width) + widths_current_value.second * interpolation_factor_width;
-                std::pair<uint8_t, uint8_t> dash = { dashes_previous_value.second.first * (1.0 - interpolation_factor_dash) + dashes_current_value.second.first * interpolation_factor_dash,
-                    dashes_previous_value.second.second * (1.0 - interpolation_factor_dash) + dashes_current_value.second.second * interpolation_factor_dash };
-                uint8_t opacity = opacities_previous_value.second * (1.0 - interpolation_factor_opacity) + opacities_current_value.second * interpolation_factor_opacity;
-
-                // merge opacity with colors
-                if (opacity != 255u) {
-                    // if opacity is set it overrides any opacity from the color
-
-                    fill_color &= 4294967040u; // bit mask that zeros out the opacity bits
-                    fill_color |= opacity;
-
-                    outline_color &= 4294967040u; // bit mask that zeros out the opacity bits
-                    outline_color |= opacity;
-                }
-
-                // dashes consist of gap / dash -> we combine them into one single value that is split again on the shader
-                const uint16_t merged_dash = (dash.first << 8) | dash.second;
-
-                LayerStyle current_style { fill_color, outline_color, width, merged_dash };
-                if (last_style != current_style) {
-                    // new style should be used
-
-                    if (!zooms_with_same_style.empty()) {
-                        // new style was encountered and we already had previous styles
-                        // -> add all the previous styles and set teh blend flag for the last style
-                        assert(last_style_index != -1u);
-                        // but first add the previous StyleFilters per zoom
-                        for (size_t i = 0; i < zooms_with_same_style.size() - 1; i++) {
-                            m_layer_to_style[layer_name].add_filter({ last_style_index | (has_blending ? 1 : 0), layer_index, filter }, zooms_with_same_style[i]);
-
-                            if (has_blending) {
-                                // we have to make sure that we create new styles for each individual step (although they are similar)
-                                // this is necessary for multi style blending
-                                // styles added here are inserted at next loop or as last
-                                last_style_index = style_values.size() << 1; // move style index by 1 for the "blend" flag
-                                style_values.push_back({ last_style.fill_color, last_style.outline_color, last_style.outline_width, last_style.outline_dash });
-                            }
-                        }
-                        // the last zoom always blends with subsequent styles
-                        m_layer_to_style[layer_name].add_filter({ last_style_index | 1, layer_index, filter }, zooms_with_same_style.back());
-                        // from now on make sure that we are always blending / create new styles
-                        has_blending = true;
-                    }
-                    // else {
-                    //     // first style no need to do anything special
-                    // }
-
-                    last_style_index = style_values.size() << 1; // move style index by 1 for the "blend" flag
-                    last_style = current_style;
-                    style_values.push_back({ fill_color, outline_color, width, merged_dash });
-
-                    // renew the vector
-                    zooms_with_same_style.clear();
-                    zooms_with_same_style.emplace_back(zoom);
-                } else {
-                    // remember that this zoom level uses this style
-                    zooms_with_same_style.emplace_back(zoom);
-                }
-
-                //  DEBUG -> style_index to layername
-                // auto id = obj.toObject().value("id").toString();
-                // qDebug() << last_style_index << id;
+        for (unsigned zoom = zoom_range.x; zoom < zoom_range.y + 1; zoom++) {
+            // determine if we have to change current / prev values
+            while (fill_colors_current_value.first < zoom) {
+                fill_colors_previous_value = fill_colors_current_value;
+                fill_colors_current_value = fill_colors[++fill_colors_index];
+            }
+            while (outline_colors_current_value.first < zoom) {
+                outline_colors_previous_value = outline_colors_current_value;
+                outline_colors_current_value = outline_colors[++outline_colors_index];
+            }
+            while (widths_current_value.first < zoom) {
+                widths_previous_value = widths_current_value;
+                widths_current_value = widths[++widths_index];
+            }
+            while (dashes_current_value.first < zoom) {
+                dashes_previous_value = dashes_current_value;
+                dashes_current_value = dashes[++dashes_index];
+            }
+            while (opacities_current_value.first < zoom) {
+                opacities_previous_value = opacities_current_value;
+                opacities_current_value = opacities[++opacities_index];
             }
 
-            // add all the remaining styles to maxzoom
-            if (!zooms_with_same_style.empty()) {
-                for (size_t i = 0; i < zooms_with_same_style.size() - 1; i++) {
-                    m_layer_to_style[layer_name].add_filter({ last_style_index | (has_blending ? 1 : 0), layer_index, filter }, zooms_with_same_style[i]);
-                    if (has_blending) {
-                        // we have to make sure that we create new styles for each individual step (although they are similar)
-                        // this is necessary for multi style blending
-                        // styles added here are inserted at next loop or as last
-                        last_style_index = style_values.size() << 1; // move style index by 1 for the "blend" flag
-                        style_values.push_back({ last_style.fill_color, last_style.outline_color, last_style.outline_width, last_style.outline_dash });
-                    }
-                }
-                // last style does no blending
-                m_layer_to_style[layer_name].add_filter({ last_style_index | 0, layer_index, filter }, zooms_with_same_style.back());
+            // interpolate between previous and current values
+            auto interpolation_factor_fill_color = 1.0;
+            auto interpolation_factor_outline_color = 1.0;
+            auto interpolation_factor_width = 1.0;
+            auto interpolation_factor_dash = 1.0;
+            auto interpolation_factor_opacity = 1.0;
+
+            if (fill_colors_previous_value.second != fill_colors_current_value.second)
+                interpolation_factor_fill_color = interpolation_factor(zoom, fill_color_interpolation_base, fill_colors_previous_value.first, fill_colors_current_value.first);
+            if (outline_colors_previous_value.second != outline_colors_current_value.second)
+                interpolation_factor_outline_color = interpolation_factor(zoom, outline_color_interpolation_base, outline_colors_previous_value.first, outline_colors_current_value.first);
+            if (widths_previous_value.second != widths_current_value.second)
+                interpolation_factor_width = interpolation_factor(zoom, width_interpolation_base, widths_previous_value.first, widths_current_value.first);
+            if (dashes_previous_value.second != dashes_current_value.second)
+                interpolation_factor_dash = interpolation_factor(zoom, dash_interpolation_base, dashes_previous_value.first, dashes_current_value.first);
+            if (opacities_previous_value.second != opacities_current_value.second)
+                interpolation_factor_opacity = interpolation_factor(zoom, opacity_interpolation_base, opacities_previous_value.first, opacities_current_value.first);
+
+            uint32_t fill_color = interpolate_color(interpolation_factor_fill_color, fill_colors_previous_value.second, fill_colors_current_value.second);
+            uint32_t outline_color = interpolate_color(interpolation_factor_outline_color, outline_colors_previous_value.second, outline_colors_current_value.second);
+            uint16_t width = widths_previous_value.second * (1.0 - interpolation_factor_width) + widths_current_value.second * interpolation_factor_width;
+            std::pair<uint8_t, uint8_t> dash = { dashes_previous_value.second.first * (1.0 - interpolation_factor_dash) + dashes_current_value.second.first * interpolation_factor_dash,
+                dashes_previous_value.second.second * (1.0 - interpolation_factor_dash) + dashes_current_value.second.second * interpolation_factor_dash };
+            uint8_t opacity = opacities_previous_value.second * (1.0 - interpolation_factor_opacity) + opacities_current_value.second * interpolation_factor_opacity;
+
+            // merge opacity with colors
+            if (opacity != 255u) {
+                // if opacity is set it overrides any opacity from the color
+
+                fill_color &= 4294967040u; // bit mask that zeros out the opacity bits
+                fill_color |= opacity;
+
+                outline_color &= 4294967040u; // bit mask that zeros out the opacity bits
+                outline_color |= opacity;
             }
+
+            // dashes consist of gap / dash -> we combine them into one single value that is split again on the shader
+            const uint16_t merged_dash = (dash.first << 8) | dash.second;
+
+            current_style_map[zoom] = { fill_color, outline_color, width, merged_dash };
+
+            //  DEBUG -> style_index to layername
+            // auto id = obj.toObject().value("id").toString();
+            // qDebug() << last_style_index << id;
         }
-
-        layer_index++;
     }
-    // qDebug() << "style_values: " << style_values.size();
 
-    // make sure that layer_index also fits into style_bits (we use this in preprocess)
-    assert(layer_index < ((1u << constants::style_bits) - 1u));
+    // at the end add the last filled style map
+    layerid_filter_to_layer_indices[previous_layer_filter].push_back(uint32_t(zoom_to_style.size()));
+    zoom_to_style.push_back(current_style_map);
+
+    for (const auto& [key, layer_indices] : layerid_filter_to_layer_indices) {
+
+        // we now know that we have valid styles -> create a new StyleFilter for this layer
+        // if (!m_layer_to_style.contains(key.first))
+        //     m_layer_to_style[key.first] = StyleFilter();
+
+        for (const auto& layer_index : layer_indices) {
+
+            const auto style_map = zoom_to_style[layer_index];
+            LayerStyle current_style;
+            bool all_styles_same = true;
+            // first loop only checks if all styles are the same -> if so, we do not need any blending and only one style is sufficient
+            for (const auto& [zoom, style] : style_map) {
+                if (current_style.fill_color == 0) // fill current_style in first iteration
+                    current_style = LayerStyle(style);
+
+                // check if any style looks different than first style
+                if (current_style != style) {
+                    all_styles_same = false;
+                    break;
+                }
+            }
+
+            bool first = true;
+            uint8_t last_zoom = 0u;
+            for (const auto& [zoom, style] : style_map) {
+                if (!all_styles_same || first) {
+                    // add a new style every loop iteration if styles are different
+                    // or if styles are the same only add it at first iteration
+                    first = false;
+                    style_values.push_back({ style.fill_color, style.outline_color, style.outline_width, style.outline_dash });
+                }
+                uint32_t style_index = (style_values.size() - 1u) << 1; // move style index by 1 for the "blend" flag
+                m_layer_to_style[key.first].add_filter({ style_index | ((all_styles_same) ? 0u : 1u), layer_index, key.second }, zoom);
+                last_zoom = zoom;
+            }
+
+            if (!all_styles_same) {
+                // we might need to fill from last_zoom to constants::max_zoom
+
+                const auto style = style_map.at(last_zoom);
+
+                for (uint8_t zoom = last_zoom + 1; zoom < constants::max_zoom; zoom++) {
+                    // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
+                    // -> according to style.json there is no style for those values, we only need to add them for blending purposes if a lower zoom tile wants to blend
+                    style_values.push_back({ style.fill_color, style.outline_color, style.outline_width, style.outline_dash });
+                }
+            }
+
+            // make sure that layer_index also fits into style_bits (we use this in preprocess)
+            assert(layer_index < ((1u << constants::style_bits) - 1u));
+        }
+    }
+
+    // qDebug() << "style_values: " << style_values.size();
 
     // make sure that the style values are within the buffer size; resize them to this size and create the raster images
     assert(style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);

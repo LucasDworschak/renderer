@@ -37,19 +37,43 @@ struct LayerStyle {
     bool operator==(const LayerStyle& other) const = default;
 };
 
-template <class T> inline void hash_combine(std::size_t& seed, T const& v) { seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2); }
 
 struct Hasher {
     size_t operator()(const LayerStyle& style) const
     {
         size_t seed = 0;
 
-        hash_combine<uint32_t>(seed, style.fill_color);
-        hash_combine<uint32_t>(seed, style.outline_color);
-        hash_combine<float>(seed, style.outline_width);
-        hash_combine<uint32_t>(seed, style.outline_dash);
+        radix::hasher::hash_combine<uint32_t>(seed, style.fill_color);
+        radix::hasher::hash_combine<uint32_t>(seed, style.outline_color);
+        radix::hasher::hash_combine<float>(seed, style.outline_width);
+        radix::hasher::hash_combine<uint32_t>(seed, style.outline_dash);
 
         return seed;
+    }
+
+    size_t operator()(const std::pair<std::string, std::shared_ptr<StyleExpressionBase>>& pair) const
+    {
+        size_t seed = 0;
+
+        radix::hasher::hash_combine<std::string>(seed, pair.first);
+        if (pair.second != nullptr) // if there is no filter -> this would be null
+            radix::hasher::hash_combine<uint32_t>(seed, pair.second->hash());
+
+        return seed;
+    }
+
+    bool operator()(const std::pair<std::string, std::shared_ptr<StyleExpressionBase>>& lhs, const std::pair<std::string, std::shared_ptr<StyleExpressionBase>>& rhs) const
+    {
+        // in order to have consistent insertion order, we are using first the string compare than the hashes of the styleexpressions
+        auto str_comp = lhs.first.compare(rhs.first);
+        if (str_comp == 0) {
+            auto h1 = (lhs.second == nullptr) ? 0 : lhs.second->hash();
+            auto h2 = (rhs.second == nullptr) ? 0 : rhs.second->hash();
+
+            return h1 < h2;
+        }
+
+        return str_comp < 0;
     }
 };
 

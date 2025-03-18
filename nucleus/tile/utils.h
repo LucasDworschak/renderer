@@ -229,7 +229,7 @@ namespace utils {
         return refine;
     }
 
-    inline auto refineFunctor_max(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
+    inline auto refineFunctor_max2(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
     {
         constexpr auto sqrt2 = 1.414213562373095;
         const auto camera_frustum = camera.frustum();
@@ -255,8 +255,8 @@ namespace utils {
         return refine;
     }
 
-    inline auto refineFunctor_min(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
-    // inline auto refineFunctor_max(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
+    // inline auto refineFunctor_min(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
+    inline auto refineFunctor_max(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
     {
         constexpr auto sqrt2 = 1.414213562373095;
         const auto camera_frustum = camera.frustum();

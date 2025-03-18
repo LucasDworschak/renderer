@@ -336,7 +336,8 @@ bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, ino
         layer_style.current_layer_style = parse_style(draw_data.style_index);
         if(draw_data.should_blend)
         {
-            layer_style.next_layer_style = parse_style(draw_data.style_index+1u);
+            // layer_style.next_layer_style = parse_style(draw_data.style_index+1u);
+            layer_style.next_layer_style = parse_style(draw_data.style_index);
         }
         else
         {

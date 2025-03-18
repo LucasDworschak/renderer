@@ -276,7 +276,7 @@ SubLayerInfo generate_expanded_filters(const QJsonObject& paint, const QJsonArra
             for (auto& [filter_hash, filter] : current_iteration_filter) {
                 // generate new key from previous hash and current criterium/value hash
                 size_t key = filter_hash;
-                hash_combine<size_t>(key, qHash(paint_filter));
+                radix::hasher::hash_combine<size_t>(key, qHash(paint_filter));
 
                 // create a new filter with the current criterium/value
                 auto new_filter = std::vector<QJsonArray>(filter);

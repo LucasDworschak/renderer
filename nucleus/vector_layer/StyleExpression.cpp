@@ -22,6 +22,8 @@
 
 #include "nucleus/vector_tile/util.h"
 
+#include <radix/hasher.h>
+
 namespace nucleus::vector_layer {
 
 QJsonValue StyleExpressionBase::extract_literal(QJsonValue expression)
@@ -61,6 +63,34 @@ std::unique_ptr<StyleExpressionBase> StyleExpressionBase::create_filter_expressi
 
     // assert(false);
     return {};
+}
+
+size_t StyleExpression::hash()
+{
+    size_t seed = 0;
+
+    radix::hasher::hash_combine<std::string>(seed, m_key);
+    radix::hasher::hash_combine<std::string>(seed, m_comparator);
+
+    for (const auto& v : m_values) {
+        radix::hasher::hash_combine<std::string>(seed, v);
+    }
+
+    return seed;
+}
+
+size_t StyleExpressionCollection::hash()
+{
+    size_t seed = 0;
+
+    radix::hasher::hash_combine<bool>(seed, m_negate);
+    radix::hasher::hash_combine<bool>(seed, m_all);
+
+    for (const auto& v : m_subFilters) {
+        radix::hasher::hash_combine<size_t>(seed, v->hash());
+    }
+
+    return seed;
 }
 
 StyleExpression::StyleExpression(QJsonArray data)

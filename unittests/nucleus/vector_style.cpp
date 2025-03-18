@@ -152,24 +152,31 @@ TEST_CASE("nucleus/vector_style")
         s.load();
 
         const auto style_buffer = s.styles()->buffer();
+        const auto line_multipliers = nucleus::vector_layer::constants::line_width_multiplier * nucleus::vector_layer::constants::style_precision;
+
+        // note order in style buffer may not be the order defined in style.json
+        // since we are using a key comparer and a map the order should still be the same between compilers/os
+        // the layer_index order is however preserved (just not tested in this testcase)
+
+        // reuse style if no blending
+        CHECK(style_buffer[0].x == 0xaaaaaaff); // make sure that we are in the right style instruction here (not using other style)
+        CHECK(style_buffer[0].z == 8 * line_multipliers); // z 11
+        CHECK(style_buffer[1].z == 8 * line_multipliers); // z 12
+        CHECK(style_buffer[2].z == 8 * line_multipliers); // z 13
+        CHECK(style_buffer[3].z == 9 * line_multipliers); // z 14
+        CHECK(style_buffer[4].z == 10 * line_multipliers); // z 15
+        CHECK(style_buffer[5].z == 10 * line_multipliers); // z 16
+        CHECK(style_buffer[6].z == 10 * line_multipliers); // z 17
 
         // "opacity outside of zoom range"
-        CHECK(style_buffer[0].x == 0xbbbbbbff); // z 13
-        CHECK(style_buffer[1].x == 0xbbbbbbff); // z 14
-        CHECK(style_buffer[2].x == 0xbbbbbbff); // z 15
-        CHECK(style_buffer[3].x == 0xbbbbbbff); // z 16
-        CHECK(style_buffer[4].x == 0xbbbbbbff); // z 17
-        CHECK(style_buffer[5].x == 0xbbbbbbff); // z 18
+        CHECK(style_buffer[7].x == 0xbbbbbbff); // z 13
+        CHECK(style_buffer[8].x == 0xbbbbbbff); // z 14
+        CHECK(style_buffer[9].x == 0xbbbbbbff); // z 15
+        CHECK(style_buffer[10].x == 0xbbbbbbff); // z 16
+        CHECK(style_buffer[11].x == 0xbbbbbbff); // z 17
 
-        const auto line_multipliers = nucleus::vector_layer::constants::line_width_multiplier * nucleus::vector_layer::constants::style_precision;
-        // reuse style if no blending
-        CHECK(style_buffer[6].x == 0xaaaaaaff); // make sure that we are in the right style instruction here (not using above style)
-        CHECK(style_buffer[6].z == 8 * line_multipliers); // z 11, 12, 13
-        CHECK(style_buffer[7].z == 9 * line_multipliers); // z 14
-        CHECK(style_buffer[8].z == 10 * line_multipliers); // z 15
-        CHECK(style_buffer[9].z == 10 * line_multipliers); // z 16
-        CHECK(style_buffer[10].z == 10 * line_multipliers); // z 17
-        CHECK(style_buffer[11].z == 10 * line_multipliers); // z 18
+        CHECK(style_buffer[12].x == -1u); // no data
+        CHECK(style_buffer[12].z == -1u); // no data
     }
 
     SECTION("Style expand openstreetmap")
@@ -660,9 +667,8 @@ TEST_CASE("nucleus/vector_style")
         // check if the color stored int he style buffer points to the correct color in the stylesheet
         const auto style_buffer = s.styles()->buffer();
 
-        CHECK(feature_to_style.size() == 96);
+        CHECK(feature_to_style.size() == 95);
         CHECK(style_buffer[feature_to_style.at("fill__building__null__null_0")].x == s.parse_color("#f2eae200"));
-        CHECK(style_buffer[feature_to_style.at("fill__building__null__null_1")].x == s.parse_color("#e2ddd9ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_0")].x == s.parse_color("#d8e8c8ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_0")].x == s.parse_color("#d8e8c8ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_0")].x == s.parse_color("#d8e8c8ff"));
