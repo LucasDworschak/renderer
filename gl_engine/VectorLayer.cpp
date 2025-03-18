@@ -77,6 +77,8 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
         m_styles_texture->upload(*m_styles);
 }
 
+unsigned VectorLayer::tile_count() const { return m_gpu_multi_array_helper.n_occupied(); }
+
 void VectorLayer::draw(
     const TileGeometry& tile_geometry, const nucleus::camera::Definition& camera, const nucleus::tile::DrawListGenerator::TileSet& draw_tiles, bool sort_tiles, glm::dvec3 sort_position) const
 {

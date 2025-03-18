@@ -53,6 +53,8 @@ public:
     uint16_t layer_amount(uint8_t buffer_index) const;
     Dictionary generate_dictionary() const;
 
+    unsigned int n_occupied() const;
+
     constexpr static int bits_for_buffer_info() { return 2; };
 
 private:

@@ -118,6 +118,7 @@ QQuickFramebufferObject::Renderer* TerrainRendererItem::createRenderer() const
     connect(r->glWindow(), &gl_engine::Window::tile_stats_ready, this->m_tile_statistics, &TileStatistics::set_gpu_stats);
     connect(ctx->geometry_scheduler(), &nucleus::tile::Scheduler::stats_ready, this->m_tile_statistics, &TileStatistics::update_scheduler_stats);
     connect(ctx->map_label_scheduler(), &nucleus::tile::Scheduler::stats_ready, this->m_tile_statistics, &TileStatistics::update_scheduler_stats);
+    connect(ctx->vector_layer_scheduler(), &nucleus::tile::Scheduler::stats_ready, this->m_tile_statistics, &TileStatistics::update_scheduler_stats);
     connect(ctx->ortho_scheduler(), &nucleus::tile::Scheduler::stats_ready, this->m_tile_statistics, &TileStatistics::update_scheduler_stats);
     connect(m_update_timer, &QTimer::timeout, this, &QQuickFramebufferObject::update);
 

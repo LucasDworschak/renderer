@@ -543,6 +543,38 @@ Rectangle {
             }
 
             //--------------------------
+            //  Vector
+            //--------------------------
+            Label {
+                text: qsTr("Vector requested: ")
+            }
+            ProgressBar {
+                id: vector_n_quads_requested
+                Layout.fillWidth: true
+                from: 0
+                to: 500
+                value: map.tile_statistics.scheduler.vector_n_quads_requested * 4
+            }
+            Label {
+                text: "(" + vector_n_quads_requested.value + ")"
+            }
+
+            Label {
+                text: qsTr("Vector ram: ")
+            }
+            ProgressBar {
+                id: vector_n_quads_ram
+                Layout.fillWidth: true
+                // Replace with a max bound for vector RAM usage
+                from: 0
+                to: map.tile_statistics.scheduler.vector_n_quads_ram_max * 4
+                value: map.tile_statistics.scheduler.vector_n_quads_ram * 4
+            }
+            Label {
+                text: "(" + vector_n_quads_ram.value + ")"
+            }
+
+            //--------------------------
             //  LABEL
             //--------------------------
             Label {
@@ -601,6 +633,19 @@ Rectangle {
             }
             Label {
                 text: "(" + map.tile_statistics.gpu.n_ortho_tiles_gpu + ")"
+            }
+
+            Label {
+                text: qsTr("Vector: ")
+            }
+            ProgressBar {
+                Layout.fillWidth: true
+                from: 0
+                to: 2048
+                value: map.tile_statistics.gpu.n_vector_tiles_gpu
+            }
+            Label {
+                text: "(" + map.tile_statistics.gpu.n_vector_tiles_gpu + ")"
             }
 
 

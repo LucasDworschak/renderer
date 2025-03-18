@@ -105,7 +105,7 @@ RenderingContext::RenderingContext(QObject* parent)
 
         auto vector_layer_service = std::make_unique<TileLoadService>("https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/", TilePattern::ZXY_yPointingSouth, "");
         m->vector_layer = nucleus::vector_layer::setup::scheduler(std::move(vector_layer_service), m->aabb_decorator, m->scheduler_thread.get());
-        m->scheduler_director->check_in("map_label", m->map_label.scheduler);
+        m->scheduler_director->check_in("vector", m->vector_layer.scheduler);
     }
     m->map_label.scheduler->set_geometry_ram_cache(&m->geometry.scheduler->ram_cache());
     m->vector_layer.scheduler->set_geometry_ram_cache(&m->geometry.scheduler->ram_cache());

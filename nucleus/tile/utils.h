@@ -229,7 +229,7 @@ namespace utils {
         return refine;
     }
 
-    inline auto refineFunctor_max2(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
+    inline auto refineFunctor_max(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
     {
         constexpr auto sqrt2 = 1.414213562373095;
         const auto camera_frustum = camera.frustum();
@@ -246,7 +246,8 @@ namespace utils {
                 camera_position.y < (aabb.min.y + aabb.max.y) / 2.0 ? aabb.max.y : aabb.min.y,
                 camera_position.z < (aabb.min.z + aabb.max.z) / 2.0 ? aabb.max.z : aabb.min.z };
             const auto delta = max_corner - camera_position;
-            const auto distance = float(std::sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z));
+            // const auto distance = float(std::sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z));
+            const auto distance = float(std::sqrt(delta.x * delta.x + delta.y * delta.y + 0));
 
             const auto pixel_size = float(sqrt2 * aabb.size().x / tile_size);
 
@@ -255,8 +256,8 @@ namespace utils {
         return refine;
     }
 
-    // inline auto refineFunctor_min(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
-    inline auto refineFunctor_max(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
+    inline auto refineFunctor_min(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
+    // inline auto refineFunctor_max(const nucleus::camera::Definition& camera, const AabbDecoratorPtr& aabb_decorator, float error_threshold_px, double tile_size = 256)
     {
         constexpr auto sqrt2 = 1.414213562373095;
         const auto camera_frustum = camera.frustum();

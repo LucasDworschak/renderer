@@ -39,7 +39,7 @@ namespace nucleus::vector_layer::setup {
 using TileLoadServicePtr = std::unique_ptr<nucleus::tile::TileLoadService>;
 
 struct SchedulerHolder {
-    std::unique_ptr<vector_layer::Scheduler> scheduler;
+    std::shared_ptr<vector_layer::Scheduler> scheduler;
     TileLoadServicePtr tile_service;
 };
 

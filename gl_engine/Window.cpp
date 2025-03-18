@@ -303,6 +303,7 @@ void Window::paint(QOpenGLFramebufferObject* framebuffer)
 
     tile_stats["n_geometry_tiles_gpu"] = m_context->tile_geometry()->tile_count();
     tile_stats["n_ortho_tiles_gpu"] = m_context->ortho_layer()->tile_count();
+    tile_stats["n_vector_tiles_gpu"] = m_context->vector_layer()->tile_count();
     tile_stats["n_geometry_tiles_drawn"] = unsigned(culled_tile_set.size());
     m_timer->stop_timer("draw_list");
 

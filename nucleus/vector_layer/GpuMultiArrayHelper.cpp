@@ -84,6 +84,13 @@ void GpuMultiArrayHelper::set_quad_limit(unsigned int new_limit)
 // constexpr uint8_t GpuMultiArrayHelper::buffer_amount() { return buffer_amount(); }
 uint16_t GpuMultiArrayHelper::layer_amount(uint8_t buffer_index) const { return helpers[buffer_to_helper(buffer_index)].size(); }
 
+unsigned GpuMultiArrayHelper::n_occupied() const
+{
+    // index is always filled -> while theoretically we also write sometimes to a second arrayHelper
+    // it makes more sense to only provide the max amount of a helper that fills/deletes everytime add/remove tile is called.
+    return unsigned(helpers[0].n_occupied());
+}
+
 GpuMultiArrayHelper::Dictionary GpuMultiArrayHelper::generate_dictionary() const
 {
     GpuMultiArrayHelper::Dictionary dict;
