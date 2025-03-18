@@ -112,8 +112,7 @@ TEST_CASE("tile/utils/refine_functor_max")
             camera_position.y < (aabb.min.y + aabb.max.y) / 2.0 ? aabb.max.y : aabb.min.y,
             camera_position.z < (aabb.min.z + aabb.max.z) / 2.0 ? aabb.max.z : aabb.min.z };
         const auto delta = max_corner - camera_position;
-        // const auto distance = float(sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z));
-        const auto distance = float(sqrt(delta.x * delta.x + delta.y * delta.y + 0));
+        const auto distance = float(std::sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z));
         // code from refine_functor END
 
         std::array<glm::dvec3, 8> all_corners = { glm::dvec3(aabb.min.x, aabb.min.y, aabb.min.z),
