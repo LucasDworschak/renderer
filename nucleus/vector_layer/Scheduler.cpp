@@ -25,7 +25,7 @@
 namespace nucleus::vector_layer {
 
 Scheduler::Scheduler(QObject* parent)
-    : nucleus::tile::Scheduler(512, parent)
+    : nucleus::tile::Scheduler(256, parent)
     // , m_style(":/vectorlayerstyles/basemap.json")
     , m_style(":/vectorlayerstyles/openstreetmap.json")
 // , m_style(":/vectorlayerstyles/qwant.json")

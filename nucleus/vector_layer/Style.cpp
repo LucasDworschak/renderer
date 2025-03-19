@@ -290,7 +290,7 @@ void Style::load()
         for (const auto& layer_index : layer_indices) {
 
             const auto style_map = zoom_to_style[layer_index];
-            LayerStyle current_style;
+            LayerStyle current_style {};
             bool all_styles_same = true;
             // first loop only checks if all styles are the same -> if so, we do not need any blending and only one style is sufficient
             for (const auto& [zoom, style] : style_map) {

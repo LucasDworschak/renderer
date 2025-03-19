@@ -55,6 +55,7 @@ SettingsPanel {
                 { text: "PixelAlpha",           value: 207  }, // (only in vector_layer.frag)
                 { text: "Draw Calls",           value: 208  }, // (only in vector_layer.frag)
                 { text: "Float Zoomlevel",      value: 209  }, // (only in vector_layer.frag)
+                { text: "Float vs tile zoom",   value: 210  }, // (only in vector_layer.frag)
             ]
             onActivated:  map.shared_config.overlay_mode = currentValue;
             Component.onCompleted: normal_mode.currentIndex = map.shared_config.normal_mode;
