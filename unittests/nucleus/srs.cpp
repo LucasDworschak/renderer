@@ -44,7 +44,7 @@ TEST_CASE("nucleus/srs")
 
         const auto add_tiles = [&](auto camera) {
             camera.set_viewport_size({ 1920, 1080 });
-            const auto all_leaves = radix::quad_tree::onTheFlyTraverse(tile::Id { 0, { 0, 0 } }, tile::utils::refineFunctor_max(camera, aabb_decorator, 1, 64), [&ids](const tile::Id& v) {
+            const auto all_leaves = radix::quad_tree::onTheFlyTraverse(tile::Id { 0, { 0, 0 } }, tile::utils::refineFunctor(camera, aabb_decorator, 1, 64), [&ids](const tile::Id& v) {
                 ids.insert(v);
                 return v.children();
             });

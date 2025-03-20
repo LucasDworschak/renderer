@@ -113,7 +113,7 @@ TEST_CASE("nucleus/tile/DrawListGenerator benchmark")
         nucleus::camera::stored_positions::stephansdom(),
     };
     for (const auto &camera_position : camera_positions) {
-        quad_tree::onTheFlyTraverse(tile::Id { 0, { 0, 0 } }, nucleus::tile::utils::refineFunctor_max(camera_position, decorator, 1), [&all_inner_nodes](const tile::Id& v) {
+        quad_tree::onTheFlyTraverse(tile::Id { 0, { 0, 0 } }, nucleus::tile::utils::refineFunctor(camera_position, decorator, 1), [&all_inner_nodes](const tile::Id& v) {
             all_inner_nodes.push_back(v);
             return v.children();
         });

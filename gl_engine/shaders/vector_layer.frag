@@ -227,7 +227,7 @@ VectorLayerData vertex_sample(lowp uint sampler_index, highp uint index, highp u
     }
 }
 
-mediump float float_zoom_interpolation(highp uvec3 tile_id)
+mediump float float_zoom_interpolation()
 {
     // 3d
     highp float dist_camera = length(var_pos_cws.xyz);
@@ -358,10 +358,6 @@ bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, ino
             // layer_style.next_layer_style = parse_style(draw_data.style_index+1u);
             layer_style.next_layer_style = parse_style(draw_data.style_index+zoom_offset+1u);
             layer_style.next_layer_style.outline_width /= zoomed_tile_extent * 2;
-
-            // layer_style.current_layer_style.fill_color = vec4(1.0, 0.0, 0.0, 1.0);
-            // layer_style.next_layer_style.fill_color = vec4(1.0, 0.0, 0.0, 1.0);
-
         }
         else
         {
@@ -423,7 +419,7 @@ void main() {
 
     if (find_tile(tile_id, dict_px, uv)) {
 
-        float_zoom = float_zoom_interpolation(tile_id);
+        float_zoom = float_zoom_interpolation();
         // float_zoom = tile_id.z; // activate this to show each tile without blending
 
 
@@ -662,6 +658,13 @@ void main() {
             texout_albedo = mix( zoom_color, color_from_id_hash(uint(var_tile_id.z)), conf.overlay_strength);
         }
     }
+
+    // if(float_zoom< tile_id.z)
+    // {
+
+    //     texout_albedo = vec3(1.0, 0.0, 0.0);
+    //     texout_albedo = vec3(1.0, 0.0, 0.0);
+    // }
 
 
 

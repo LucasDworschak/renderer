@@ -56,7 +56,7 @@ const TileSet& DrawListGenerator::tiles() const { return m_available_tiles; }
 
 DrawListGenerator::TileSet DrawListGenerator::generate_for(const nucleus::camera::Definition& camera) const
 {
-    const auto tile_refine_functor = tile::utils::refineFunctor_max(camera, m_aabb_decorator, m_permissible_screen_space_error);
+    const auto tile_refine_functor = tile::utils::refineFunctor(camera, m_aabb_decorator, m_permissible_screen_space_error);
     const auto draw_refine_functor = [&tile_refine_functor, this](const tile::Id& tile) {
         bool all = true;
         for (const auto& child : tile.children()) {

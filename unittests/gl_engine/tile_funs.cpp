@@ -44,7 +44,7 @@ using nucleus::srs::pack;
 using nucleus::srs::unpack;
 using namespace nucleus::tile;
 using nucleus::tile::utils::AabbDecorator;
-using nucleus::tile::utils::refineFunctor_max;
+using nucleus::tile::utils::refineFunctor;
 using radix::TileHeights;
 
 namespace {
@@ -300,7 +300,7 @@ TEST_CASE("glsl tile functions")
 
         const auto add_tiles = [&](auto camera) {
             camera.set_viewport_size({ 1920, 1080 });
-            const auto all_leaves = quad_tree::onTheFlyTraverse(Id { 0, { 0, 0 } }, refineFunctor_max(camera, aabb_decorator, 3, 64), [&ids](const Id& v) {
+            const auto all_leaves = quad_tree::onTheFlyTraverse(Id { 0, { 0, 0 } }, refineFunctor(camera, aabb_decorator, 3, 64), [&ids](const Id& v) {
                 ids.insert(v);
                 return v.children();
             });

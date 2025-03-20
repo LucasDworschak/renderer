@@ -118,7 +118,7 @@ void Scheduler::set_network_reachability(QNetworkInformation::Reachability reach
 
 void Scheduler::update_gpu_quads()
 {
-    const auto should_refine = tile::utils::refineFunctor_max(m_current_camera, m_aabb_decorator, m_permissible_screen_space_error, m_tile_resolution);
+    const auto should_refine = tile::utils::refineFunctor(m_current_camera, m_aabb_decorator, m_permissible_screen_space_error, m_tile_resolution);
     std::vector<DataQuad> gpu_candidates;
     m_ram_cache.visit([this, &gpu_candidates, &should_refine](const DataQuad& quad) {
         if (!should_refine(quad.id))
@@ -177,7 +177,7 @@ void Scheduler::purge_ram_cache()
         return;
     }
 
-    const auto should_refine = tile::utils::refineFunctor_max(m_current_camera, m_aabb_decorator, m_permissible_screen_space_error, m_tile_resolution);
+    const auto should_refine = tile::utils::refineFunctor(m_current_camera, m_aabb_decorator, m_permissible_screen_space_error, m_tile_resolution);
     m_ram_cache.visit([&should_refine](const DataQuad& quad) { return should_refine(quad.id); });
     m_ram_cache.purge(m_ram_quad_limit);
 
@@ -263,7 +263,7 @@ std::vector<Id> Scheduler::quads_for_current_camera_position() const
 {
     std::vector<Id> all_inner_nodes;
     const auto all_leaves = radix::quad_tree::onTheFlyTraverse(
-        Id { 0, { 0, 0 } }, tile::utils::refineFunctor_max(m_current_camera, m_aabb_decorator, m_permissible_screen_space_error, m_tile_resolution), [&all_inner_nodes](const Id& v) {
+        Id { 0, { 0, 0 } }, tile::utils::refineFunctor(m_current_camera, m_aabb_decorator, m_permissible_screen_space_error, m_tile_resolution), [&all_inner_nodes](const Id& v) {
             all_inner_nodes.push_back(v);
             return v.children();
         });
