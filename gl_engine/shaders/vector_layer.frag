@@ -85,7 +85,7 @@ const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 const lowp float style_precision = 100.0;
 
 const lowp int style_bits = 13;
-const lowp int max_zoom = 18;
+const lowp float max_zoom = 18.0;
 const lowp uint zoom_blend_steps = 4u;
 
 ///////////////////////////////////////////////
@@ -248,7 +248,7 @@ mediump float float_zoom_interpolation()
     highp float static_factors = camera_factors * sqrt2 * cEarthCircumference / tile_size;
     highp float z = log2(static_factors / dist_camera / error_threshold_px)+1.0;
 
-    return clamp(z, 0, max_zoom);
+    return clamp(z, 0.0, max_zoom);
 }
 
 bool find_tile(inout highp uvec3 tile_id, out lowp ivec2 dict_px, inout highp vec2 uv) {
@@ -358,7 +358,7 @@ bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, ino
         // the outline_width is saved as tile_extent dependent
         // by dividing by tile_extent we get the width we want to draw
         // by further dividing the tile_extent by 2^zoom_offset, we reduce the tile_extent and increase the line width.
-        float zoomed_tile_extent = tile_extent / pow(2, zoom_offset);
+        mediump float zoomed_tile_extent = tile_extent / pow(2.0, float(zoom_offset));
 
         layer_style.current_zoom_style.outline_width /= zoomed_tile_extent;
         if(draw_data.should_blend)
