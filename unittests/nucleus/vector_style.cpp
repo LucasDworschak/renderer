@@ -143,6 +143,24 @@ TEST_CASE("nucleus/vector_style")
         CHECK(s.parse_color("hsl(36, 6%, 74%)") == 0XC1BDB9FF);
     }
 
+    SECTION("Premultiply alpha")
+    {
+        // full alpha
+        CHECK(Style::premultiply_alpha(0xFFFFFFFF) == 0xFFFFFFFF);
+        CHECK(Style::premultiply_alpha(0xAABBCCFF) == 0xAABBCCFF);
+        CHECK(Style::premultiply_alpha(0x334455FF) == 0x334455FF);
+
+        // half alpha
+        CHECK(Style::premultiply_alpha(0xFFFFFF80) == 0x80808080);
+        CHECK(Style::premultiply_alpha(0xAABBCC80) == 0x555D6680);
+        CHECK(Style::premultiply_alpha(0x33445580) == 0x19222A80);
+
+        CHECK(Style::premultiply_alpha(0xFFFFFF15) == 0x15151515);
+        CHECK(Style::premultiply_alpha(0xFFFFFFCC) == 0xCCCCCCCC);
+        CHECK(Style::premultiply_alpha(0xAA558815) == 0x0E070B15);
+        CHECK(Style::premultiply_alpha(0x991188CC) == 0x7A0D6CCC);
+    }
+
     SECTION("Simple style parsing")
     {
         // define your own corner case styles in the test-style.json
@@ -159,24 +177,30 @@ TEST_CASE("nucleus/vector_style")
         // the layer_index order is however preserved (just not tested in this testcase)
 
         // reuse style if no blending
-        CHECK(style_buffer[0].x == 0xaaaaaaff); // make sure that we are in the right style instruction here (not using other style)
-        CHECK(style_buffer[0].z == 8 * line_multipliers); // z 11
-        CHECK(style_buffer[1].z == 8 * line_multipliers); // z 12
-        CHECK(style_buffer[2].z == 8 * line_multipliers); // z 13
-        CHECK(style_buffer[3].z == 9 * line_multipliers); // z 14
-        CHECK(style_buffer[4].z == 10 * line_multipliers); // z 15
-        CHECK(style_buffer[5].z == 10 * line_multipliers); // z 16
-        CHECK(style_buffer[6].z == 10 * line_multipliers); // z 17
+        CHECK(style_buffer[0].x == 0); // make sure that we are in the right style instruction here (not using other style)
+        CHECK(style_buffer[0].z == 8 * line_multipliers); // z 11-4
+        CHECK(style_buffer[1].z == 8 * line_multipliers); // z 11-3
+        CHECK(style_buffer[2].z == 8 * line_multipliers); // z 11-2
+        CHECK(style_buffer[3].z == 8 * line_multipliers); // z 11-1
+        CHECK(style_buffer[3].x == 0); // z 11-1 // color
+        CHECK(style_buffer[4].x == 0xaaaaaaff); // z 11 // color
+        CHECK(style_buffer[4].z == 8 * line_multipliers); // z 11
+        CHECK(style_buffer[5].z == 8 * line_multipliers); // z 12
+        CHECK(style_buffer[6].z == 8 * line_multipliers); // z 13
+        CHECK(style_buffer[7].z == 9 * line_multipliers); // z 14
+        CHECK(style_buffer[8].z == 10 * line_multipliers); // z 15
 
         // "opacity outside of zoom range"
-        CHECK(style_buffer[7].x == 0xbbbbbbff); // z 13
-        CHECK(style_buffer[8].x == 0xbbbbbbff); // z 14
-        CHECK(style_buffer[9].x == 0xbbbbbbff); // z 15
-        CHECK(style_buffer[10].x == 0xbbbbbbff); // z 16
-        CHECK(style_buffer[11].x == 0xbbbbbbff); // z 17
+        CHECK(style_buffer[9].x == 0); // z 13-4
+        CHECK(style_buffer[10].x == 0); // z 13-3
+        CHECK(style_buffer[11].x == 0); // z 13-2
+        CHECK(style_buffer[12].x == 0); // z 13-1
+        CHECK(style_buffer[13].x == 0xbbbbbbff); // z 13
+        CHECK(style_buffer[14].x == 0xbbbbbbff); // z 14
+        CHECK(style_buffer[15].x == 0xbbbbbbff); // z 15
 
-        CHECK(style_buffer[12].x == -1u); // no data
-        CHECK(style_buffer[12].z == -1u); // no data
+        CHECK(style_buffer[16].x == -1u); // no data
+        CHECK(style_buffer[16].z == -1u); // no data
     }
 
     SECTION("Style expand openstreetmap")
@@ -338,7 +362,7 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[feature_to_style.at("fill__transportation__pier__null_0")].x == s.parse_color("#f6f1e5ff"));
         CHECK(style_buffer[feature_to_style.at("fill__water__lake__null__0_0")].x == s.parse_color("#aad3dfff"));
         CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__0_0")].x == s.parse_color("#aad3dfff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__1_0")].x == s.parse_color("#acdafbd8"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__1_0")].x == s.parse_color("#91b8d4d8"));
         CHECK(style_buffer[feature_to_style.at("fill__water__river__null__0_0")].x == s.parse_color("#aad3dfff"));
         CHECK(style_buffer[feature_to_style.at("fill__water__swimming_pool__null__0_0")].x == s.parse_color("#aad3dfff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null_0")].x == s.parse_color("#ffffffff"));
@@ -501,12 +525,12 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__scrub_0")].x == s.parse_color("#e0f2d3ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__forest_0")].x == s.parse_color("#cae4beff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__wood_0")].x == s.parse_color("#cae4beff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__commercial__null_0")].x == s.parse_color("#fff4c256"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__industrial__null_0")].x == s.parse_color("#fff4c256"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__pitch__null_0")].x == s.parse_color("#69966c33"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__residential__null_0")].x == s.parse_color("#eceaea5c"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__zoo__null_0")].x == s.parse_color("#e938650c"));
-        CHECK(style_buffer[feature_to_style.at("fill__transportation__bridge__null__bridge__1_0")].x == s.parse_color("#ededede5"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__commercial__null_0")].x == s.parse_color("#56524156"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__industrial__null_0")].x == s.parse_color("#56524156"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__pitch__null_0")].x == s.parse_color("#151e1533"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__residential__null_0")].x == s.parse_color("#5554545c"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__zoo__null_0")].x == s.parse_color("#0a02040c"));
+        CHECK(style_buffer[feature_to_style.at("fill__transportation__bridge__null__bridge__1_0")].x == s.parse_color("#d4d4d4e5"));
         CHECK(style_buffer[feature_to_style.at("fill__transportation__pier__null_0")].x == s.parse_color("#f8f4f0ff"));
         CHECK(style_buffer[feature_to_style.at("fill__water__lake__null__0_0")].x == s.parse_color("#bbe0fcff"));
         CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__0_0")].x == s.parse_color("#bbe0fcff"));
@@ -668,22 +692,22 @@ TEST_CASE("nucleus/vector_style")
         const auto style_buffer = s.styles()->buffer();
 
         CHECK(feature_to_style.size() == 95);
-        CHECK(style_buffer[feature_to_style.at("fill__building__null__null_0")].x == s.parse_color("#f2eae200"));
+        CHECK(style_buffer[feature_to_style.at("fill__building__null__null_0")].x == s.parse_color("#00000000"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_0")].x == s.parse_color("#d8e8c8ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_0")].x == s.parse_color("#d8e8c8ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_0")].x == s.parse_color("#d8e8c8ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__park_0")].x == s.parse_color("#d8e8c8ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__scrub_0")].x == s.parse_color("#d8e8c8ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__forest_0")].x == s.parse_color("#66aa4419"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__wood_0")].x == s.parse_color("#66aa4419"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__commercial__null_0")].x == s.parse_color("#f2caca3a"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__industrial__null_0")].x == s.parse_color("#fff4c256"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__residential__null_0")].x == s.parse_color("#eae5e15c"));
-        CHECK(style_buffer[feature_to_style.at("fill__transportation__bridge__null__bridge__1_0")].x == s.parse_color("#e3e3e3e5"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__forest_0")].x == s.parse_color("#0a100619"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__wood_0")].x == s.parse_color("#0a100619"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__commercial__null_0")].x == s.parse_color("#372d2d3a"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__industrial__null_0")].x == s.parse_color("#56524156"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__residential__null_0")].x == s.parse_color("#5452515c"));
+        CHECK(style_buffer[feature_to_style.at("fill__transportation__bridge__null__bridge__1_0")].x == s.parse_color("#cbcbcbe5"));
         CHECK(style_buffer[feature_to_style.at("fill__transportation__pier__null_0")].x == s.parse_color("#f8f4f0ff"));
         CHECK(style_buffer[feature_to_style.at("fill__water__lake__null__0_0")].x == s.parse_color("#bfd9f2ff"));
         CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__0_0")].x == s.parse_color("#bfd9f2ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__1_0")].x == s.parse_color("#bfd9f2b2"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__1_0")].x == s.parse_color("#8597a8b2"));
         CHECK(style_buffer[feature_to_style.at("fill__water__river__null__0_0")].x == s.parse_color("#bfd9f2ff"));
         CHECK(style_buffer[feature_to_style.at("fill__water__swimming_pool__null__0_0")].x == s.parse_color("#bfd9f2ff"));
         CHECK(style_buffer[feature_to_style.at("line__boundary__null__null__6__0__0_0")].x == s.parse_color("#9e9cabff"));
@@ -800,13 +824,13 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[feature_to_style.at("fill__GEWAESSER_F_GEWF__1_0")].x == s.parse_color("#b3d9ffff"));
         CHECK(style_buffer[feature_to_style.at("fill__GEWAESSER_F_GEWF__3_0")].x == s.parse_color("#b3d9ffff"));
         CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__0_0")].x == s.parse_color("#efebe9ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__1_0")].x == s.parse_color("#88cc663f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__2_0")].x == s.parse_color("#ebffaa3f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__3_0")].x == s.parse_color("#47b3123f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__5_0")].x == s.parse_color("#ffffff3f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__6_0")].x == s.parse_color("#a3ff733f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__7_0")].x == s.parse_color("#997d4d3f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__8_0")].x == s.parse_color("#66994d3f"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__1_0")].x == s.parse_color("#2132193f"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__2_0")].x == s.parse_color("#3a3f2a3f"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__3_0")].x == s.parse_color("#112c043f"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__5_0")].x == s.parse_color("#3f3f3f3f"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__6_0")].x == s.parse_color("#283f1c3f"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__7_0")].x == s.parse_color("#251e133f"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__8_0")].x == s.parse_color("#1925133f"));
         CHECK(style_buffer[feature_to_style.at("line__BEV_BEZIRK_L_BEZIRKSGRENZE__0_0")].x == s.parse_color("#b094a0ff"));
         CHECK(style_buffer[feature_to_style.at("line__BEV_BEZIRK_L_BEZIRKSGRENZE__0_1")].x == s.parse_color("#eae0efff"));
         CHECK(style_buffer[feature_to_style.at("line__BEV_GEMEINDE_L_GEMEINDEGRENZE__0_0")].x == s.parse_color("#b094a0ff"));

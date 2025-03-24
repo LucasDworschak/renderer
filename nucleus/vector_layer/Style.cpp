@@ -168,9 +168,9 @@ void Style::load()
         if (invalid)
             continue;
 
-        // determine zoom range defined in style.json (or fall back to [8-maxzoom] range (if maxzoom in style is bigger than constants::max_zoom, than choose the lower value
-        glm::uvec2 zoom_range(8u, constants::max_zoom);
-        if (obj.toObject().contains("minzoom"))
+        // determine zoom range defined in style.json (or fall back to constants::style_zoom_range (zoom in style.json only narrows the range)
+        glm::uvec2 zoom_range = constants::style_zoom_range;
+        if (obj.toObject().contains("minzoom") && uint8_t(obj.toObject().value("minzoom").toInt()) > zoom_range.x)
             zoom_range.x = obj.toObject().value("minzoom").toInt();
         if (obj.toObject().contains("maxzoom") && uint8_t(obj.toObject().value("maxzoom").toInt()) < zoom_range.y)
             zoom_range.y = obj.toObject().value("maxzoom").toInt();
@@ -266,6 +266,11 @@ void Style::load()
                 outline_color |= opacity;
             }
 
+            // premultiply alpha
+            // done outside of above if because opacity might be declared in fill_color only
+            fill_color = premultiply_alpha(fill_color);
+            outline_color = premultiply_alpha(outline_color);
+
             // dashes consist of gap / dash -> we combine them into one single value that is split again on the shader
             const uint16_t merged_dash = (dash.first << 8) | dash.second;
 
@@ -304,30 +309,32 @@ void Style::load()
                 }
             }
 
+            // create styles below min zoom and fade out
+            uint8_t first_zoom = style_map.begin()->first;
+            if (!all_styles_same) {
+                // we might need to fill from styles from style.json range to style_zoom_range
+                // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
+                // -> according to style.json there is no style for those values, we only need to add them for blending purposes
+
+                const auto first_style = style_map.at(first_zoom);
+
+                for (uint8_t zoom = first_zoom - constants::style_zoom_blend_steps; zoom < first_zoom; zoom++) {
+                    style_values.push_back({ 0, first_style.outline_color, first_style.outline_width, first_style.outline_dash });
+                }
+            }
+
             bool first = true;
-            uint8_t last_zoom = 0u;
             for (const auto& [zoom, style] : style_map) {
                 if (!all_styles_same || first) {
+
                     // add a new style every loop iteration if styles are different
                     // or if styles are the same only add it at first iteration
                     first = false;
                     style_values.push_back({ style.fill_color, style.outline_color, style.outline_width, style.outline_dash });
                 }
+                // add the styles to the data structure where we later can find the relevant style_index
                 uint32_t style_index = (style_values.size() - 1u) << 1; // move style index by 1 for the "blend" flag
                 m_layer_to_style[key.first].add_filter({ style_index | ((all_styles_same) ? 0u : 1u), layer_index, key.second }, zoom);
-                last_zoom = zoom;
-            }
-
-            if (!all_styles_same) {
-                // we might need to fill from last_zoom to constants::max_zoom
-
-                const auto style = style_map.at(last_zoom);
-
-                for (uint8_t zoom = last_zoom + 1; zoom < constants::max_zoom; zoom++) {
-                    // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
-                    // -> according to style.json there is no style for those values, we only need to add them for blending purposes if a lower zoom tile wants to blend
-                    style_values.push_back({ style.fill_color, style.outline_color, style.outline_width, style.outline_dash });
-                }
             }
 
             // make sure that layer_index also fits into style_bits (we use this in preprocess)
@@ -641,6 +648,17 @@ uint32_t Style::parse_color(const QJsonValue& value)
         qDebug() << "cannot parse color: " << colorValue;
         return 0ul;
     }
+}
+
+uint32_t Style::premultiply_alpha(uint32_t color)
+{
+    uint8_t a = color & 255;
+    float opacity = float(a) / 255.0;
+    uint8_t r = ((color >> 24) & 255) * opacity;
+    uint8_t g = ((color >> 16) & 255) * opacity;
+    uint8_t b = ((color >> 8) & 255) * opacity;
+
+    return ((r << 24) | (g << 16) | (b << 8) | a);
 }
 
 uint8_t Style::parse_opacity(const QJsonValue& value)

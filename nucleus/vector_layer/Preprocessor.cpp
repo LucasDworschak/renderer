@@ -272,8 +272,10 @@ VectorLayerCollection preprocess_geometry(const std::vector<GeometryData>& data,
                 const auto scale = float(constants::grid_size) / float(data[i].extent);
 
                 for (size_t j = 0; j < data[i].vertices.size(); ++j) {
-
-                    nucleus::utils::rasterizer::rasterize_line(cell_writer, data[i].vertices[j], line_width * scale, scale);
+                    // TODO: according to Task #151 -> we doubled the line width that goes into the acceleration structure because we are looking at tiles that are bigger
+                    // Nevertheless, we artificially worsened the performance by introducing more cells where a line could be (although it is only there on specific zoom levels)
+                    // This performance issue will be solved with Task #198 (mipmaps)
+                    nucleus::utils::rasterizer::rasterize_line(cell_writer, data[i].vertices[j], line_width * scale * 2.0, scale);
                 }
             }
             for (size_t j = 0; j < data[i].vertices.size(); ++j) {

@@ -91,6 +91,8 @@ public:
     std::pair<uint8_t, uint8_t> parse_dash(const QJsonValue& value);
     uint16_t parse_line_width(const QJsonValue& value);
 
+    static uint32_t premultiply_alpha(uint32_t color);
+
     std::vector<std::pair<uint32_t, uint32_t>> indices(std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
 
     std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles() const;

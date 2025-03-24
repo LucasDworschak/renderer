@@ -22,6 +22,8 @@
 #include <cmath>
 #include <stdint.h>
 
+#include <glm/glm.hpp>
+
 namespace nucleus::vector_layer::constants {
 // sizes are all only one side -> and have to be squared to get the actual amount of data stored in the buffer
 // if values here change -> you also need to change them in the shader
@@ -43,6 +45,7 @@ constexpr auto style_buffer_size = 64;
 constexpr uint16_t style_precision = 100;
 
 constexpr uint8_t line_width_multiplier = 5;
-constexpr uint8_t max_zoom = 18u;
+constexpr glm::uvec2 style_zoom_range = glm::uvec2(8u, 18u);
+constexpr uint8_t style_zoom_blend_steps = 4u; // how many zoom steps below min_zoom should be created to allow blending
 
 } // namespace nucleus::vector_layer::constants

@@ -67,8 +67,8 @@ struct Layer_Style
 {
     highp uint last_style;
     lowp float layer_alpha;
-    Style_Data current_layer_style;
-    Style_Data next_layer_style;
+    Style_Data current_zoom_style;
+    Style_Data next_zoom_style;
     bool should_blend;
 };
 
@@ -86,6 +86,7 @@ const lowp float style_precision = 100.0;
 
 const lowp int style_bits = 13;
 const lowp int max_zoom = 18;
+const lowp uint zoom_blend_steps = 4u;
 
 ///////////////////////////////////////////////
 
@@ -303,21 +304,24 @@ Style_Data parse_style(highp uint style_index) {
 /**
   * zoom_blend: value between 0-1, determines how much of the current and how much of the next style should be used
   */
-void draw_layer(inout Layer_Style layer_style,inout lowp vec3 pixel_color , highp float zoom_blend)
+void draw_layer(inout Layer_Style layer_style,inout lowp vec4 pixel_color , highp float zoom_blend)
 {
     // mix the previous layer color information with output
     if(layer_style.should_blend)
     {
-        lowp vec4 col = mix(layer_style.current_layer_style.fill_color, layer_style.next_layer_style.fill_color, zoom_blend);
-        pixel_color = mix(pixel_color, col.rgb, layer_style.layer_alpha * col.a);
+        // calculate color of current layer by blending the styles of current and next zoom step (depending on zoom_blend factor)
+        lowp vec4 col = mix(layer_style.current_zoom_style.fill_color, layer_style.next_zoom_style.fill_color, zoom_blend);
+
+        // merge current layer color with previous pixel color
+        pixel_color = pixel_color + ((1.0-pixel_color.a)*col) * layer_style.layer_alpha;
     }
     else
     {
-        pixel_color = mix(pixel_color, layer_style.current_layer_style.fill_color.rgb, layer_style.layer_alpha * layer_style.current_layer_style.fill_color.a);
+         pixel_color = pixel_color + ((1.0-pixel_color.a)*layer_style.current_zoom_style.fill_color) * layer_style.layer_alpha;
     }
 }
 
-bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, inout lowp vec3 pixel_color, highp float float_zoom_offset)
+bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, inout lowp vec4 pixel_color, highp float float_zoom_offset)
 {
     // we need to make sure that a layer with < 1 opacity does only fill the correct amount of opacity
     // we therefore fill colors per layerstyle
@@ -328,9 +332,6 @@ bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, ino
             // we already fully filled the current layer -> go to the next layer
             return true;
         }
-
-        // TODO do we need to draw here?
-        // draw_layer(draw_data, layer_style, pixel_color, float_zoom);
     }
     else
     {
@@ -339,29 +340,35 @@ bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, ino
         // draw the previous style to pixel_color
         draw_layer(layer_style, pixel_color, fract(float_zoom_offset));
 
-        // at this pixel, how many styles do we have to increase to get the current style
+        // current discrete tile z 8
+        // floating tile zoom z 6.8
+        // zoom_offset 2 (current style z 6 next style z 7)
+
+        // at this pixel, how many styles do we have to reduce to get the current style
         // next style (if we blend) will be always +1 (since we only blend one pixel)
         lowp uint zoom_offset = 0u;
 
         if(draw_data.should_blend)
-            zoom_offset = uint(floor(float_zoom_offset));
+            zoom_offset = clamp(uint(ceil(float_zoom_offset)), 0u, zoom_blend_steps);
 
         // get and store new style info
         layer_style.last_style = draw_data.style_index;
-        layer_style.current_layer_style = parse_style(draw_data.style_index + zoom_offset);
+        layer_style.current_zoom_style = parse_style(draw_data.style_index - zoom_offset);
 
-        float zoomed_tile_extent = tile_extent *  pow(2, zoom_offset);
+        // the outline_width is saved as tile_extent dependent
+        // by dividing by tile_extent we get the width we want to draw
+        // by further dividing the tile_extent by 2^zoom_offset, we reduce the tile_extent and increase the line width.
+        float zoomed_tile_extent = tile_extent / pow(2, zoom_offset);
 
-        layer_style.current_layer_style.outline_width /= zoomed_tile_extent;
+        layer_style.current_zoom_style.outline_width /= zoomed_tile_extent;
         if(draw_data.should_blend)
         {
-            // layer_style.next_layer_style = parse_style(draw_data.style_index+1u);
-            layer_style.next_layer_style = parse_style(draw_data.style_index+zoom_offset+1u);
-            layer_style.next_layer_style.outline_width /= zoomed_tile_extent * 2;
+            layer_style.next_zoom_style = parse_style(draw_data.style_index-zoom_offset+1u);
+            layer_style.next_zoom_style.outline_width /= (zoomed_tile_extent * 2.0);
         }
         else
         {
-            layer_style.next_layer_style = layer_style.current_layer_style;
+            layer_style.next_zoom_style = layer_style.current_zoom_style;
         }
         layer_style.should_blend = draw_data.should_blend;
         // how much alpha per layer we accumulate
@@ -385,9 +392,7 @@ void main() {
     // highp float depth = depthWSEncode2n8(length(var_pos_cws));
     highp float depth = length(var_pos_cws);
 
-    highp float float_zoom = 0;
-
-
+    highp float float_zoom = float_zoom_interpolation();
 
 
     lowp vec3 debug_cacscade_layer = vec3(0,0,0);// DEBUG -> which cascade is being used
@@ -407,20 +412,22 @@ void main() {
     lowp ivec2 dict_px;
     highp uvec2 offset_size = uvec2(0u);
 
-    lowp float pixel_alpha = 0.0;
     // openmaptile
-    // texout_albedo = vec3(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f);
+    // lowp vec4 background_color = vec3(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f, 0.0f);
     // qwant
-    // texout_albedo = vec3(248.0f/255.0f, 248.0f/255.0f, 248.0f/255.0f);
+    // lowp vec4 background_color = vec3(248.0f/255.0f, 248.0f/255.0f, 248.0f/255.0f, 0.0f);
     // osm-bright
-    texout_albedo = vec3(248.0f/255.0f, 244.0f/255.0f, 240.0f/255.0f);
+    lowp vec4 background_color = vec4(248.0f/255.0f, 244.0f/255.0f, 240.0f/255.0f, 0.0f);
 
-
+    lowp vec4 pixel_color = vec4(0.0f, 0.0, 0.0f, 0.0f);
 
     if (find_tile(tile_id, dict_px, uv)) {
 
-        float_zoom = float_zoom_interpolation();
-        // float_zoom = tile_id.z; // activate this to show each tile without blending
+        // float_zoom = tile_id.z; // uncomment this to show each tile without blending
+
+        highp float zoom_offset = float(tile_id.z)-float_zoom;
+
+
 
 
         highp uvec2 texture_layer = texelFetch(array_index_sampler, dict_px, 0).xy;
@@ -438,9 +445,6 @@ void main() {
                 lowp vec3 raw_grid = vec3(1,0,0);// DEBUG
                 lowp ivec2 grid_cell = ivec2(int(grid_lookup.x), int(grid_lookup.y)); // DEBUG
                 lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
-
-
-                lowp vec3 pixel_color = vec3(0.0f, 0.0, 0.0f);
 
 
                 // get the buffer index and extract the correct texture_layer.y
@@ -482,7 +486,7 @@ void main() {
 
                 Layer_Style layer_style;
                 layer_style.last_style = -1u;
-                layer_style.current_layer_style = Style_Data(vec4(0.0), vec4(0.0), 0.0, vec2(0.0));
+                layer_style.current_zoom_style = Style_Data(vec4(0.0), vec4(0.0), 0.0, vec2(0.0));
                 layer_style.layer_alpha = 0.0;
 
                 lowp float geometry_influence = 0.0; // how much is the current line/polygon visible
@@ -506,7 +510,6 @@ void main() {
 
                         highp float thickness = 0.0;
                         d = sdTriangle(uv, v0, v1, v2) - thickness;
-                        // d = 100.0;
 
                         geometry_influence = 1.0 - step(0.0, d);
 
@@ -515,7 +518,7 @@ void main() {
                             continue;
 
                         // calling it here prevents getting the layerstyle if we do not need it yet
-                        bool check_next_geometry = check_and_draw_layer(draw_data, layer_style, pixel_color, float_zoom-float(tile_id.z));
+                        bool check_next_geometry = check_and_draw_layer(draw_data, layer_style, pixel_color, zoom_offset);
                         if(check_next_geometry)
                             continue;
                     }
@@ -527,14 +530,14 @@ void main() {
                         highp vec2 v1 = vec2(line_data.b) / vec2(tile_extent);
 
                         // needs to be applied here to get the thickness of the line
-                        bool check_next_geometry = check_and_draw_layer(draw_data, layer_style, pixel_color, float_zoom-float(tile_id.z));
+                        bool check_next_geometry = check_and_draw_layer(draw_data, layer_style, pixel_color, zoom_offset);
                         if(check_next_geometry)
                             continue;
 
 
-                        highp float thickness_current = layer_style.current_layer_style.outline_width;
-                        highp float thickness_next = layer_style.next_layer_style.outline_width;
-                        highp float thickness = mix(thickness_current, thickness_next, fract(float_zoom));
+                        lowp float thickness_current = layer_style.current_zoom_style.outline_width;
+                        lowp float thickness_next = layer_style.next_zoom_style.outline_width;
+                        lowp float thickness = mix(thickness_current, thickness_next, fract(float_zoom));
                         d = sdLine(uv, v0, v1) - thickness;
 
 
@@ -561,70 +564,28 @@ void main() {
 
 
 
+                    // set layer_alpha from the current geometry
+                    layer_style.layer_alpha = min(1.0, layer_style.layer_alpha + geometry_influence);
 
-
-
-                    pixel_alpha += geometry_influence * layer_style.current_layer_style.fill_color.a;
-                    if(pixel_alpha > 1.0)
-                        geometry_influence = pixel_alpha - 1.0;
-
-                    layer_style.layer_alpha += geometry_influence;
-
-                    if(pixel_alpha >= 1.0)
-                        break; // early exit if alpha is >= 1;
-
+                    // we do not need to check any other geometry -> pixel is already fully filled
+                    if(pixel_color.a >= 1.0)
+                        break;
                 }
 
 
                 // mix the last layer we parsed
-                // pixel_color = mix(pixel_color, layer_style.current_layer_style.fill_color.rgb, layer_style.layer_alpha * layer_style.current_layer_style.fill_color.a);
-                // pixel_color = mix(pixel_color, layer_style.current_layer_style.fill_color.rgb,  layer_style.current_layer_style.fill_color.a);
                 draw_layer(layer_style, pixel_color, fract(float_zoom));
-
-
-                // mix polygon color with background
-                texout_albedo = mix(texout_albedo, pixel_color, pixel_alpha);
-                // texout_albedo = vec3(layer_style.layer_alpha);
-
-
-
-
-                // texout_albedo = pixel_color;
-                // texout_albedo = debug_texture_layer;
-
-                // texout_albedo = mix(cells, texout_albedo, 0.9);// DEBUG
-                // texout_albedo = mix(texout_albedo, debug_triangle_lines, 0.5);// DEBUG
-
-                // vec3 grid_start = color_from_id_hash(offset_size.x);
-                // vec3 grid_start = color_from_id_hash(offset_size.y);
- // texout_albedo = grid_start;
-
-                // texout_albedo = mix(grid_start, pixel_color, 0.5);// DEBUG
-                // texout_albedo = mix(raw_grid, pixel_color, 0.5);// DEBUG
-                // texout_albedo = raw_grid;// DEBUG
-                // texout_albedo = vec3(pixel_alpha);// DEBUG
-                // texout_albedo = debug_triangle_lines;// DEBUG
-                // texout_albedo = debug_cacscade_layer;// DEBUG
-                // texout_albedo = debug_cell_size;// DEBUG
-                // texout_albedo = mix(texout_albedo, color_from_id_hash(texture_layer.y), 0.2);
             }
-            else
-            {
-                // we aren't processing anything
-                // texout_albedo = vec3(0.0, 0.0, 0.0);// DEBUG
-            }
-
-            // float min_size = 50;
-            // float max_size = 160;
-            // texout_albedo = vec3(((clamp(offset_size.y, min_size, max_size) - min_size) / (max_size-min_size)) / 2.0 + (0.5 * ((offset_size.y > min_size)? 1.0 : 0.0)), 0.0 ,0.0);
-
         }
     }
 
-    lowp vec3 zoom_color =  color_from_id_hash(uint(float_zoom));
+    // mix polygon color with background
+    texout_albedo = (pixel_color + ((1.0-pixel_color.a)*background_color)).rgb;
 
 
     if (conf.overlay_mode > 199u && conf.overlay_mode < 300u) {
+        lowp vec3 zoom_debug_color =  color_from_id_hash(uint(float_zoom));
+
         lowp vec3 overlay_color = vec3(0.0);
         switch(conf.overlay_mode) {
             case 200u: overlay_color = vec3(uv, 0.0);break;
@@ -634,10 +595,10 @@ void main() {
             case 204u: overlay_color = debug_index_buffer_start;break;
             case 205u: overlay_color = debug_index_buffer_size;break;
             case 206u: overlay_color = debug_texture_layer;break;
-            case 207u: overlay_color = vec3(pixel_alpha, 0.0, 0.0);break;
+            case 207u: overlay_color = vec3(pixel_color.a, 0.0, 0.0);break;
             // case 208u: handled below;
             // case 209u: overlay_color = vec3(float_zoom, 0.0, 0.0);break;
-            case 209u: overlay_color = mix(vec3(1,1,1), zoom_color, 1.0-fract(float_zoom));break;
+            case 209u: overlay_color = mix(vec3(1,1,1), zoom_debug_color, 1.0-fract(float_zoom));break;
             default: overlay_color = vertex_color;
         }
         texout_albedo = mix(texout_albedo, overlay_color, conf.overlay_strength);
@@ -655,16 +616,9 @@ void main() {
         else if(conf.overlay_mode == 210u)
         {
             // comparison between float zoom and tile zoom
-            texout_albedo = mix( zoom_color, color_from_id_hash(uint(var_tile_id.z)), conf.overlay_strength);
+            texout_albedo = mix(zoom_debug_color, color_from_id_hash(uint(var_tile_id.z)), conf.overlay_strength);
         }
     }
-
-    // if(float_zoom< tile_id.z)
-    // {
-
-    //     texout_albedo = vec3(1.0, 0.0, 0.0);
-    //     texout_albedo = vec3(1.0, 0.0, 0.0);
-    // }
 
 
 
