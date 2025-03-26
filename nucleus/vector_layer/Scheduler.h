@@ -28,28 +28,23 @@ namespace nucleus::vector_layer {
 class Scheduler : public nucleus::tile::Scheduler {
     Q_OBJECT
 public:
-    explicit Scheduler(QObject* parent = nullptr);
+    explicit Scheduler(const Scheduler::Settings& settings, Style&& style);
     ~Scheduler() override;
 
-    void set_geometry_ram_cache(nucleus::tile::MemoryCache* new_geometry_ram_cache);
-
-    void load_style();
-
-public slots:
-    void enable_scheduler(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles);
+    void set_enabled(bool new_enabled) override;
 
 signals:
-    void gpu_quads_updated(const std::vector<nucleus::tile::GpuVectorLayerQuad>& new_quads, const std::vector<tile::Id>& deleted_quads);
-    void style_updated(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles);
+    void gpu_tiles_updated(const std::vector<tile::Id>& deleted_tiles, const std::vector<nucleus::tile::GpuVectorLayerTile>& new_tiles);
+
+    void style_updated(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> style_buffer);
 
 protected:
     void transform_and_emit(const std::vector<tile::DataQuad>& new_quads, const std::vector<tile::Id>& deleted_quads) override;
-    bool is_ready_to_ship(const nucleus::tile::DataQuad& quad) const override;
 
 private:
-    nucleus::tile::MemoryCache* m_geometry_ram_cache = nullptr;
-
     Style m_style;
+    bool m_needs_to_update_style;
+    nucleus::tile::GpuVectorLayerTile m_default_tile;
 };
 
 } // namespace nucleus::vector_layer

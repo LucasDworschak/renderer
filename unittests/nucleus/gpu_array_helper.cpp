@@ -70,22 +70,22 @@ TEST_CASE("nucleus/gpu_array_helper")
 
             CHECK(helper.buffer_amount() == 3);
 
-            helper.set_quad_limit(512);
+            helper.set_tile_limit(2048);
 
-            CHECK(helper.layer_amount(0) == 512 * 4);
-            CHECK(helper.layer_amount(1) == 512 * 4);
-            CHECK(helper.layer_amount(2) == constants::array_layer_quad_amount[2] * 4);
-            CHECK(helper.layer_amount(3) == constants::array_layer_quad_amount[3] * 4);
+            CHECK(helper.layer_amount(0) == 2048);
+            CHECK(helper.layer_amount(1) == 2048);
+            CHECK(helper.layer_amount(2) == constants::array_layer_tile_amount[2]);
+            CHECK(helper.layer_amount(3) == constants::array_layer_tile_amount[3]);
         }
         {
             GpuMultiArrayHelper helper;
 
-            helper.set_quad_limit(64);
+            helper.set_tile_limit(512);
 
-            CHECK(helper.layer_amount(0) == 64 * 4);
-            CHECK(helper.layer_amount(1) == 64 * 4);
-            CHECK(helper.layer_amount(2) == 64 * 4); // although it is a custom size, the lower value is used instead
-            CHECK(helper.layer_amount(3) == constants::array_layer_quad_amount[3] * 4);
+            CHECK(helper.layer_amount(0) == 512);
+            CHECK(helper.layer_amount(1) == 512);
+            CHECK(helper.layer_amount(2) == 512); // although it is a custom size, the lower value is used instead
+            CHECK(helper.layer_amount(3) == constants::array_layer_tile_amount[3]);
         }
 
     }
@@ -97,7 +97,7 @@ TEST_CASE("nucleus/gpu_array_helper")
 
         GpuMultiArrayHelper helper;
 
-        helper.set_quad_limit(512);
+        helper.set_tile_limit(2048);
 
         const nucleus::tile::Id id0 = { 10, { 10, 10 } };
         const nucleus::tile::Id id1 = { 12, { 12, 12 } };
@@ -140,7 +140,7 @@ TEST_CASE("nucleus/gpu_array_helper")
 
         GpuMultiArrayHelper helper;
 
-        helper.set_quad_limit(512);
+        helper.set_tile_limit(2048);
 
         const nucleus::tile::Id id0 = { 6, { 23, 56 } };
         const nucleus::tile::Id id1 = { 8, { 122, 132 } };

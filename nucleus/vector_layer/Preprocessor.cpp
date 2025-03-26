@@ -32,6 +32,19 @@
 
 namespace nucleus::vector_layer {
 
+GpuVectorLayerTile create_default_gpu_tile()
+{
+    GpuVectorLayerTile default_tile;
+    default_tile.buffer_info = 0;
+    default_tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(glm::uvec2(constants::grid_size), { -1u }));
+    default_tile.index_buffer = std::make_shared<const nucleus::Raster<uint32_t>>(
+        nucleus::Raster<uint32_t>(glm::uvec2(constants::data_size[0] * constants::index_buffer_size_multiplier), { -1u }));
+    default_tile.vertex_buffer
+        = std::make_shared<const nucleus::Raster<glm::u32vec3>>(nucleus::Raster<glm::u32vec3>(glm::uvec2(constants::data_size[0]), { -1u, -1u, -1u }));
+
+    return default_tile;
+}
+
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
 {
     if (vector_tile_data.isEmpty())
@@ -50,6 +63,7 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
     auto layer_collection = details::preprocess_geometry(tile_data, style_buffer);
 
     auto tile = create_gpu_tile(layer_collection);
+    tile.id = id;
 
     return tile;
 }

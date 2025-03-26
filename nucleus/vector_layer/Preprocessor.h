@@ -107,4 +107,6 @@ namespace details {
 
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
 
+GpuVectorLayerTile create_default_gpu_tile();
+
 } // namespace nucleus::vector_layer

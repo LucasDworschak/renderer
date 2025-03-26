@@ -24,59 +24,44 @@
 
 namespace nucleus::vector_layer {
 
-Scheduler::Scheduler(QObject* parent)
-    : nucleus::tile::Scheduler(256, parent)
-    // , m_style(":/vectorlayerstyles/basemap.json")
-    , m_style(":/vectorlayerstyles/openstreetmap.json")
-// , m_style(":/vectorlayerstyles/qwant.json")
-// , m_style(":/vectorlayerstyles/osm-bright.json")
+Scheduler::Scheduler(const Scheduler::Settings& settings, Style&& style)
+    : nucleus::tile::Scheduler(settings)
+    , m_style(std::move(style))
+    , m_needs_to_update_style(true)
 {
-    connect(&m_style, &Style::load_finished, this, &Scheduler::enable_scheduler);
+    m_default_tile = nucleus::vector_layer::create_default_gpu_tile();
 }
+
 Scheduler::~Scheduler() = default;
 
 void Scheduler::transform_and_emit(const std::vector<tile::DataQuad>& new_quads, const std::vector<tile::Id>& deleted_quads)
 {
-    std::vector<nucleus::tile::GpuVectorLayerQuad> new_gpu_quads;
-    new_gpu_quads.reserve(new_quads.size());
+    std::vector<nucleus::tile::GpuVectorLayerTile> new_gpu_tiles;
+    new_gpu_tiles.reserve(new_quads.size() * 4);
 
-    // const auto style = m_style;
-
-    std::transform(new_quads.cbegin(), new_quads.cend(), std::back_inserter(new_gpu_quads), [this](const auto& quad) {
-        // create GpuQuad based on cpu quad
-        GpuVectorLayerQuad gpu_quad;
-        gpu_quad.id = quad.id;
-
-        assert(quad.n_tiles == 4);
+    for (const auto& quad : new_quads) {
         for (unsigned i = 0; i < 4; ++i) {
 
-            gpu_quad.tiles[i] = nucleus::vector_layer::preprocess(quad.tiles[i].id, *quad.tiles[i].data, m_style);
-            gpu_quad.tiles[i].id = quad.tiles[i].id;
+            GpuVectorLayerTile gpu_tile = nucleus::vector_layer::preprocess(quad.tiles[i].id, *quad.tiles[i].data, m_style);
+            if (gpu_tile.id != quad.tiles[i].id) {
+                gpu_tile = m_default_tile;
+                gpu_tile.id = quad.tiles[i].id;
+            }
+            new_gpu_tiles.push_back(gpu_tile);
         }
-        return gpu_quad;
-    });
+    }
 
-    emit gpu_quads_updated(new_gpu_quads, deleted_quads);
+    emit gpu_tiles_updated(deleted_quads, new_gpu_tiles);
 }
 
-// TODO not quite sure if this is the correct way we want to do this yet..
-// especially with changing vector layer source this would definitely cause problems
-void Scheduler::load_style() { m_style.load(); }
-
-void Scheduler::enable_scheduler(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles)
+void Scheduler::set_enabled(bool new_enabled)
 {
-    qDebug() << "vectorlayer style loaded";
+    nucleus::tile::Scheduler::set_enabled(new_enabled);
 
-    set_enabled(true);
-    emit style_updated(styles);
+    if (m_needs_to_update_style) {
+        emit style_updated(m_style.styles());
+        m_needs_to_update_style = false;
+    }
 }
-
-bool Scheduler::is_ready_to_ship(const nucleus::tile::DataQuad& quad) const
-{
-    assert(m_geometry_ram_cache);
-    return m_geometry_ram_cache->contains(quad.id);
-}
-
-void Scheduler::set_geometry_ram_cache(nucleus::tile::MemoryCache* new_geometry_ram_cache) { m_geometry_ram_cache = new_geometry_ram_cache; }
 
 } // namespace nucleus::vector_layer

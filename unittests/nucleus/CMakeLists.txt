@@ -41,6 +41,7 @@ alp_add_unittest(unittests_nucleus
     zppbits.cpp
     cache_queries.cpp
     bits_and_pieces.cpp
+    tile_drawing.cpp
     vector_preprocess.cpp
     vector_style.cpp
     gpu_array_helper.cpp
@@ -71,6 +72,11 @@ qt_add_resources(unittests_nucleus "test_data"
     data/eaws_0-0-0.mvt
     data/eaws_2-2-0.mvt
     data/eaws_10-236-299.mvt
+    data/quad/7_68_82.jpg
+    data/quad/7_68_83.jpg
+    data/quad/7_69_82.jpg
+    data/quad/7_69_83.jpg
+    data/quad/merged.jpg
     data/rasterizer_simple_triangle.png
     data/rasterizer_output_random_triangle.png
     data/vector_layer/grid_triangles.png

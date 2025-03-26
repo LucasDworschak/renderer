@@ -26,6 +26,7 @@
 #include <nucleus/tile/RateLimiter.h>
 #include <nucleus/tile/SlotLimiter.h>
 #include <nucleus/tile/TileLoadService.h>
+#include <nucleus/vector_layer/constants.h>
 
 #include <QTimer>
 
@@ -45,10 +46,19 @@ struct SchedulerHolder {
 
 SchedulerHolder scheduler(TileLoadServicePtr tile_service, const tile::utils::AabbDecoratorPtr& aabb_decorator, QThread* thread = nullptr)
 {
-    auto scheduler = std::make_unique<nucleus::vector_layer::Scheduler>();
-    scheduler->read_disk_cache();
-    scheduler->set_gpu_quad_limit(512);
-    scheduler->set_ram_quad_limit(12000);
+
+    // Style style(":/vectorlayerstyles/basemap.json");
+    Style style(":/vectorlayerstyles/openstreetmap.json");
+    // Style style(":/vectorlayerstyles/qwant.json");
+    // Style style(":/vectorlayerstyles/osm-bright.json");
+
+    style.load();
+
+    Scheduler::Settings settings;
+    settings.max_zoom_level = constants::style_zoom_range.y;
+    settings.tile_resolution = 256;
+    settings.gpu_quad_limit = 512;
+    auto scheduler = std::make_unique<nucleus::vector_layer::Scheduler>(settings, std::move(style));
     scheduler->set_aabb_decorator(aabb_decorator);
 
     {

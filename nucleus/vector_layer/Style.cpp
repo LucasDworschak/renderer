@@ -35,14 +35,19 @@ namespace nucleus::vector_layer {
 
 // https://maplibre.org/maplibre-style-spec/
 
-// TODO add flag if two subsequent styles should be blended (also if they shouldnt be blended you can reuse style)
-
 Style::Style(const QString& filename)
     : m_filename(filename)
 {
     // make sure that style_bits and style_buffer_size are correctly matched -> changing one means you also need to change the other
     // -1 because one bit is used to signal if it should blend with next style or not
     assert(((constants::style_buffer_size * constants::style_buffer_size) >> (constants::style_bits - 1)) == 1);
+}
+
+Style::Style(Style&& other)
+    : m_styles(std::move(other.m_styles))
+    , m_layer_to_style(std::move(other.m_layer_to_style))
+    , m_filename(std::move(other.m_filename))
+{
 }
 
 void Style::load()
@@ -64,8 +69,6 @@ void Style::load()
     }
 
     std::vector<glm::u32vec4> style_values;
-
-    // std::unordered_map<LayerStyle, uint32_t, Hasher> style_to_index;
 
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonArray layers = style_expander::expand(doc.object().value("layers").toArray());
@@ -350,7 +353,7 @@ void Style::load()
 
     m_styles = std::make_shared<const nucleus::Raster<glm::u32vec4>>(nucleus::Raster<glm::u32vec4>(constants::style_buffer_size, std::move(style_values)));
 
-    emit load_finished(m_styles);
+    qDebug() << "vectorlayer style loaded";
 }
 
 std::vector<std::pair<uint32_t, uint32_t>> Style::indices(

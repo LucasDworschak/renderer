@@ -27,8 +27,8 @@
 #include "hashing.glsl" // DEBUG
 
 uniform highp usampler2DArray acceleration_grid_sampler;
-uniform highp usampler2D array_index_sampler;
-uniform highp usampler2D vector_map_tile_id_sampler;
+uniform highp usampler2D instanced_texture_array_index_sampler;
+uniform highp usampler2D instanced_texture_zoom_sampler;
 
 uniform highp usampler2D styles_sampler;
 
@@ -54,6 +54,7 @@ in highp vec3 var_normal;
 in lowp float is_curtain;
 #endif
 flat in lowp vec3 vertex_color;
+flat in highp uint instance_id;
 
 struct Style_Data
 {
@@ -209,7 +210,6 @@ DrawData index_sample(lowp uint sampler_index, highp uint pixel_index, highp uin
 
 VectorLayerData vertex_sample(lowp uint sampler_index, highp uint index, highp uint texture_layer)
 {
-
     if(sampler_index == 0u)
     {
         return unpack_vectorlayer_data(texelFetch(vertex_buffer_sampler_0, ivec3(to_dict_pixel_64(index), texture_layer), 0).rgb);
@@ -249,30 +249,6 @@ mediump float float_zoom_interpolation()
     highp float z = log2(static_factors / dist_camera / error_threshold_px)+1.0;
 
     return clamp(z, 0.0, max_zoom);
-}
-
-bool find_tile(inout highp uvec3 tile_id, out lowp ivec2 dict_px, inout highp vec2 uv) {
-    uvec2 missing_packed_tile_id = uvec2((-1u) & 65535u, (-1u) & 65535u);
-    uint iter = 0u;
-    do {
-        mediump uint hash = hash_tile_id(tile_id);
-        highp uvec2 wanted_packed_tile_id = pack_tile_id(tile_id);
-        highp uvec2 found_packed_tile_id = texelFetch(vector_map_tile_id_sampler, to_dict_pixel(hash), 0).xy;
-        while(found_packed_tile_id != wanted_packed_tile_id && found_packed_tile_id != missing_packed_tile_id) {
-            hash++;
-            found_packed_tile_id = texelFetch(vector_map_tile_id_sampler, to_dict_pixel(hash), 0).xy;
-            if (iter++ > 50u) {
-                break;
-            }
-        }
-        if (found_packed_tile_id == wanted_packed_tile_id) {
-            dict_px = to_dict_pixel(hash);
-            tile_id = unpack_tile_id(wanted_packed_tile_id);
-            return true;
-        }
-    }
-    while (decrease_zoom_level_by_one(tile_id, uv));
-    return false;
 }
 
 highp uvec3 u32_2_to_u16_u24_u24(highp uvec2 data){
@@ -412,6 +388,9 @@ void main() {
     lowp ivec2 dict_px;
     highp uvec2 offset_size = uvec2(0u);
 
+
+    lowp vec4 pixel_color = vec4(0.0f, 0.0, 0.0f, 0.0f);
+
     // openmaptile
     // lowp vec4 background_color = vec3(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f, 0.0f);
     // qwant
@@ -419,163 +398,158 @@ void main() {
     // osm-bright
     lowp vec4 background_color = vec4(248.0f/255.0f, 244.0f/255.0f, 240.0f/255.0f, 0.0f);
 
-    lowp vec4 pixel_color = vec4(0.0f, 0.0, 0.0f, 0.0f);
 
-    if (find_tile(tile_id, dict_px, uv)) {
-
-        // float_zoom = tile_id.z; // uncomment this to show each tile without blending
-
-        highp float zoom_offset = float(tile_id.z)-float_zoom;
+    decrease_zoom_level_until(tile_id, uv, texelFetch(instanced_texture_zoom_sampler, ivec2(instance_id, 0), 0).x);
+    highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler, ivec2(instance_id, 0), 0).xy;
 
 
+    // float_zoom = tile_id.z; // uncomment this to show each tile without blending
+    highp float zoom_offset = float(tile_id.z)-float_zoom;
 
 
-        highp uvec2 texture_layer = texelFetch(array_index_sampler, dict_px, 0).xy;
+    if(texture_layer.x != bit_mask_ones && texture_layer.y != bit_mask_ones) // check for valid data
+    {
+        // acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
+        highp vec2 grid_lookup = grid_size*uv;
+        offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(int(grid_lookup.x), int(grid_lookup.y), texture_layer.x & layer_mask),0).r);
 
-        if(texture_layer.x != bit_mask_ones && texture_layer.y != bit_mask_ones) // check for valid data
+        // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
+        if(offset_size.y != uint(0)) // only if we have data here
         {
-            // acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
-            highp vec2 grid_lookup = grid_size*uv;
-            offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(int(grid_lookup.x), int(grid_lookup.y), texture_layer.x & layer_mask),0).r);
-
-            // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
-            if(offset_size.y != uint(0)) // only if we have data here
-            {
-                // lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
-                lowp vec3 raw_grid = vec3(1,0,0);// DEBUG
-                lowp ivec2 grid_cell = ivec2(int(grid_lookup.x), int(grid_lookup.y)); // DEBUG
-                lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
+            // lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
+            lowp vec3 raw_grid = vec3(1,0,0);// DEBUG
+            lowp ivec2 grid_cell = ivec2(int(grid_lookup.x), int(grid_lookup.y)); // DEBUG
+            lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
 
 
-                // get the buffer index and extract the correct texture_layer.y
-                lowp uint sampler_buffer_index = (texture_layer.y & ((bit_mask_ones << sampler_offset))) >> sampler_offset;
-                texture_layer.y = texture_layer.y & layer_mask;
+            // get the buffer index and extract the correct texture_layer.y
+            lowp uint sampler_buffer_index = (texture_layer.y & ((bit_mask_ones << sampler_offset))) >> sampler_offset;
+            texture_layer.y = texture_layer.y & layer_mask;
 
-                { // DEBUG
-                    debug_texture_layer = color_from_id_hash(texture_layer.y);
+            { // DEBUG
+                debug_texture_layer = color_from_id_hash(texture_layer.y);
 
-                    {
-                        if(sampler_buffer_index == 0u)
-                            debug_cacscade_layer = vec3(0,1,0); // green
-                        else if(sampler_buffer_index == 1u)
-                            debug_cacscade_layer = vec3(1,1,0); // yellow
-                        else if(sampler_buffer_index == 2u)
-                            debug_cacscade_layer = vec3(1,0.5,0); // orange
-                        else if(sampler_buffer_index == 3u)
-                            debug_cacscade_layer = vec3(1,0,0); // red
-                        else
-                            debug_cacscade_layer = vec3(1,0,1); // purple -> should never happen -> unrecognized index
-                    }
-
-                    {
-                        if(offset_size.y < 32u)
-                            debug_cell_size = vec3(0,1,0); // green
-                        else if(offset_size.y < 64u)
-                            debug_cell_size = vec3(1,1,0); // yellow
-                        else if(offset_size.y  < 128u)
-                            debug_cell_size = vec3(1,0.5,0); // orange
-                        else if(offset_size.y < 255u)
-                            debug_cell_size = vec3(1,0,0); // red
-                        else
-                            debug_cell_size = vec3(1,0,1); // purple -> should never happen -> unrecognized index
-                    }
-
-                    debug_index_buffer_start = color_from_id_hash(offset_size.x);
-                    debug_index_buffer_size = color_from_id_hash(offset_size.y);
-                } // DEBUG END
-
-                Layer_Style layer_style;
-                layer_style.last_style = -1u;
-                layer_style.current_zoom_style = Style_Data(vec4(0.0), vec4(0.0), 0.0, vec2(0.0));
-                layer_style.layer_alpha = 0.0;
-
-                lowp float geometry_influence = 0.0; // how much is the current line/polygon visible
-
-                for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
-                // for(highp uint i = offset_size.x+ offset_size.y; i --> offset_size.x ; ) // reverse traversal
                 {
-
-                    debug_draw_calls = debug_draw_calls + 1;
-                    DrawData draw_data = index_sample(sampler_buffer_index, i, texture_layer.y);
-
-                    highp float d = 0.0;
-
-                    if(draw_data.is_polygon)
-                    {
-                        VectorLayerData triangle_data = vertex_sample(sampler_buffer_index, draw_data.geometry_index, texture_layer.y);
-
-                        highp vec2 v0 = vec2(triangle_data.a) / vec2(tile_extent);
-                        highp vec2 v1 = vec2(triangle_data.b) / vec2(tile_extent);
-                        highp vec2 v2 = vec2(triangle_data.c) / vec2(tile_extent);
-
-                        highp float thickness = 0.0;
-                        d = sdTriangle(uv, v0, v1, v2) - thickness;
-
-                        geometry_influence = 1.0 - step(0.0, d);
-
-                        // polygon does not influence pixel at all -> we do not draw it
-                        if(geometry_influence <= 0.0)
-                            continue;
-
-                        // calling it here prevents getting the layerstyle if we do not need it yet
-                        bool check_next_geometry = check_and_draw_layer(draw_data, layer_style, pixel_color, zoom_offset);
-                        if(check_next_geometry)
-                            continue;
-                    }
+                    if(sampler_buffer_index == 0u)
+                        debug_cacscade_layer = vec3(0,1,0); // green
+                    else if(sampler_buffer_index == 1u)
+                        debug_cacscade_layer = vec3(1,1,0); // yellow
+                    else if(sampler_buffer_index == 2u)
+                        debug_cacscade_layer = vec3(1,0.5,0); // orange
+                    else if(sampler_buffer_index == 3u)
+                        debug_cacscade_layer = vec3(1,0,0); // red
                     else
-                    {
-                        VectorLayerData line_data = vertex_sample(sampler_buffer_index, draw_data.geometry_index, texture_layer.y);
+                        debug_cacscade_layer = vec3(1,0,1); // purple -> should never happen -> unrecognized index
+                }
 
-                        highp vec2 v0 = vec2(line_data.a) / vec2(tile_extent);
-                        highp vec2 v1 = vec2(line_data.b) / vec2(tile_extent);
+                {
+                    if(offset_size.y < 32u)
+                        debug_cell_size = vec3(0,1,0); // green
+                    else if(offset_size.y < 64u)
+                        debug_cell_size = vec3(1,1,0); // yellow
+                    else if(offset_size.y  < 128u)
+                        debug_cell_size = vec3(1,0.5,0); // orange
+                    else if(offset_size.y < 255u)
+                        debug_cell_size = vec3(1,0,0); // red
+                    else
+                        debug_cell_size = vec3(1,0,1); // purple -> should never happen -> unrecognized index
+                }
 
-                        // needs to be applied here to get the thickness of the line
-                        bool check_next_geometry = check_and_draw_layer(draw_data, layer_style, pixel_color, zoom_offset);
-                        if(check_next_geometry)
-                            continue;
+                debug_index_buffer_start = color_from_id_hash(offset_size.x);
+                debug_index_buffer_size = color_from_id_hash(offset_size.y);
+            } // DEBUG END
+
+            Layer_Style layer_style;
+            layer_style.last_style = -1u;
+            layer_style.current_zoom_style = Style_Data(vec4(0.0), vec4(0.0), 0.0, vec2(0.0));
+            layer_style.layer_alpha = 0.0;
+
+            lowp float geometry_influence = 0.0; // how much is the current line/polygon visible
+            for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
+            // for(highp uint i = offset_size.x+ offset_size.y; i --> offset_size.x ; ) // reverse traversal
+            {
+
+                debug_draw_calls = debug_draw_calls + 1;
+                DrawData draw_data = index_sample(sampler_buffer_index, i, texture_layer.y);
+
+                highp float d = 0.0;
+
+                if(draw_data.is_polygon)
+                {
+                    // VectorLayerData triangle_data = vertex_sample(sampler_buffer_index, draw_data.geometry_index, texture_layer.y);
+                    VectorLayerData triangle_data = vertex_sample(sampler_buffer_index, draw_data.geometry_index, texture_layer.y);
+
+                    highp vec2 v0 = vec2(triangle_data.a) / vec2(tile_extent);
+                    highp vec2 v1 = vec2(triangle_data.b) / vec2(tile_extent);
+                    highp vec2 v2 = vec2(triangle_data.c) / vec2(tile_extent);
+
+                    highp float thickness = 0.0;
+                    d = sdTriangle(uv, v0, v1, v2) - thickness;
+
+                    geometry_influence = 1.0 - step(0.0, d);
+
+                    // polygon does not influence pixel at all -> we do not draw it
+                    if(geometry_influence <= 0.0)
+                        continue;
+
+                    // calling it here prevents getting the layerstyle if we do not need it yet
+                    bool check_next_geometry = check_and_draw_layer(draw_data, layer_style, pixel_color, zoom_offset);
+                    if(check_next_geometry)
+                        continue;
+                }
+                else
+                {
+                    VectorLayerData line_data = vertex_sample(sampler_buffer_index, draw_data.geometry_index, texture_layer.y);
+
+                    highp vec2 v0 = vec2(line_data.a) / vec2(tile_extent);
+                    highp vec2 v1 = vec2(line_data.b) / vec2(tile_extent);
+
+                    // needs to be applied here to get the thickness of the line
+                    bool check_next_geometry = check_and_draw_layer(draw_data, layer_style, pixel_color, zoom_offset);
+                    if(check_next_geometry)
+                        continue;
 
 
-                        lowp float thickness_current = layer_style.current_zoom_style.outline_width;
-                        lowp float thickness_next = layer_style.next_zoom_style.outline_width;
-                        lowp float thickness = mix(thickness_current, thickness_next, fract(float_zoom));
-                        d = sdLine(uv, v0, v1) - thickness;
+                    lowp float thickness_current = layer_style.current_zoom_style.outline_width;
+                    lowp float thickness_next = layer_style.next_zoom_style.outline_width;
+                    lowp float thickness = mix(thickness_current, thickness_next, fract(float_zoom));
+                    d = sdLine(uv, v0, v1) - thickness;
 
 
-                        geometry_influence = 1.0 - step(0.0, d);
+                    geometry_influence = 1.0 - step(0.0, d);
 
-                        // polygon does not influence pixel at all -> we do not draw it
-                        if(geometry_influence <= 0.0)
-                            continue;
-
-
-                    }
+                    // polygon does not influence pixel at all -> we do not draw it
+                    if(geometry_influence <= 0.0)
+                        continue;
 
 
-
-
-
-                    { // DEBUG -> triangle lines
-                        highp float t_line = 0.0;
-                        if(d <= 0.001 && d >= -0.001)
-                            t_line = 0.2;
-                        debug_triangle_lines += vec3(0.0f, t_line, 0.0f);
-                    }
-
-
-
-
-                    // set layer_alpha from the current geometry
-                    layer_style.layer_alpha = min(1.0, layer_style.layer_alpha + geometry_influence);
-
-                    // we do not need to check any other geometry -> pixel is already fully filled
-                    if(pixel_color.a >= 1.0)
-                        break;
                 }
 
 
-                // mix the last layer we parsed
-                draw_layer(layer_style, pixel_color, fract(float_zoom));
+
+
+
+                { // DEBUG -> triangle lines
+                    highp float t_line = 0.0;
+                    if(d <= 0.001 && d >= -0.001)
+                        t_line = 0.2;
+                    debug_triangle_lines += vec3(0.0f, t_line, 0.0f);
+                }
+
+
+
+
+                // set layer_alpha from the current geometry
+                layer_style.layer_alpha = min(1.0, layer_style.layer_alpha + geometry_influence);
+
+                // we do not need to check any other geometry -> pixel is already fully filled
+                if(pixel_color.a >= 1.0)
+                    break;
             }
+
+
+            // mix the last layer we parsed
+            draw_layer(layer_style, pixel_color, fract(float_zoom));
         }
     }
 

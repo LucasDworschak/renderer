@@ -92,11 +92,10 @@ struct GpuTextureTile {
 };
 static_assert(NamedTile<GpuTextureTile>);
 
-struct GpuTextureQuad {
+struct TileBounds {
     tile::Id id;
-    std::array<GpuTextureTile, 4> tiles;
+    tile::SrsAndHeightBounds bounds = {};
 };
-static_assert(NamedTile<GpuTextureQuad>);
 
 struct GpuGeometryTile {
     tile::Id id;
@@ -104,12 +103,6 @@ struct GpuGeometryTile {
     std::shared_ptr<const nucleus::Raster<uint16_t>> surface;
 };
 static_assert(NamedTile<GpuGeometryTile>);
-
-struct GpuGeometryQuad {
-    tile::Id id;
-    std::array<GpuGeometryTile, 4> tiles;
-};
-static_assert(NamedTile<GpuGeometryQuad>);
 
 struct GpuVectorLayerTile {
     tile::Id id;
@@ -122,14 +115,6 @@ struct GpuVectorLayerTile {
 
     uint8_t buffer_info;
 };
-
 static_assert(NamedTile<GpuVectorLayerTile>);
-
-struct GpuVectorLayerQuad {
-    tile::Id id;
-    std::array<GpuVectorLayerTile, 4> tiles;
-};
-
-static_assert(NamedTile<GpuVectorLayerQuad>);
 
 } // namespace nucleus::tile::tile_types

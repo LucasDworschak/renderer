@@ -81,6 +81,7 @@ class Style : public QObject {
     Q_OBJECT
 public:
     Style(const QString& filename);
+    Style(Style&& style);
 
     void parse_colors(const QJsonValue& value, std::vector<std::pair<uint8_t, uint32_t>>& colors, float& base);
     void parse_opacities(const QJsonValue& value, std::vector<std::pair<uint8_t, uint8_t>>& opacities, float& base);

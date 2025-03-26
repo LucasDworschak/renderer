@@ -30,10 +30,10 @@ namespace nucleus::vector_layer::constants {
 constexpr auto grid_size = 64;
 constexpr auto data_size = std::array<uint32_t, 4> { 64u, 128u, 256u, 512u }; // needs to be in ascending order
 constexpr auto index_buffer_size_multiplier = 2.0; // index buffer can be bigger by this multiplier than the vertex buffer
-// how many array layers quads per data size
-// NOTE: -1u is used to say that we should use the upper limit determined by renderingcontext, if renderingcontext gives us a lower value than set, it is automatically lowered
-// IMPORTANT: only set -1u for the first values since those values will be combined to only one array_helper
-constexpr auto array_layer_quad_amount = std::array<uint32_t, 4> { -1u, -1u, 256u, 32u };
+// how many array layers tiles per data size
+// NOTE: -1u is used to say that we should use the upper limit determined by renderingcontext, if renderingcontext gives us a lower value than set, it is
+// automatically lowered IMPORTANT: only set -1u for the first values since those values will be combined to only one array_helper
+constexpr auto array_layer_tile_amount = std::array<uint32_t, 4> { -1u, -1u, 1024u, 128u };
 constexpr auto tile_extent = 4096;
 
 // if you change one of the following setting you also need to change the other (that they match is asserted in style.cpp)

@@ -28,14 +28,14 @@ namespace nucleus::vector_layer {
 // calculates the first index of array_layer_quad_amount that is not -1
 constexpr static size_t custom_array_layer_index()
 {
-    for (size_t i = 0; i < constants::array_layer_quad_amount.size(); i++) {
-        if (constants::array_layer_quad_amount[i] != -1u)
+    for (size_t i = 0; i < constants::array_layer_tile_amount.size(); i++) {
+        if (constants::array_layer_tile_amount[i] != -1u)
             return i;
     }
-    return constants::array_layer_quad_amount.size(); // no custom quads found -> return max
+    return constants::array_layer_tile_amount.size(); // no custom tiles found -> return max
 }
 
-constexpr uint8_t helper_size = (constants::array_layer_quad_amount.size() - custom_array_layer_index() + 1);
+constexpr uint8_t helper_size = (constants::array_layer_tile_amount.size() - custom_array_layer_index() + 1);
 
 class GpuMultiArrayHelper {
 public:
@@ -43,17 +43,22 @@ public:
         nucleus::Raster<glm::u32vec2> packed_ids;
         nucleus::Raster<glm::u16vec2> layers;
     };
+    struct MultiLayerInfo {
+        tile::Id id;
+        uint16_t index1;
+        uint16_t index2;
+    };
     GpuMultiArrayHelper();
 
     /// returns index in texture array
     glm::u16vec2 add_tile(const tile::Id& tile_id, uint8_t buffer_info);
     void remove_tile(const tile::Id& tile_id);
-    void set_quad_limit(unsigned new_limit);
+    void set_tile_limit(unsigned new_limit);
     constexpr static uint8_t buffer_amount() { return helper_size; };
     uint16_t layer_amount(uint8_t buffer_index) const;
-    Dictionary generate_dictionary() const;
-
     unsigned int n_occupied() const;
+    Dictionary generate_dictionary() const;
+    MultiLayerInfo layer(tile::Id tile_id) const;
 
     constexpr static int bits_for_buffer_info() { return 2; };
 

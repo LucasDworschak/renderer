@@ -21,12 +21,17 @@
 #include "GpuMultiArrayHelper.h"
 #include <nucleus/srs.h>
 
+// TODO: with the latest change of how the dictionary was created, we might be able to refactor this class a bit
+// - since we no longer call generate_dictionary -> we can remove this function from here and from the individual helpers
+// - since generate_dictionary is not used anymore we do not care anymore about hash conflicts -> we only need two helpers, one for acceleration structure and
+// one for the data buffer (i think)
+
 namespace nucleus::vector_layer {
 GpuMultiArrayHelper::GpuMultiArrayHelper()
 {
     // if this assert fails, it means we have to increase bits_for_buffer_info
     // in theory we should have 2*5 bits available with quad limit being 512
-    assert(constants::array_layer_quad_amount.size() <= 4);
+    assert(constants::array_layer_tile_amount.size() <= 4);
 }
 
 glm::u16vec2 GpuMultiArrayHelper::add_tile(const tile::Id& id, uint8_t buffer_info)
@@ -48,7 +53,7 @@ glm::u16vec2 GpuMultiArrayHelper::add_tile(const tile::Id& id, uint8_t buffer_in
 
 uint8_t GpuMultiArrayHelper::buffer_to_helper(uint8_t buffer) const
 {
-    if (constants::array_layer_quad_amount[buffer] == -1u)
+    if (constants::array_layer_tile_amount[buffer] == -1u)
         return 0;
 
     assert(buffer - custom_array_layer_index() + 1 > 0);
@@ -64,12 +69,12 @@ void GpuMultiArrayHelper::remove_tile(const tile::Id& tile_id)
     }
 }
 
-void GpuMultiArrayHelper::set_quad_limit(unsigned int new_limit)
+void GpuMultiArrayHelper::set_tile_limit(unsigned int new_limit)
 {
     // if we have a limit greater than this assert, we cannot use the first bits to encode the buffer_info
     // -> either find a better way to encode buffer_info, or lower buffer amount.
     // Ultimately you can also refactor everything to send buffer info separately, increase layers to uint32_t or use rgb textures to encode the extra information in the b channel
-    assert(new_limit <= (1 << (16 - bits_for_buffer_info())) / 4); // for 2 bits quad limit is 4096
+    assert(new_limit <= (1 << (16 - bits_for_buffer_info()))); // for 2 bits quad limit is 4096
 
     for (uint8_t i = 0; i < buffer_amount(); i++) {
         uint8_t offset = 0;
@@ -77,7 +82,7 @@ void GpuMultiArrayHelper::set_quad_limit(unsigned int new_limit)
             offset = custom_array_layer_index() - 1; // offset for buffer that use custom helpers
 
         // use the lower limit -> either limit of array_layer_quad_amount or the limit passed by the argument
-        helpers[i].set_quad_limit((constants::array_layer_quad_amount[i + offset] < new_limit) ? constants::array_layer_quad_amount[i + offset] : new_limit);
+        helpers[i].set_tile_limit((constants::array_layer_tile_amount[i + offset] < new_limit) ? constants::array_layer_tile_amount[i + offset] : new_limit);
     }
 }
 
@@ -89,6 +94,29 @@ unsigned GpuMultiArrayHelper::n_occupied() const
     // index is always filled -> while theoretically we also write sometimes to a second arrayHelper
     // it makes more sense to only provide the max amount of a helper that fills/deletes everytime add/remove tile is called.
     return unsigned(helpers[0].n_occupied());
+}
+
+GpuMultiArrayHelper::MultiLayerInfo GpuMultiArrayHelper::layer(tile::Id tile_id) const
+{
+    const auto layer_info_common = helpers[0].layer(tile_id);
+
+    if (layer_info_common.id == tile::Id {})
+        return { {}, 0, 0 }; // may be empty during startup.
+
+    uint16_t index2 = layer_info_common.index;
+
+    for (uint8_t i = 1; i < buffer_amount(); i++) { // we do not look int 0th buffer (since we use it as default)
+        // go through every helper and execute layer with the id we know exists.
+        const auto layer_info = helpers[i].layer(layer_info_common.id);
+
+        if (layer_info.index != uint16_t(-1)) {
+            // we found the correct helper where we put our data
+            index2 = layer_info.index;
+            break;
+        }
+    }
+
+    return { layer_info_common.id, layer_info_common.index, index2 };
 }
 
 GpuMultiArrayHelper::Dictionary GpuMultiArrayHelper::generate_dictionary() const

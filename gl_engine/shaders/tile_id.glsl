@@ -69,10 +69,11 @@ void decrease_zoom_level_until(inout highp uvec3 id, inout highp vec2 uv, in low
     uv = uv / float(1u << z_delta) + vec2(x_border, y_border);
 }
 
-highp vec4 tile_bounds(highp uvec3 tile_id)
-{
-    highp float tiles_for_zoom = float(1 << tile_id.z);
-    highp float width_of_a_tile = cEarthCircumference / tiles_for_zoom;
-    highp float height_of_a_tile = cEarthCircumference / tiles_for_zoom;
-    return vec4(float(tile_id.x) * width_of_a_tile - cOriginShift, float(tile_id.y) * height_of_a_tile  - cOriginShift, float(tile_id.x + 1u) * width_of_a_tile - cOriginShift, float(tile_id.y + 1u) * height_of_a_tile  - cOriginShift);
+void decrease_zoom_level_until(inout highp uvec3 id, in lowp uint zoom_level) {
+    if(id.z <= zoom_level)
+        return;
+    highp uint z_delta = id.z - zoom_level;
+    id.z = id.z - z_delta;
+    id.x = id.x >> z_delta;
+    id.y = id.y >> z_delta;
 }
