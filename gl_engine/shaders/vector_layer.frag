@@ -87,7 +87,7 @@ const lowp float style_precision = 100.0;
 
 const lowp int style_bits = 13;
 const lowp float max_zoom = 18.0;
-const lowp uint zoom_blend_steps = 4u;
+const lowp int zoom_blend_steps = 4;
 
 ///////////////////////////////////////////////
 
@@ -280,8 +280,11 @@ Style_Data parse_style(highp uint style_index) {
 /**
   * zoom_blend: value between 0-1, determines how much of the current and how much of the next style should be used
   */
-void draw_layer(inout Layer_Style layer_style,inout lowp vec4 pixel_color , highp float zoom_blend)
+void draw_layer(inout Layer_Style layer_style, inout lowp vec4 pixel_color, highp float zoom_blend)
 {
+    if(layer_style.last_style == -1u)
+        return; // we currently have an invalid style -> do not draw anything
+
     // mix the previous layer color information with output
     if(layer_style.should_blend)
     {
@@ -314,8 +317,7 @@ bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, ino
         // we encountered a new layer
 
         // draw the previous style to pixel_color
-        if(layer_style.last_style != -1u)
-            draw_layer(layer_style, pixel_color, fract(float_zoom_offset));
+        draw_layer(layer_style, pixel_color, fract(float_zoom_offset));
 
         // current discrete tile z 8
         // floating tile zoom z 6.8
@@ -323,24 +325,24 @@ bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, ino
 
         // at this pixel, how many styles do we have to reduce to get the current style
         // next style (if we blend) will be always +1 (since we only blend one pixel)
-        lowp uint zoom_offset = 0u;
+        lowp int zoom_offset = 0;
 
         if(draw_data.should_blend)
-            zoom_offset = clamp(uint(ceil(float_zoom_offset)), 0u, zoom_blend_steps);
+            zoom_offset = int(max(int(floor(float_zoom_offset)), -zoom_blend_steps)); // calculate an integer zoom offset and make sure that we do not go below -zoom_blend_steps
 
         // get and store new style info
         layer_style.last_style = draw_data.style_index;
-        layer_style.current_zoom_style = parse_style(draw_data.style_index - zoom_offset);
+        layer_style.current_zoom_style = parse_style(uint(int(draw_data.style_index) + zoom_offset));
 
         // the outline_width is saved as tile_extent dependent
         // by dividing by tile_extent we get the width we want to draw
         // by further dividing the tile_extent by 2^zoom_offset, we reduce the tile_extent and increase the line width.
-        mediump float zoomed_tile_extent = tile_extent / pow(2.0, float(zoom_offset));
+        mediump float zoomed_tile_extent = tile_extent * pow(2.0, float(zoom_offset));
 
         layer_style.current_zoom_style.outline_width /= zoomed_tile_extent;
         if(draw_data.should_blend)
         {
-            layer_style.next_zoom_style = parse_style(draw_data.style_index-zoom_offset+1u);
+            layer_style.next_zoom_style = parse_style(uint(int(draw_data.style_index)+zoom_offset+1));
             layer_style.next_zoom_style.outline_width /= (zoomed_tile_extent * 2.0);
         }
         else
@@ -406,7 +408,7 @@ void main() {
 
 
     // float_zoom = tile_id.z; // uncomment this to show each tile without blending
-    highp float zoom_offset = float(tile_id.z)-float_zoom;
+    highp float zoom_offset = float_zoom-float(tile_id.z);
 
 
     if(texture_layer.x != bit_mask_ones && texture_layer.y != bit_mask_ones) // check for valid data
