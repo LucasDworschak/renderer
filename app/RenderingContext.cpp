@@ -173,10 +173,10 @@ void RenderingContext::initialise()
     m->engine_context->set_ortho_layer(std::make_shared<gl_engine::TextureLayer>(512));
     m->engine_context->tile_geometry()->set_tile_limit(2048);
     m->engine_context->tile_geometry()->set_aabb_decorator(m->aabb_decorator);
-    m->engine_context->set_vector_layer(std::make_shared<gl_engine::VectorLayer>());
-    m->engine_context->vector_layer()->set_tile_limit(2048);
     m->engine_context->set_aabb_decorator(m->aabb_decorator);
     m->engine_context->ortho_layer()->set_tile_limit(1024);
+    m->engine_context->set_vector_layer(std::make_shared<gl_engine::VectorLayer>());
+    m->engine_context->vector_layer()->set_tile_limit(2048);
 
     nucleus::utils::thread::async_call(m->geometry.scheduler.get(), [this]() { m->geometry.scheduler->set_enabled(true); });
     const auto texture_compression = gl_engine::Texture::compression_algorithm();
