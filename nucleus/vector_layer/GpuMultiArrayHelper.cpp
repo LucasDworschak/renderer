@@ -110,6 +110,7 @@ GpuMultiArrayHelper::MultiLayerInfo GpuMultiArrayHelper::layer(tile::Id tile_id)
         const auto layer_info = helpers[i].layer(layer_info_common.id);
 
         if (layer_info.index != uint16_t(-1)) {
+            assert(layer_info.id == layer_info_common.id);
             // we found the correct helper where we put our data
             index2 = layer_info.index;
             break;

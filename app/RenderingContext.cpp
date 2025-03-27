@@ -186,11 +186,11 @@ void RenderingContext::initialise()
     });
 
     // vector layer
-    nucleus::utils::thread::async_call(m->vector_layer.scheduler.get(), [this]() { m->vector_layer.scheduler->set_enabled(true); });
     connect(m->vector_layer.scheduler.get(),
         &nucleus::vector_layer::Scheduler::style_updated,
         m->engine_context->vector_layer(),
         &gl_engine::VectorLayer::update_style);
+    nucleus::utils::thread::async_call(m->vector_layer.scheduler.get(), [this]() { m->vector_layer.scheduler->set_enabled(true); });
 
     // labels
     m->engine_context->set_map_label_manager(std::make_unique<gl_engine::MapLabels>(m->aabb_decorator));

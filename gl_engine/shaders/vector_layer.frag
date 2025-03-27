@@ -91,7 +91,7 @@ const lowp uint zoom_blend_steps = 4u;
 
 ///////////////////////////////////////////////
 
-const highp uint bit_mask_ones = uint(-1u);
+const highp uint bit_mask_ones = -1u;
 const highp uint style_bit_mask = (1u << style_bits) -1u;
 
 
@@ -314,7 +314,8 @@ bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, ino
         // we encountered a new layer
 
         // draw the previous style to pixel_color
-        draw_layer(layer_style, pixel_color, fract(float_zoom_offset));
+        if(layer_style.last_style != -1u)
+            draw_layer(layer_style, pixel_color, fract(float_zoom_offset));
 
         // current discrete tile z 8
         // floating tile zoom z 6.8
@@ -368,7 +369,6 @@ void main() {
     // highp float depth = depthWSEncode2n8(length(var_pos_cws));
     highp float depth = length(var_pos_cws);
 
-    highp float float_zoom = float_zoom_interpolation();
 
 
     lowp vec3 debug_cacscade_layer = vec3(0,0,0);// DEBUG -> which cascade is being used
@@ -398,9 +398,11 @@ void main() {
     // osm-bright
     lowp vec4 background_color = vec4(248.0f/255.0f, 244.0f/255.0f, 240.0f/255.0f, 0.0f);
 
-
     decrease_zoom_level_until(tile_id, uv, texelFetch(instanced_texture_zoom_sampler, ivec2(instance_id, 0), 0).x);
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler, ivec2(instance_id, 0), 0).xy;
+
+
+    highp float float_zoom = float_zoom_interpolation();
 
 
     // float_zoom = tile_id.z; // uncomment this to show each tile without blending
@@ -462,6 +464,7 @@ void main() {
             Layer_Style layer_style;
             layer_style.last_style = -1u;
             layer_style.current_zoom_style = Style_Data(vec4(0.0), vec4(0.0), 0.0, vec2(0.0));
+            layer_style.next_zoom_style = layer_style.current_zoom_style;
             layer_style.layer_alpha = 0.0;
 
             lowp float geometry_influence = 0.0; // how much is the current line/polygon visible
@@ -476,7 +479,6 @@ void main() {
 
                 if(draw_data.is_polygon)
                 {
-                    // VectorLayerData triangle_data = vertex_sample(sampler_buffer_index, draw_data.geometry_index, texture_layer.y);
                     VectorLayerData triangle_data = vertex_sample(sampler_buffer_index, draw_data.geometry_index, texture_layer.y);
 
                     highp vec2 v0 = vec2(triangle_data.a) / vec2(tile_extent);
@@ -521,8 +523,6 @@ void main() {
                     // polygon does not influence pixel at all -> we do not draw it
                     if(geometry_influence <= 0.0)
                         continue;
-
-
                 }
 
 

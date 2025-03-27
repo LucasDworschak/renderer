@@ -104,11 +104,6 @@ void VectorLayer::draw(
     m_shader->set_uniform("instanced_texture_zoom_sampler", 6);
     m_instanced_zoom->upload(zoom_level_raster);
 
-    // m_shader->set_uniform("array_index_sampler", 5);
-    // m_array_index_texture->bind(5);
-    // m_shader->set_uniform("vector_map_tile_id_sampler", 6);
-    // m_tile_id_texture->bind(6);
-
     m_shader->set_uniform("styles_sampler", 7);
     m_styles_texture->bind(7);
 
@@ -141,10 +136,10 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
     for (const auto& tile : new_tiles) {
         // test for validity
         assert(tile.id.zoom_level < 100);
-        if (!tile.acceleration_grid)
-            continue; // nothing here
+        // if (!tile.acceleration_grid)
+        //     continue; // nothing here
 
-        // assert(tile.triangle_acceleration_grid);
+        assert(tile.acceleration_grid);
         assert(tile.index_buffer);
         assert(tile.vertex_buffer);
 

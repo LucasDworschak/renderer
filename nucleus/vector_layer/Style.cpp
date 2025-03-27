@@ -313,12 +313,12 @@ void Style::load()
             }
 
             // create styles below min zoom and fade out
-            uint8_t first_zoom = style_map.begin()->first;
             if (!all_styles_same) {
                 // we might need to fill from styles from style.json range to style_zoom_range
                 // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
                 // -> according to style.json there is no style for those values, we only need to add them for blending purposes
 
+                uint8_t first_zoom = style_map.begin()->first;
                 const auto first_style = style_map.at(first_zoom);
 
                 for (uint8_t zoom = first_zoom - constants::style_zoom_blend_steps; zoom < first_zoom; zoom++) {
@@ -338,6 +338,19 @@ void Style::load()
                 // add the styles to the data structure where we later can find the relevant style_index
                 uint32_t style_index = (style_values.size() - 1u) << 1; // move style index by 1 for the "blend" flag
                 m_layer_to_style[key.first].add_filter({ style_index | ((all_styles_same) ? 0u : 1u), layer_index, key.second }, zoom);
+            }
+
+            if (!all_styles_same) {
+                // we might need to fill from styles from style.json range to style_zoom_range
+                // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
+                // -> according to style.json there is no style for those values, we only need to add them for blending purposes
+
+                const auto last_style = style_values[style_values.size() - 1];
+                uint8_t last_zoom = style_map.rbegin()->first;
+
+                for (uint8_t zoom = last_zoom; zoom < constants::style_zoom_range.y; zoom++) {
+                    style_values.push_back({ last_style.x, last_style.y, last_style.z, last_style.w });
+                }
             }
 
             // make sure that layer_index also fits into style_bits (we use this in preprocess)

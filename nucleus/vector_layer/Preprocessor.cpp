@@ -36,11 +36,11 @@ GpuVectorLayerTile create_default_gpu_tile()
 {
     GpuVectorLayerTile default_tile;
     default_tile.buffer_info = 0;
-    default_tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(glm::uvec2(constants::grid_size), { -1u }));
+    default_tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(glm::uvec2(constants::grid_size), 0));
     default_tile.index_buffer = std::make_shared<const nucleus::Raster<uint32_t>>(
-        nucleus::Raster<uint32_t>(glm::uvec2(constants::data_size[0] * constants::index_buffer_size_multiplier), { -1u }));
+        nucleus::Raster<uint32_t>(glm::uvec2(constants::data_size[0] * constants::index_buffer_size_multiplier), -1u));
     default_tile.vertex_buffer
-        = std::make_shared<const nucleus::Raster<glm::u32vec3>>(nucleus::Raster<glm::u32vec3>(glm::uvec2(constants::data_size[0]), { -1u, -1u, -1u }));
+        = std::make_shared<const nucleus::Raster<glm::u32vec3>>(nucleus::Raster<glm::u32vec3>(glm::uvec2(constants::data_size[0]), glm::u32vec3(-1u)));
 
     return default_tile;
 }

@@ -189,18 +189,24 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[6].z == 8 * line_multipliers); // z 13
         CHECK(style_buffer[7].z == 9 * line_multipliers); // z 14
         CHECK(style_buffer[8].z == 10 * line_multipliers); // z 15
+        CHECK(style_buffer[9].z == 10 * line_multipliers); // z 16
+        CHECK(style_buffer[10].z == 10 * line_multipliers); // z 17
+        CHECK(style_buffer[11].z == 10 * line_multipliers); // z 18
 
         // "opacity outside of zoom range"
-        CHECK(style_buffer[9].x == 0); // z 13-4
-        CHECK(style_buffer[10].x == 0); // z 13-3
-        CHECK(style_buffer[11].x == 0); // z 13-2
-        CHECK(style_buffer[12].x == 0); // z 13-1
-        CHECK(style_buffer[13].x == 0xbbbbbbff); // z 13
-        CHECK(style_buffer[14].x == 0xbbbbbbff); // z 14
-        CHECK(style_buffer[15].x == 0xbbbbbbff); // z 15
+        CHECK(style_buffer[12].x == 0); // z 13-4
+        CHECK(style_buffer[13].x == 0); // z 13-3
+        CHECK(style_buffer[14].x == 0); // z 13-2
+        CHECK(style_buffer[15].x == 0); // z 13-1
+        CHECK(style_buffer[16].x == 0xbbbbbbff); // z 13
+        CHECK(style_buffer[17].x == 0xbbbbbbff); // z 14
+        CHECK(style_buffer[18].x == 0xbbbbbbff); // z 15
+        CHECK(style_buffer[19].x == 0xbbbbbbff); // z 16
+        CHECK(style_buffer[20].x == 0xbbbbbbff); // z 17
+        CHECK(style_buffer[21].x == 0xbbbbbbff); // z 18
 
-        CHECK(style_buffer[16].x == -1u); // no data
-        CHECK(style_buffer[16].z == -1u); // no data
+        CHECK(style_buffer[22].x == -1u); // no data
+        CHECK(style_buffer[23].z == -1u); // no data
     }
 
     SECTION("Style expand openstreetmap")
