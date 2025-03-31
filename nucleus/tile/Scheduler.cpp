@@ -117,6 +117,10 @@ void Scheduler::set_network_reachability(QNetworkInformation::Reachability reach
 
 void Scheduler::update_gpu_quads()
 {
+#ifdef ALP_ENABLE_DEV_TOOLS
+    emit processing_started();
+#endif
+
     const auto should_refine
         = tile::utils::refineFunctor(m_current_camera, m_aabb_decorator, m_permissible_screen_space_error, m.tile_resolution, m.max_zoom_level);
     std::vector<DataQuad> gpu_candidates;
@@ -158,6 +162,10 @@ void Scheduler::update_gpu_quads()
     });
 
     transform_and_emit(gpu_candidates, { superfluous_ids.cbegin(), superfluous_ids.cend() });
+
+#ifdef ALP_ENABLE_DEV_TOOLS
+    emit processing_finished();
+#endif
 }
 
 void Scheduler::send_quad_requests()

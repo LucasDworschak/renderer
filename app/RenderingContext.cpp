@@ -43,6 +43,10 @@
 #include <nucleus/vector_layer/Scheduler.h>
 #include <nucleus/vector_layer/setup.h>
 
+#ifdef ALP_ENABLE_DEV_TOOLS
+#include <nucleus/utils/Benchmark.h>
+#endif
+
 using namespace nucleus::tile;
 using namespace nucleus::map_label;
 using namespace nucleus::picker;
@@ -65,6 +69,9 @@ struct RenderingContext::Data {
     std::shared_ptr<nucleus::picker::PickerManager> picker_manager;
     std::shared_ptr<nucleus::tile::utils::AabbDecorator> aabb_decorator;
     std::unique_ptr<nucleus::tile::SchedulerDirector> scheduler_director;
+#ifdef ALP_ENABLE_DEV_TOOLS
+    std::vector<std::shared_ptr<nucleus::utils::Benchmark>> benchmarks;
+#endif
 };
 
 RenderingContext::RenderingContext(QObject* parent)
@@ -146,6 +153,11 @@ RenderingContext::RenderingContext(QObject* parent)
 #ifdef ALP_ENABLE_THREADING
     qDebug() << "Scheduler thread: " << m->scheduler_thread.get();
     m->scheduler_thread->start();
+#endif
+
+#ifdef ALP_ENABLE_DEV_TOOLS
+    // benchmarks
+    m->benchmarks.push_back(std::make_shared<nucleus::utils::Benchmark>("vector_layer"));
 #endif
 }
 
@@ -296,3 +308,11 @@ SchedulerDirector* RenderingContext::scheduler_director() const
     QMutexLocker locker(&m->shared_ptr_mutex);
     return m->scheduler_director.get();
 }
+
+#ifdef ALP_ENABLE_DEV_TOOLS
+std::vector<std::shared_ptr<nucleus::utils::Benchmark>> RenderingContext::benchmarks() const
+{
+    QMutexLocker locker(&m->shared_ptr_mutex);
+    return m->benchmarks;
+}
+#endif

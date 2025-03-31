@@ -52,6 +52,7 @@
 
 #ifdef ALP_ENABLE_DEV_TOOLS
 #include "TimerFrontendManager.h"
+#include <nucleus/utils/Benchmark.h>
 #endif
 
 namespace {
@@ -164,6 +165,15 @@ QQuickFramebufferObject::Renderer* TerrainRendererItem::createRenderer() const
 
 #ifdef ALP_ENABLE_DEV_TOOLS
     connect(r->glWindow(), &gl_engine::Window::timer_measurements_ready, TimerFrontendManager::instance(), &TimerFrontendManager::receive_measurements);
+
+    // Benchmarking
+    for (const auto& benchmark : ctx->benchmarks()) {
+
+        connect(ctx->vector_layer_scheduler(), &nucleus::tile::Scheduler::processing_started, benchmark.get(), &nucleus::utils::Benchmark::increase_load_count);
+        connect(
+            ctx->vector_layer_scheduler(), &nucleus::tile::Scheduler::processing_finished, benchmark.get(), &nucleus::utils::Benchmark::decrease_load_count);
+        connect(r->glWindow(), &gl_engine::Window::timer_measurements_ready, benchmark.get(), &nucleus::utils::Benchmark::receive_measurements);
+    }
 #endif
 
     // We now have to initialize everything based on the url, but we need to do this on the thread this instance

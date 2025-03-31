@@ -104,6 +104,12 @@ signals:
     void quad_received(const tile::Id& ids);
     void quads_requested(const std::vector<tile::Id>& ids);
 
+#ifdef ALP_ENABLE_DEV_TOOLS
+    // used for benchmark
+    void processing_started();
+    void processing_finished();
+#endif
+
 public slots:
     void update_camera(const nucleus::camera::Definition& camera);
     void receive_quad(const DataQuad& new_quad);

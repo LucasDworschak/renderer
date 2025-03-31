@@ -166,6 +166,9 @@ endif()
 
 if (ALP_ENABLE_DEV_TOOLS)
     target_compile_definitions(nucleus PUBLIC ALP_ENABLE_DEV_TOOLS)
+    target_sources(nucleus PRIVATE
+         utils/Benchmark.h utils/Benchmark.cpp
+    )
 endif()
 
 target_include_directories(nucleus PUBLIC ${CMAKE_SOURCE_DIR})

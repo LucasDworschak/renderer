@@ -48,6 +48,11 @@ class SchedulerDirector;
 namespace nucleus::tile::utils {
 class AabbDecorator;
 }
+#ifdef ALP_ENABLE_DEV_TOOLS
+namespace nucleus::utils {
+class Benchmark;
+}
+#endif
 
 class RenderingContext : public QObject {
     Q_OBJECT
@@ -82,6 +87,9 @@ public:
     [[nodiscard]] nucleus::vector_layer::Scheduler* vector_layer_scheduler() const;
     [[nodiscard]] nucleus::tile::TextureScheduler* ortho_scheduler() const;
     [[nodiscard]] nucleus::tile::SchedulerDirector* scheduler_director() const;
+#ifdef ALP_ENABLE_DEV_TOOLS
+    [[nodiscard]] std::vector<std::shared_ptr<nucleus::utils::Benchmark>> benchmarks() const;
+#endif
 
 signals:
     void initialised();
