@@ -225,6 +225,7 @@ void RenderingContext::destroy()
             m->map_label.scheduler.reset();
             m->vector_layer.scheduler.reset();
             m->ortho_texture.scheduler.reset();
+            m->scheduler_director.reset();
         });
         nucleus::utils::thread::sync_call(m->geometry.tile_service.get(), [this]() {
             m->geometry.tile_service.reset();
