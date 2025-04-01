@@ -162,11 +162,9 @@ QQuickFramebufferObject::Renderer* TerrainRendererItem::createRenderer() const
 
     // Benchmarking
     for (const auto& benchmark : ctx->benchmarks()) {
-
-        connect(ctx->vector_layer_scheduler(), &nucleus::tile::Scheduler::processing_started, benchmark.get(), &nucleus::utils::Benchmark::increase_load_count);
-        connect(
-            ctx->vector_layer_scheduler(), &nucleus::tile::Scheduler::processing_finished, benchmark.get(), &nucleus::utils::Benchmark::decrease_load_count);
         connect(r->glWindow(), &gl_engine::Window::timer_measurements_ready, benchmark.get(), &nucleus::utils::Benchmark::receive_measurements);
+        connect(this, &TerrainRendererItem::activate_benchmark, benchmark.get(), &nucleus::utils::Benchmark::activate);
+        connect(benchmark.get(), &nucleus::utils::Benchmark::camera_definition_set_by_user, r->controller(), &nucleus::camera::Controller::set_model_matrix);
     }
 #endif
 
@@ -412,12 +410,22 @@ void TerrainRendererItem::set_label_filter(nucleus::map_label::FilterDefinitions
     }
 }
 
-void TerrainRendererItem::set_selected_camera_position_index(unsigned value) {
+void TerrainRendererItem::set_selected_camera_position_index(unsigned value)
+{
     qDebug() << "TerrainRendererItem::set_selected_camera_position_index(unsigned value): " << value;
     if (value > 100)
         return;
     schedule_update();
     emit camera_definition_set_by_user(nucleus::camera::PositionStorage::instance()->get_by_index(value));
+}
+
+void TerrainRendererItem::set_selected_benchmark_position_index(unsigned value)
+{
+    qDebug() << "TerrainRendererItem::set_selected_benchmark_position_index(unsigned value): " << value;
+    if (value > 100)
+        return;
+    set_continuous_update(true);
+    emit activate_benchmark(value);
 }
 
 unsigned int TerrainRendererItem::tile_cache_size() const

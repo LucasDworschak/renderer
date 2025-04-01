@@ -447,6 +447,19 @@ Rectangle {
                         }
                     }
                 }
+
+
+            Label {
+                text: "Benchmark:"
+                font.bold: true
+                Layout.topMargin: 15
+            }
+            ComboBox {
+                Layout.fillWidth: true
+                Layout.columnSpan: 2
+                model: ["", "Vector Layer"]
+                ModelBinding on currentIndex { target: map; property: "selected_benchmark_position_index"; default_value: -1 }
+            }
         }
         CheckGroup {
             id: camera_group

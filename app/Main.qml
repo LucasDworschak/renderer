@@ -205,15 +205,6 @@ Item {
         main.onWidthChanged(); // trigger responsive updates manually
     }
 
-    function benchmarkVectorTiles() {
-        console.log("starting vectortile benchmark");
-
-
-
-        console.log("finished vectortile benchmark");
-    }
-
-
     TerrainRenderer {
         id: map
         focus: true
@@ -225,10 +216,6 @@ Item {
             else if(event.key === Qt.Key_F7)
             {
                 toggleFilterWindow();
-            }
-            else if(event.key === Qt.Key_F9)
-            {
-                benchmarkVectorTiles();
             }
         }
         Behavior on field_of_view { NumberAnimation { duration: 500; easing.type: Easing.InOutExpo } }

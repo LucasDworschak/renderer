@@ -18,48 +18,217 @@
 
 #include "Benchmark.h"
 
+#include <nucleus/camera/PositionStorage.h>
+
+#include <QFile>
+#include <QStandardPaths>
+#include <QString>
 #include <QTimer>
+
+#include <filesystem>
+#include <set>
 
 namespace nucleus::utils {
 
-Benchmark::Benchmark(QString name)
+Benchmark::Benchmark(QString name, unsigned id, std::vector<std::string> positions)
     : m_name(name)
-    , m_wait_count(0)
-    , m_benchmark_ready(false)
+    , m_id(id)
+    , m_load_count(0)
+    , m_record_data(false)
+    , m_activated(false)
+    , m_current_position(0)
+    , m_positions(positions)
 {
-    qDebug() << "Benchmark created: " << name;
+    qDebug() << "Benchmark: created" << name << id;
+
+    m_continue_timer = std::make_unique<QTimer>(this);
+    m_continue_timer->setSingleShot(true);
+    m_buffer_timer = std::make_unique<QTimer>(this);
+    m_buffer_timer->setSingleShot(true);
+
+    connect(m_continue_timer.get(), &QTimer::timeout, this, &Benchmark::next_place);
+    connect(m_buffer_timer.get(), &QTimer::timeout, this, &Benchmark::update_record_state);
 }
-void Benchmark::start_benchmark() { qDebug() << "starting Benchmark"; }
+void Benchmark::activate(unsigned id)
+{
+    // if there is a timer running -> stop it
+    m_continue_timer->stop();
+    m_buffer_timer->stop();
+
+    // reset any data
+    m_current_position = 0;
+    m_record_data = false;
+
+    if (id != m_id) { // -> another benchmark was selected
+        m_activated = false;
+        return;
+    }
+
+    m_activated = true;
+
+    qDebug() << "Benchmark: starting" << m_name << m_id;
+
+    m_continue_timer->start(100);
+}
 
 void Benchmark::increase_load_count()
 {
-    m_wait_count += 1;
-    m_benchmark_ready = false;
+    m_load_count += 1;
+    m_record_data = false;
+    if (m_continue_timer->isActive()) {
+        // new tiles arrived while recording -> stop the timer and remove all data fromt he current location
+        m_continue_timer->stop();
+
+        m_timings[m_positions[m_current_position - 1]].clear();
+    }
+
+    if (m_buffer_timer->isActive()) {
+        // new data is being loaded -> we have to wait a bit longer
+        m_buffer_timer->stop();
+    }
 }
 
-void Benchmark::decrease_load_count() { m_wait_count -= 1; }
+void Benchmark::decrease_load_count()
+{
+    m_load_count -= 1;
+    if (m_activated && m_load_count == 0 && !m_buffer_timer->isActive()) {
+        // start the buffer timer to start recording after the buffer time ended
+        m_buffer_timer->start(buffer_time);
+    }
+}
+
+void Benchmark::next_place()
+{
+    m_record_data = false;
+
+    if (m_current_position > 0) {
+        const auto total_milliseconds = m_previous_time.msecsTo(QDateTime::currentDateTime());
+        m_total_time_per_location[m_positions[m_current_position - 1]] = float(total_milliseconds) / 1000.0f;
+    }
+    m_previous_time = QDateTime::currentDateTime();
+
+    if (m_current_position >= m_positions.size()) {
+        // no more locations to benchmark -> we are finished
+        m_buffer_timer->stop();
+
+        m_activated = false;
+
+        create_report();
+
+        return;
+    }
+
+    // change to next location
+    emit camera_definition_set_by_user(nucleus::camera::PositionStorage::instance()->get(m_positions[m_current_position++]));
+}
+
+void Benchmark::create_report()
+{
+
+    auto comp = [](const QString& a, const QString& b) {
+        // make sure that gpu_total and cpu_total are the first twi values
+        if (a != b) {
+            if (a == "gpu_total")
+                return true;
+            if (b == "gpu_total")
+                return false;
+            if (a == "cpu_total")
+                return true;
+            if (b == "cpu_total")
+                return false;
+        }
+
+        return a < b;
+    };
+
+    std::set<QString, decltype(comp)> metrics;
+
+    // <location, <timer_name, values>>
+    std::unordered_map<std::string, std::map<QString, std::vector<float>>> reports;
+
+    for (const auto& [location, timer_reports] : m_timings) {
+        reports[location] = std::map<QString, std::vector<float>>();
+
+        for (const auto& report : timer_reports) {
+            for (const auto& entry : report) {
+                reports[location][entry.name].push_back(entry.value);
+                metrics.insert(entry.name);
+            }
+        }
+    }
+
+    // open file for writing
+    // the report will be written in a similar directory as the tile cache -> linux: /home/<user>/.cache/AlpineMaps.org/AlpineApp/benchmarks/
+    const auto base_path = std::filesystem::path(QStandardPaths::writableLocation(QStandardPaths::CacheLocation).toStdString());
+    std::filesystem::create_directories(base_path);
+    const auto path = base_path / "benchmarks";
+    std::filesystem::create_directories(path);
+
+    const auto datetime = QDateTime::currentDateTime();
+
+    QFile file(path / ("vector_layer_" + datetime.toString("yyyy-MM-dd-hh-mm-ss").toStdString() + ".csv"));
+    const auto success = file.open(QIODeviceBase::WriteOnly);
+    assert(success);
+    QTextStream out_stream(&file);
+
+    out_stream << "Location" << "\t total time \t";
+    for (const auto& metric : metrics) {
+        out_stream << metric << "\t avg \t min \t max \t";
+    }
+
+    out_stream << "\n";
+
+    for (const auto& [location, timers] : reports) {
+        out_stream << QString::fromStdString(location) << "\t";
+
+        out_stream << m_total_time_per_location[location] << "\t";
+
+        for (const auto& metric : metrics) {
+            float avg = 0.0;
+            float min = 999999.9;
+            float max = 0.0;
+
+            const auto& values = timers.at(metric);
+
+            for (const auto& value : values) {
+                if (value < min)
+                    min = value;
+                if (value > max)
+                    max = value;
+                avg += value;
+            }
+            avg /= values.size();
+
+            out_stream << "\t" << avg << "\t" << min << "\t" << max << "\t";
+        }
+        out_stream << "\n";
+    }
+
+    qDebug() << "Benchmark: finished" << m_name << m_id;
+}
 
 /**
  * We are calling this method with a timer
  * if the timer was finished and we are still at wait_count 0 we can finally benchmark
  */
-void Benchmark::update_benchmark_state()
+void Benchmark::update_record_state()
 {
-    if (m_wait_count == 0)
-        m_benchmark_ready = true;
+    if (m_load_count == 0) {
+        // we are now recording -> record for the current location -> wait and then go to the next place
+        // qDebug() << "benchmark: start recording";
+        m_record_data = true;
+        m_continue_timer->start(time_per_location);
+    }
 }
 
 // void Benchmark::receive_measurements(QList<nucleus::timing::TimerReport> values)
-void Benchmark::receive_measurements(QList<nucleus::timing::TimerReport>)
+void Benchmark::receive_measurements(QList<nucleus::timing::TimerReport> values)
 {
-    if (m_wait_count == 0) {
-        if (m_benchmark_ready) {
-            qDebug() << "benchmark " << m_wait_count;
-        } else {
-            QTimer::singleShot(1000, this, &Benchmark::update_benchmark_state);
-        }
-    } else {
-        qDebug() << "benchmark processing:" << m_wait_count;
+    if (!m_activated)
+        return;
+
+    if (m_record_data && m_load_count == 0) {
+        m_timings[m_positions[m_current_position - 1]].push_back(values);
     }
 }
 

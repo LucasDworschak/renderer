@@ -56,6 +56,8 @@ class TerrainRendererItem : public QQuickFramebufferObject {
     Q_PROPERTY(TileStatistics* tile_statistics MEMBER m_tile_statistics CONSTANT)
     Q_PROPERTY(unsigned int tile_cache_size READ tile_cache_size WRITE set_tile_cache_size NOTIFY tile_cache_size_changed)
     Q_PROPERTY(unsigned int selected_camera_position_index MEMBER m_selected_camera_position_index WRITE set_selected_camera_position_index)
+    Q_PROPERTY(unsigned int selected_benchmark_position_index MEMBER m_selected_benchmark_position_index WRITE set_selected_benchmark_position_index)
+
     Q_PROPERTY(QVector2D sun_angles READ sun_angles WRITE set_sun_angles NOTIFY sun_angles_changed)
     Q_PROPERTY(bool continuous_update READ continuous_update WRITE set_continuous_update NOTIFY continuous_update_changed)
     Q_PROPERTY(nucleus::picker::Feature picked_feature READ picked_feature NOTIFY picked_feature_changed FINAL)
@@ -113,6 +115,8 @@ signals:
 
     void world_space_cursor_position_changed(const QVector3D& world_space_cursor_position);
 
+    void activate_benchmark(unsigned value);
+
 protected:
     void touchEvent(QTouchEvent*) override;
     void mousePressEvent(QMouseEvent*) override;
@@ -169,6 +173,7 @@ public:
     void set_label_filter(nucleus::map_label::FilterDefinitions new_label_filter);
 
     void set_selected_camera_position_index(unsigned value);
+    void set_selected_benchmark_position_index(unsigned value);
 
     [[nodiscard]] unsigned int tile_cache_size() const;
     void set_tile_cache_size(unsigned int new_tile_cache_size);
@@ -200,6 +205,8 @@ private:
     int m_redraw_delay = 1;
     unsigned m_tile_cache_size = 12000;
     unsigned int m_selected_camera_position_index = 0;
+    unsigned int m_selected_benchmark_position_index = 0;
+
     QDateTime m_selected_datetime = QDateTime::currentDateTime();
 
     nucleus::picker::Feature m_picked_feature;

@@ -157,7 +157,14 @@ RenderingContext::RenderingContext(QObject* parent)
 
 #ifdef ALP_ENABLE_DEV_TOOLS
     // benchmarks
-    m->benchmarks.push_back(std::make_shared<nucleus::utils::Benchmark>("vector_layer"));
+    m->benchmarks.push_back(std::make_shared<nucleus::utils::Benchmark>("vector_layer", 1u, std::vector<std::string> { "wien", "weichtalhaus", "karwendel" }));
+
+    for (const auto& benchmark : m->benchmarks) {
+        connect(
+            m->vector_layer.scheduler.get(), &nucleus::tile::Scheduler::processing_started, benchmark.get(), &nucleus::utils::Benchmark::increase_load_count);
+        connect(
+            m->vector_layer.scheduler.get(), &nucleus::tile::Scheduler::processing_finished, benchmark.get(), &nucleus::utils::Benchmark::decrease_load_count);
+    }
 #endif
 }
 
