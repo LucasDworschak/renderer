@@ -20,10 +20,12 @@
 
 #include <nucleus/camera/PositionStorage.h>
 
+#include <QDesktopServices>
 #include <QFile>
 #include <QStandardPaths>
 #include <QString>
 #include <QTimer>
+#include <QUrl>
 
 #include <filesystem>
 #include <set>
@@ -74,6 +76,7 @@ void Benchmark::activate(unsigned id)
 void Benchmark::increase_load_count()
 {
     m_load_count += 1;
+    // qDebug() << "benchmark: increase load " << m_load_count;
     m_record_data = false;
     if (m_continue_timer->isActive()) {
         // new tiles arrived while recording -> stop the timer and remove all data fromt he current location
@@ -95,6 +98,8 @@ void Benchmark::decrease_load_count()
         // start the buffer timer to start recording after the buffer time ended
         m_buffer_timer->start(buffer_time);
     }
+
+    // qDebug() << "benchmark: decrease load " << m_load_count;
 }
 
 void Benchmark::next_place()
@@ -103,7 +108,7 @@ void Benchmark::next_place()
 
     if (m_current_position > 0) {
         const auto total_milliseconds = m_previous_time.msecsTo(QDateTime::currentDateTime());
-        m_total_time_per_location[m_positions[m_current_position - 1]] = float(total_milliseconds) / 1000.0f;
+        m_total_time_per_location[m_positions[m_current_position - 1]] = (float(total_milliseconds - buffer_time - time_per_location) / 1000.0f);
     }
     m_previous_time = QDateTime::currentDateTime();
 
@@ -126,7 +131,7 @@ void Benchmark::create_report()
 {
 
     auto comp = [](const QString& a, const QString& b) {
-        // make sure that gpu_total and cpu_total are the first twi values
+        // make sure that gpu_total and cpu_total are the first two values
         if (a != b) {
             if (a == "gpu_total")
                 return true;
@@ -171,7 +176,7 @@ void Benchmark::create_report()
     assert(success);
     QTextStream out_stream(&file);
 
-    out_stream << "Location" << "\t total time \t";
+    out_stream << "Location" << "\t preprocess time \t";
     for (const auto& metric : metrics) {
         out_stream << metric << "\t avg \t min \t max \t";
     }
@@ -203,6 +208,9 @@ void Benchmark::create_report()
         }
         out_stream << "\n";
     }
+    out_stream.flush(); // Ensure all data is written to the file.
+    file.close(); // Close the file.
+    QDesktopServices::openUrl(QUrl::fromLocalFile(file.fileName())); // Open with system handler.
 
     qDebug() << "Benchmark: finished" << m_name << m_id;
 }

@@ -117,9 +117,7 @@ void Scheduler::set_network_reachability(QNetworkInformation::Reachability reach
 
 void Scheduler::update_gpu_quads()
 {
-#ifdef ALP_ENABLE_DEV_TOOLS
-    emit processing_started();
-#endif
+    // emit processing_started();
 
     const auto should_refine = tile::utils::refineFunctor(m_current_camera, m_aabb_decorator, m.tile_resolution, m.max_zoom_level);
     std::vector<DataQuad> gpu_candidates;
@@ -162,15 +160,16 @@ void Scheduler::update_gpu_quads()
 
     transform_and_emit(gpu_candidates, { superfluous_ids.cbegin(), superfluous_ids.cend() });
 
-#ifdef ALP_ENABLE_DEV_TOOLS
     emit processing_finished();
-#endif
 }
 
 void Scheduler::send_quad_requests()
 {
     if (!m_network_requests_enabled)
         return;
+
+    emit processing_started();
+
     auto quads = missing_quads_for_current_camera();
     QVariantMap stats;
     stats["n_quads_ram"] = m_ram_cache.n_cached_objects();

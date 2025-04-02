@@ -160,10 +160,10 @@ RenderingContext::RenderingContext(QObject* parent)
     m->benchmarks.push_back(std::make_shared<nucleus::utils::Benchmark>("vector_layer", 1u, std::vector<std::string> { "wien", "weichtalhaus", "karwendel" }));
 
     for (const auto& benchmark : m->benchmarks) {
-        connect(
-            m->vector_layer.scheduler.get(), &nucleus::tile::Scheduler::processing_started, benchmark.get(), &nucleus::utils::Benchmark::increase_load_count);
-        connect(
-            m->vector_layer.scheduler.get(), &nucleus::tile::Scheduler::processing_finished, benchmark.get(), &nucleus::utils::Benchmark::decrease_load_count);
+        m->scheduler_director->visit([&benchmark](nucleus::tile::Scheduler* sch) {
+            connect(sch, &nucleus::tile::Scheduler::processing_started, benchmark.get(), &nucleus::utils::Benchmark::increase_load_count);
+            connect(sch, &nucleus::tile::Scheduler::processing_finished, benchmark.get(), &nucleus::utils::Benchmark::decrease_load_count);
+        });
     }
 #endif
 }
