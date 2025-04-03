@@ -83,6 +83,7 @@ qt_add_resources(unittests_nucleus "test_data"
     data/vector_layer/grid_lines.png
     data/vector_layer/vectortile.mvt
     data/vector_layer/vectortile_13_4412_2893.pbf
+    data/vector_layer/vectortile_benchmark_14_8936_5681.pbf
     data/vector_layer/vectortile_openmaptile_13_4412_2893.pbf
     data/vector_layer/test-style.json
 )

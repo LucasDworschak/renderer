@@ -35,12 +35,14 @@ class Benchmark : public QObject {
     Q_OBJECT
 public:
     Benchmark(QString name, unsigned id, std::vector<std::string> positions);
+    void register_scheduler(QString name);
 public slots:
     void activate(unsigned id);
-    void increase_load_count();
-    void decrease_load_count();
+    void increase_load_count(const QString& scheduler_name);
+    void decrease_load_count(const QString& scheduler_name);
 
     void receive_measurements(QList<nucleus::timing::TimerReport> values);
+    void check_requested_quads(const QString& scheduler_name, const QVariantMap& new_stats);
 
 private slots:
     void next_place();
@@ -62,15 +64,20 @@ private:
     std::vector<std::string> m_positions;
 
     std::unique_ptr<QTimer> m_continue_timer;
-    std::unique_ptr<QTimer> m_buffer_timer;
+    std::unique_ptr<QTimer> m_warm_up_timer;
 
     std::unordered_map<std::string, std::vector<QList<nucleus::timing::TimerReport>>> m_timings;
-    std::unordered_map<std::string, float> m_total_time_per_location;
 
+    void start_if_finished_loading();
     void create_report();
 
+    // TODO -> if processing_finished(scheduler_name) was called and has_quads_requested == falce
+    // if all is_finished are true -> start benchmark
+    std::unordered_map<QString, bool> m_is_finished;
+    std::unordered_map<QString, bool> m_has_quads_requested;
+
     static constexpr int time_per_location = 10000;
-    static constexpr int buffer_time = 5000; // we need a sufficiently high time to make sure that no other tiles arrive anymore
+    static constexpr int warm_up_time = 500; // we need a sufficiently high time to make sure that the tiles are on the gpu
 };
 
 } // namespace nucleus::utils

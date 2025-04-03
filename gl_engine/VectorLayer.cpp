@@ -76,7 +76,6 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_initialized = true;
     if (m_styles) {
         m_styles_texture->upload(*m_styles);
-        qDebug() << "uploading styles";
     }
 }
 
@@ -166,14 +165,12 @@ void VectorLayer::set_tile_limit(unsigned int new_limit)
 
 void VectorLayer::update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles)
 {
-    qDebug() << "update style called";
     // at this point we cannot be sure that the texture has been initialized -> save the pointer for now and upload after init
     m_styles = styles;
 
     if (m_initialized) // only upload if it is already initialized
     {
         m_styles_texture->upload(*m_styles);
-        qDebug() << "uploading styles";
     }
 }
 

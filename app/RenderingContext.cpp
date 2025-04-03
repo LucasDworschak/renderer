@@ -161,6 +161,8 @@ RenderingContext::RenderingContext(QObject* parent)
 
     for (const auto& benchmark : m->benchmarks) {
         m->scheduler_director->visit([&benchmark](nucleus::tile::Scheduler* sch) {
+            benchmark->register_scheduler(sch->name());
+            connect(sch, &nucleus::tile::Scheduler::stats_ready, benchmark.get(), &nucleus::utils::Benchmark::check_requested_quads);
             connect(sch, &nucleus::tile::Scheduler::processing_started, benchmark.get(), &nucleus::utils::Benchmark::increase_load_count);
             connect(sch, &nucleus::tile::Scheduler::processing_finished, benchmark.get(), &nucleus::utils::Benchmark::decrease_load_count);
         });

@@ -102,8 +102,8 @@ signals:
     void quad_received(const tile::Id& ids);
     void quads_requested(const std::vector<tile::Id>& ids);
 
-    void processing_started();
-    void processing_finished();
+    void processing_started(const QString& scheduler_name);
+    void processing_finished(const QString& scheduler_name);
 
 public slots:
     void update_camera(const nucleus::camera::Definition& camera);

@@ -19,6 +19,7 @@
 #include "Benchmark.h"
 
 #include <nucleus/camera/PositionStorage.h>
+#include <nucleus/version.h>
 
 #include <QDesktopServices>
 #include <QFile>
@@ -45,17 +46,24 @@ Benchmark::Benchmark(QString name, unsigned id, std::vector<std::string> positio
 
     m_continue_timer = std::make_unique<QTimer>(this);
     m_continue_timer->setSingleShot(true);
-    m_buffer_timer = std::make_unique<QTimer>(this);
-    m_buffer_timer->setSingleShot(true);
+    m_warm_up_timer = std::make_unique<QTimer>(this);
+    m_warm_up_timer->setSingleShot(true);
 
     connect(m_continue_timer.get(), &QTimer::timeout, this, &Benchmark::next_place);
-    connect(m_buffer_timer.get(), &QTimer::timeout, this, &Benchmark::update_record_state);
+    connect(m_warm_up_timer.get(), &QTimer::timeout, this, &Benchmark::update_record_state);
 }
+
+void Benchmark::register_scheduler(QString name)
+{
+    m_is_finished[name] = false;
+    m_has_quads_requested[name] = true;
+}
+
 void Benchmark::activate(unsigned id)
 {
     // if there is a timer running -> stop it
     m_continue_timer->stop();
-    m_buffer_timer->stop();
+    m_warm_up_timer->stop();
 
     // reset any data
     m_current_position = 0;
@@ -73,11 +81,12 @@ void Benchmark::activate(unsigned id)
     m_continue_timer->start(100);
 }
 
-void Benchmark::increase_load_count()
+void Benchmark::increase_load_count(const QString& scheduler_name)
 {
+    m_is_finished[scheduler_name] = false;
     m_load_count += 1;
-    // qDebug() << "benchmark: increase load " << m_load_count;
     m_record_data = false;
+
     if (m_continue_timer->isActive()) {
         // new tiles arrived while recording -> stop the timer and remove all data fromt he current location
         m_continue_timer->stop();
@@ -85,36 +94,59 @@ void Benchmark::increase_load_count()
         m_timings[m_positions[m_current_position - 1]].clear();
     }
 
-    if (m_buffer_timer->isActive()) {
+    if (m_warm_up_timer->isActive()) {
         // new data is being loaded -> we have to wait a bit longer
-        m_buffer_timer->stop();
+        m_warm_up_timer->stop();
     }
 }
 
-void Benchmark::decrease_load_count()
+void Benchmark::decrease_load_count(const QString& scheduler_name)
 {
+    m_is_finished[scheduler_name] = true;
     m_load_count -= 1;
-    if (m_activated && m_load_count == 0 && !m_buffer_timer->isActive()) {
-        // start the buffer timer to start recording after the buffer time ended
-        m_buffer_timer->start(buffer_time);
+
+    start_if_finished_loading();
+}
+
+void Benchmark::start_if_finished_loading()
+{
+    if (!m_activated || m_load_count != 0 || m_warm_up_timer->isActive())
+        return; // not finished yet
+
+    for (const auto& entry : m_is_finished) {
+        if (!m_is_finished[entry.first] || m_has_quads_requested[entry.first]) {
+            // not finished yet
+            return;
+        }
     }
 
-    // qDebug() << "benchmark: decrease load " << m_load_count;
+    qDebug() << "benchmark: " << m_positions[m_current_position - 1];
+
+    // all are finished -> we can finally start with the benchmark
+    // start the warm-up timer to ensure that everything is on the gpu
+    m_warm_up_timer->start(warm_up_time);
+}
+
+void Benchmark::check_requested_quads(const QString& scheduler_name, const QVariantMap& new_stats)
+{
+    m_has_quads_requested[scheduler_name] = new_stats["n_quads_requested"] != 0;
 }
 
 void Benchmark::next_place()
 {
     m_record_data = false;
 
-    if (m_current_position > 0) {
-        const auto total_milliseconds = m_previous_time.msecsTo(QDateTime::currentDateTime());
-        m_total_time_per_location[m_positions[m_current_position - 1]] = (float(total_milliseconds - buffer_time - time_per_location) / 1000.0f);
+    // reset dicts
+    for (const auto& entry : m_is_finished) {
+        m_is_finished[entry.first] = false;
+        m_has_quads_requested[entry.first] = true;
     }
+
     m_previous_time = QDateTime::currentDateTime();
 
     if (m_current_position >= m_positions.size()) {
         // no more locations to benchmark -> we are finished
-        m_buffer_timer->stop();
+        m_warm_up_timer->stop();
 
         m_activated = false;
 
@@ -170,23 +202,24 @@ void Benchmark::create_report()
     std::filesystem::create_directories(path);
 
     const auto datetime = QDateTime::currentDateTime();
-
-    QFile file(path / ("vector_layer_" + datetime.toString("yyyy-MM-dd-hh-mm-ss").toStdString() + ".csv"));
+    QFile file(path / (m_name.toStdString() + "_" + nucleus::version() + "_" + datetime.toString("hh-mm-ss").toStdString() + ".csv"));
     const auto success = file.open(QIODeviceBase::WriteOnly);
     assert(success);
     QTextStream out_stream(&file);
 
-    out_stream << "Location" << "\t preprocess time \t";
+    out_stream << datetime.toString("yyyy-MM-dd-hh-mm-ss") << "\t" << QString::fromStdString(nucleus::version()) << "\n";
+    out_stream << "Location\t";
     for (const auto& metric : metrics) {
         out_stream << metric << "\t avg \t min \t max \t";
     }
 
     out_stream << "\n";
 
+    // map<metric, map<location, avg>>
+    std::unordered_map<QString, std::unordered_map<std::string, float>> avg_values_per_location;
+
     for (const auto& [location, timers] : reports) {
         out_stream << QString::fromStdString(location) << "\t";
-
-        out_stream << m_total_time_per_location[location] << "\t";
 
         for (const auto& metric : metrics) {
             float avg = 0.0;
@@ -204,13 +237,54 @@ void Benchmark::create_report()
             }
             avg /= values.size();
 
+            avg_values_per_location[metric][location] = avg;
+
             out_stream << "\t" << avg << "\t" << min << "\t" << max << "\t";
         }
         out_stream << "\n";
     }
     out_stream.flush(); // Ensure all data is written to the file.
     file.close(); // Close the file.
-    QDesktopServices::openUrl(QUrl::fromLocalFile(file.fileName())); // Open with system handler.
+
+    {
+        // append to cummulative file
+        QFile file(path / (m_name.toStdString() + "_combined" + ".csv"));
+        const auto is_new_file = !file.exists();
+        const auto success = file.open(QIODeviceBase::WriteOnly | QIODevice::Append);
+        assert(success);
+        QTextStream out_stream(&file);
+
+        if (is_new_file) {
+            // create headers for the combined file
+            out_stream << "\t";
+            for (const auto& metric : metrics) {
+                bool first = true;
+                for (size_t i = 0; i < avg_values_per_location[metric].size(); i++) {
+                    if (first) {
+                        first = false;
+                        out_stream << "avg " << metric << "\t";
+                    } else {
+                        out_stream << "\t";
+                    }
+                }
+            }
+            out_stream << "\nversion\t";
+            for (const auto& metric : metrics) {
+                for (const auto& [location, avg] : avg_values_per_location[metric]) {
+                    out_stream << QString::fromStdString(location) << "\t";
+                }
+            }
+        }
+
+        out_stream << "\n" << QString::fromStdString(nucleus::version()) << "\t";
+        for (const auto& metric : metrics) {
+            for (const auto& [location, avg] : avg_values_per_location[metric]) {
+                out_stream << avg << "\t";
+            }
+        }
+
+        QDesktopServices::openUrl(QUrl::fromLocalFile(file.fileName())); // Open with system handler.
+    }
 
     qDebug() << "Benchmark: finished" << m_name << m_id;
 }

@@ -626,6 +626,29 @@ TEST_CASE("nucleus/vector_preprocess")
 
 TEST_CASE("nucleus/vector_preprocess benchmarks")
 {
+    // load tile data
+    // the normal tile is a tile in a small city, with more than half of the tile consisting of a mountain.
+    // the zoom level of 13 and 14 are the tiles with the most amount of data present, but since most of this tile is in the countryside, it only contains 68kb
+    // of data
+    auto id_normal = nucleus::tile::Id { .zoom_level = 13, .coords = { 4412, 2893 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+    auto file_normal = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_13_4412_2893.pbf"));
+    file_normal.open(QFile::ReadOnly);
+    const auto bytes_normal = file_normal.readAll();
+
+    // the "worst" tile is one of the largest tile with 868kb (right over vienna -> lots of buildings and other details)
+    // so the output of the benchmark can be regarded as a worst case approximation
+    auto id_worst = nucleus::tile::Id { .zoom_level = 14, .coords = { 8936, 5681 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+    auto file_worst = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_benchmark_14_8936_5681.pbf"));
+    file_worst.open(QFile::ReadOnly);
+    const auto bytes_worst = file_worst.readAll();
+
+    // load style
+    Style style(":/vectorlayerstyles/openstreetmap.json");
+    style.load();
+
+    BENCHMARK("preprocess normal tile") { nucleus::vector_layer::preprocess(id_normal, bytes_normal, style); };
+    BENCHMARK("preprocess worse case tile") { nucleus::vector_layer::preprocess(id_worst, bytes_worst, style); };
+
     // BENCHMARK("triangulize polygons")
     // {
     //     const std::vector<glm::vec2> polygon_points = { glm::vec2(10.5, 10.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5), glm::vec2(10.5, 30.5) };
