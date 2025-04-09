@@ -504,6 +504,7 @@ std::vector<glm::ivec2> generate_neighbour_edges(size_t num_points, const size_t
 // std::vector<glm::vec2> triangulize(std::vector<glm::vec2> polygon_points, std::vector<glm::ivec2> edges, bool remove_duplicate_vertices = false);
 
 std::vector<glm::vec2> triangulize(std::vector<std::vector<glm::vec2>> polygon_points, bool remove_duplicate_vertices = false);
+
 /*
  * Rasterize a triangle
  * in this method every triangle is traversed only once, and it only accesses pixels it needs for itself.

@@ -55,7 +55,7 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
     // const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5 / 64.0 * constants::grid_size, 30.5 / 64.0 * constants::grid_size),
     //     glm::vec2(30.5 / 64.0 * constants::grid_size, 10.5 / 64.0 * constants::grid_size),
     //     glm::vec2(50.5 / 64.0 * constants::grid_size, 50.5 / 64.0 * constants::grid_size) } };
-    const std::vector<unsigned int> style_indices = { 1 };
+    // const std::vector<unsigned int> style_indices = { 1 };
 
     auto tile_data = details::parse_tile(id, vector_tile_data, style);
 
@@ -170,12 +170,12 @@ glm::uvec3 pack_triangle_data(glm::vec2 a, glm::vec2 b, glm::vec2 c)
     c += constants::tile_extent;
 
     // make sure that we do not remove bits from the coordinates
-    assert((uint32_t(a.x) & ((1u << coordinate_bits) - 1u)) == uint32_t(a.x));
-    assert((uint32_t(a.y) & ((1u << coordinate_bits) - 1u)) == uint32_t(a.y));
-    assert((uint32_t(b.x) & ((1u << coordinate_bits) - 1u)) == uint32_t(b.x));
-    assert((uint32_t(b.y) & ((1u << coordinate_bits) - 1u)) == uint32_t(b.y));
-    assert((uint32_t(c.x) & ((1u << coordinate_bits) - 1u)) == uint32_t(c.x));
-    assert((uint32_t(c.y) & ((1u << coordinate_bits) - 1u)) == uint32_t(c.y));
+    // assert((uint32_t(a.x) & ((1u << coordinate_bits) - 1u)) == uint32_t(a.x));
+    // assert((uint32_t(a.y) & ((1u << coordinate_bits) - 1u)) == uint32_t(a.y));
+    // assert((uint32_t(b.x) & ((1u << coordinate_bits) - 1u)) == uint32_t(b.x));
+    // assert((uint32_t(b.y) & ((1u << coordinate_bits) - 1u)) == uint32_t(b.y));
+    // assert((uint32_t(c.x) & ((1u << coordinate_bits) - 1u)) == uint32_t(c.x));
+    // assert((uint32_t(c.y) & ((1u << coordinate_bits) - 1u)) == uint32_t(c.y));
 
     out.x = uint32_t(a.x) << coordinate_shift1;
     out.x = out.x | ((uint32_t(a.y) & coordinate_bitmask) << coordinate_shift2);

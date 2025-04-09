@@ -35,6 +35,9 @@ if(ALP_RASTERIZER STREQUAL "cdt")
 elseif(ALP_RASTERIZER STREQUAL "earcut")
     alp_add_git_repository(earcut URL https://github.com/mapbox/earcut.hpp.git COMMITISH 7fa7aa30183849e988ae79ab2eef19f9ae97acf4 DO_NOT_ADD_SUBPROJECT)
 endif()
+# TODO remove earcut below again
+alp_add_git_repository(earcut URL https://github.com/mapbox/earcut.hpp.git COMMITISH 7fa7aa30183849e988ae79ab2eef19f9ae97acf4 DO_NOT_ADD_SUBPROJECT)
+alp_add_git_repository(clipper2 URL https://github.com/AlpineMapsOrgDependencies/Clipper2.git COMMITISH ca6e8fd58e30521115d5b83ee785b90cea07c059 DO_NOT_ADD_SUBPROJECT)
 
 add_library(zppbits INTERFACE)
 target_include_directories(zppbits SYSTEM INTERFACE ${zppbits_SOURCE_DIR})
@@ -46,6 +49,11 @@ set_target_properties(goofy_tc PROPERTIES SYSTEM true)
 add_library(tl_expected INTERFACE)
 target_include_directories(tl_expected INTERFACE ${tl_expected_SOURCE_DIR}/include)
 
+# add_library(clipper2 INTERFACE)
+# target_include_directories(clipper2 INTERFACE ${clipper2_SOURCE_DIR}/CPP/Clipper2Lib/include/clipper2)
+# target_include_directories(clipper2 INTERFACE ${clipper2_SOURCE_DIR}/CPP/Clipper2Lib/src)
+add_subdirectory(${clipper2_SOURCE_DIR}/CPP ${CMAKE_BINARY_DIR}/alp_external/clipper2)
+
 if(ALP_RASTERIZER STREQUAL "cdt")
     add_library(cdt INTERFACE)
     target_include_directories(cdt INTERFACE ${cdt_SOURCE_DIR}/CDT/include)
@@ -53,6 +61,9 @@ elseif(ALP_RASTERIZER STREQUAL "earcut")
     add_library(earcut INTERFACE)
     target_include_directories(earcut INTERFACE ${earcut_SOURCE_DIR}/include/mapbox)
 endif()
+# TODO remove earcut below again
+add_library(earcut INTERFACE)
+target_include_directories(earcut INTERFACE ${earcut_SOURCE_DIR}/include/mapbox)
 
 set(alp_version_out ${CMAKE_BINARY_DIR}/alp_version/nucleus/version.cpp)
 
@@ -139,6 +150,8 @@ qt_add_library(nucleus STATIC
     vector_layer/StyleExpression.h vector_layer/StyleExpression.cpp
     vector_layer/GpuMultiArrayHelper.h vector_layer/GpuMultiArrayHelper.cpp
     utils/rasterizer.h utils/rasterizer.cpp
+    vector_layer/clipper1.h
+    vector_layer/clipper2.h
 )
 
 if (ALP_ENABLE_AVLANCHE_WARNING_LAYER)
@@ -173,7 +186,7 @@ endif()
 
 target_include_directories(nucleus PUBLIC ${CMAKE_SOURCE_DIR})
 # Please keep Qt::Gui outside the nucleus. If you need it optional via a cmake based switch
-target_link_libraries(nucleus PUBLIC radix Qt::Core Qt::Network zppbits tl_expected nucleus_version stb_slim goofy_tc)
+target_link_libraries(nucleus PUBLIC radix Qt::Core Qt::Network zppbits tl_expected nucleus_version stb_slim goofy_tc Clipper2)
 
 if(ALP_RASTERIZER STREQUAL "cdt")
     target_link_libraries(nucleus PUBLIC cdt)
@@ -182,6 +195,8 @@ elseif(ALP_RASTERIZER STREQUAL "earcut")
     target_link_libraries(nucleus PUBLIC earcut)
     target_compile_definitions(nucleus PUBLIC ALP_RASTERIZER_EARCUT)
 endif()
+# TODO remove earcut below again
+target_link_libraries(nucleus PUBLIC earcut)
 
 qt_add_resources(nucleus "icons"
     PREFIX "/map_icons"
