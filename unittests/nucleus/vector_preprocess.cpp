@@ -38,9 +38,6 @@
 #include "nucleus/utils/rasterizer.h"
 #include "nucleus/vector_layer/constants.h"
 
-#include "nucleus/vector_layer/clipper1.h"
-#include "nucleus/vector_layer/clipper2.h"
-
 #include <clipper2/clipper.h>
 
 #include <CDT.h>
@@ -138,84 +135,7 @@ bool same_cells_are_filled(const nucleus::Raster<uint8_t>& raster1, std::shared_
     return true;
 }
 
-std::vector<glm::uvec3> clip_cells1(const std::vector<nucleus::vector_layer::details::GeometryData>& data, std::vector<glm::uvec4> grid)
-{
-    auto geometry_buffer = std::vector<glm::uvec3>();
-    auto acceleration_grid = std::vector<std::vector<uint32_t>>(
-        nucleus::vector_layer::constants::grid_size * nucleus::vector_layer::constants::grid_size, std::vector<uint32_t>());
-
-    for (size_t i = 0; i < data.size(); ++i) {
-        if (data[i].is_polygon) {
-
-            const auto scale = float(nucleus::vector_layer::constants::grid_size) / float(data[i].extent);
-
-            for (const auto& cell : grid) {
-                std::vector<std::vector<glm::vec2>> polygon;
-
-                for (const auto& vertices : data[i].vertices) {
-                    polygon.push_back(nucleus::vector_layer::clip_polygon_with_cell(vertices, cell, scale));
-                }
-
-                // if we inserted nothing (or the first polygon is empty -> we do not want to draw anything
-                // -> second and subsequent polygons contain holes
-                if (polygon.empty() || polygon[0].empty())
-                    continue;
-
-                // triangulize and add the data to the grid
-                std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygon, true);
-
-                for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
-                    auto packed = nucleus::vector_layer::details::pack_triangle_data(
-                        triangle_points[j * 3 + 0], triangle_points[j * 3 + 1], triangle_points[j * 3 + 2]);
-
-                    geometry_buffer.push_back(packed);
-                }
-            }
-        }
-    }
-
-    return geometry_buffer;
-}
-
-std::vector<glm::uvec3> clip_cells2(const std::vector<nucleus::vector_layer::details::GeometryData>& data, std::vector<glm::uvec4> grid)
-{
-    auto geometry_buffer = std::vector<glm::uvec3>();
-    auto acceleration_grid = std::vector<std::vector<uint32_t>>(8 * 8, std::vector<uint32_t>());
-
-    for (size_t i = 0; i < data.size(); ++i) {
-        if (data[i].is_polygon) {
-
-            const auto scale = float(8) / float(data[i].extent);
-
-            for (const auto& cell : grid) {
-                std::vector<std::vector<glm::vec2>> polygon;
-
-                for (const auto& vertices : data[i].vertices) {
-                    polygon.push_back(nucleus::vector_layer::clip_polygon_with_cell2(vertices, cell, scale));
-                }
-
-                // if we inserted nothing (or the first polygon is empty -> we do not want to draw anything
-                // -> second and subsequent polygons contain holes
-                if (polygon.empty() || polygon[0].empty())
-                    continue;
-
-                // triangulize and add the data to the grid
-                std::vector<glm::vec2> triangle_points = nucleus::utils::rasterizer::triangulize(polygon, true);
-
-                for (size_t j = 0; j < triangle_points.size() / 3; ++j) {
-                    auto packed = nucleus::vector_layer::details::pack_triangle_data(
-                        triangle_points[j * 3 + 0], triangle_points[j * 3 + 1], triangle_points[j * 3 + 2]);
-
-                    geometry_buffer.push_back(packed);
-                }
-            }
-        }
-    }
-
-    return geometry_buffer;
-}
-
-void triangulize(const Clipper2Lib::Paths64& polygon_points, bool remove_duplicate_vertices, std::vector<glm::uvec3>& geometry_buffer)
+void triangulize(const Clipper2Lib::Paths64& polygon_points, bool remove_duplicate_vertices, std::vector<glm::uvec3>* geometry_buffer)
 {
 
     // cdt needs to create edges and combine all polygons into one single vector
@@ -253,7 +173,7 @@ void triangulize(const Clipper2Lib::Paths64& polygon_points, bool remove_duplica
     // geometry_buffer.reserve(geometry_buffer.size() + cdt.triangles.size());
     for (size_t i = 0; i < cdt.triangles.size(); ++i) {
         const auto tri = cdt.triangles[i];
-        geometry_buffer.push_back(nucleus::vector_layer::details::pack_triangle_data({ cdt.vertices[tri.vertices[0]].x, cdt.vertices[tri.vertices[0]].y },
+        geometry_buffer->push_back(nucleus::vector_layer::details::pack_triangle_data({ cdt.vertices[tri.vertices[0]].x, cdt.vertices[tri.vertices[0]].y },
             { cdt.vertices[tri.vertices[1]].x, cdt.vertices[tri.vertices[1]].y },
             { cdt.vertices[tri.vertices[2]].x, cdt.vertices[tri.vertices[2]].y }));
         // processed_triangles.emplace_back(cdt.vertices[tri.vertices[0]].x, cdt.vertices[tri.vertices[1]].x, cdt.vertices[tri.vertices[2]].x);
@@ -281,7 +201,7 @@ std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<
 }
 
 // std::vector<glm::uvec3> triangulize_earcut(const std::vector<std::vector<glm::vec2>>& polygon_points)
-void triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, std::vector<glm::uvec3>& geometry_buffer)
+void triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, std::vector<glm::uvec3>* geometry_buffer)
 {
     auto indices = mapbox::earcut<uint32_t>(polygon_points);
 
@@ -310,51 +230,9 @@ void triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, std::vector<
         // qDebug() << p2.x << p2.y;
         // qDebug() << "";
 
-        geometry_buffer.push_back(nucleus::vector_layer::details::pack_triangle_data({ p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }));
+        geometry_buffer->push_back(nucleus::vector_layer::details::pack_triangle_data({ p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }));
     }
 
-}
-
-std::vector<glm::uvec3> clipper2_clip(const std::vector<nucleus::vector_layer::details::GeometryData>& data, vector<Clipper2Lib::RectClip64> grid)
-{
-    auto geometry_buffer = std::vector<glm::uvec3>();
-    auto acceleration_grid = std::vector<std::vector<uint32_t>>(8 * 8, std::vector<uint32_t>());
-
-    Clipper2Lib::Paths64 all_polygons;
-
-    all_polygons.reserve(data.size()); // not actual size of polygons -> since we also have polylines
-
-    for (size_t i = 0; i < data.size(); ++i) {
-        if (data[i].is_polygon) {
-
-            // const auto scale = float(8) / float(data[i].extent);
-
-            Clipper2Lib::BoundedPaths64 shapes;
-
-            // GetBounds
-            shapes.reserve(data[i].vertices.size());
-            for (size_t j = 0; j < data[i].vertices.size(); j++) {
-                auto& p = shapes.emplace_back();
-                p.path.reserve(data[i].vertices[j].size());
-                for (size_t k = 0; k < data[i].vertices[j].size(); k++) {
-                    p.path.emplace_back(data[i].vertices[j][k].x, data[i].vertices[j][k].y);
-                }
-                p.bound = Clipper2Lib::GetBounds(p.path);
-            }
-
-            for (auto& cell : grid) {
-                Clipper2Lib::Paths64 solution = cell.Execute(shapes);
-                // Clipper2Lib::Paths64 solution = RectClip(cell, shapes);
-
-                // triangulize and add the data to the grid
-                // auto triangulized_data = triangulize(solution, true);
-                triangulize_earcut(solution, geometry_buffer);
-                // geometry_buffer.insert(geometry_buffer.begin(), triangulized_data.begin(), triangulized_data.end());
-            }
-        }
-    }
-
-    return geometry_buffer;
 }
 
 std::vector<glm::uvec3> triangulize_tile_cdt(const std::vector<nucleus::vector_layer::details::GeometryData>& data)
@@ -381,7 +259,7 @@ std::vector<glm::uvec3> triangulize_tile_cdt(const std::vector<nucleus::vector_l
             }
 
             // triangulize and add the data to the grid
-            triangulize(shapes, true, geometry_buffer);
+            triangulize(shapes, true, &geometry_buffer);
         }
     }
 
@@ -412,7 +290,7 @@ std::vector<glm::uvec3> triangulize_tile_earcut(const std::vector<nucleus::vecto
             }
 
             // triangulize and add the data to the grid
-            triangulize_earcut(shapes, geometry_buffer);
+            triangulize_earcut(shapes, &geometry_buffer);
             // geometry_buffer.insert(geometry_buffer.begin(), triangulized_data.begin(), triangulized_data.end());
         }
     }
@@ -420,28 +298,87 @@ std::vector<glm::uvec3> triangulize_tile_earcut(const std::vector<nucleus::vecto
     return geometry_buffer;
 }
 
-vector<glm::uvec4> generateGrid(uint8_t width, uint8_t height)
+// TODOs
+
+// fully filled cell
+// - vector<Clipper2Lib::RectClip64> grid to vector<struct{is_done, Clipper2Lib::RectClip64}> grid
+// - is_done is set to true, if polygon fully covers cell
+// - beware of transparancies
+
+// polylines
+// - aabb needs to expand by 1/2 * line width in all directions
+// - clipper rects need to expand by 1/2 + line width in all directions
+// - do clipper rects need to be uniformely sized? -> in theory i think not since the origin stays the same (and we use negative numbers)
+// -- but we would need to create new rectclip objects for each individual line width (which is expensive)
+// -> therefore one oversized rectclip with some kind of upper boundary of how large lines could be
+// -> but the larger this is, the more cells will be filled unintentionally
+// - alternative -> create two boundary polylines (Clipper2Lib::InflatePaths ?)
+// - only if the boundary line falls into the inner clip, the outer clip will be executed
+
+// triangles/polylines coordinates are anchored to cell origin
+
+// move code to preprocessor and visualize in shader
+
+std::vector<glm::uvec3> clipper2_clip(const std::vector<nucleus::vector_layer::details::GeometryData>& data, nucleus::Raster<Clipper2Lib::RectClip64> grid)
 {
-    vector<glm::uvec4> grid;
-    for (uint8_t x = 0; x < width; x++) {
-        for (uint8_t y = 0; y < height; y++) {
-            grid.push_back({ x, y, x + 1u, y + 1u });
+    auto geometry_buffer = std::vector<glm::uvec3>();
+    auto acceleration_grid = std::vector<std::vector<uint32_t>>(8 * 8, std::vector<uint32_t>());
+
+    Clipper2Lib::Paths64 all_polygons;
+
+    all_polygons.reserve(data.size()); // not actual size of polygons -> since we also have polylines
+
+    for (size_t i = 0; i < data.size(); ++i) {
+
+        if (data[i].is_polygon) {
+
+            const auto scale = float(grid.width()) / float(data[i].extent);
+
+            Clipper2Lib::BoundedPaths64 shapes;
+
+            radix::geometry::Aabb2i aabb({ grid.width() * 2, grid.height() * 2 }, { -100, -100 });
+
+            // GetBounds
+            shapes.reserve(data[i].vertices.size());
+            for (size_t j = 0; j < data[i].vertices.size(); j++) {
+
+                auto& p = shapes.emplace_back();
+                p.path.reserve(data[i].vertices[j].size());
+                for (size_t k = 0; k < data[i].vertices[j].size(); k++) {
+                    p.path.emplace_back(data[i].vertices[j][k].x, data[i].vertices[j][k].y);
+                }
+                p.bound = Clipper2Lib::GetBounds(p.path);
+
+                aabb.expand_by({ float(p.bound.left) * scale, float(p.bound.top) * scale });
+                aabb.expand_by({ std::ceil(float(p.bound.right) * scale), std::ceil(float(p.bound.bottom) * scale) });
+            }
+
+            grid.visit(aabb, [&geometry_buffer, &shapes](glm::uvec2, Clipper2Lib::RectClip64 cell) {
+                Clipper2Lib::Paths64 solution = cell.Execute(shapes);
+
+                if (solution.empty())
+                    return;
+
+                triangulize_earcut(solution, &geometry_buffer);
+            });
         }
     }
-    return grid;
+
+    return geometry_buffer;
 }
 
-vector<Clipper2Lib::RectClip64> generate_clipper2_grid(uint8_t steps)
+nucleus::Raster<Clipper2Lib::RectClip64> generate_clipper2_grid(unsigned steps)
 {
     constexpr auto tile_extent = 4096u;
     const auto step_size = tile_extent / steps;
-    vector<Clipper2Lib::RectClip64> grid;
-    for (uint8_t x = 0; x < steps; x++) {
-        for (uint8_t y = 0; y < steps; y++) {
+    std::vector<Clipper2Lib::RectClip64> grid;
+    for (unsigned y = 0; y < steps; y++) {
+        for (unsigned x = 0; x < steps; x++) {
             grid.emplace_back(Clipper2Lib::Rect64(x * step_size, y * step_size, (x + 1) * step_size, (y + 1) * step_size));
         }
     }
-    return grid;
+
+    return nucleus::Raster<Clipper2Lib::RectClip64>(steps, std::move(grid));
 }
 
 TEST_CASE("nucleus/vector_preprocess/clipping")
@@ -598,8 +535,8 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
         auto out = std::vector<glm::uvec3>();
         auto out2 = std::vector<glm::uvec3>();
-        triangulize_earcut(in, out);
-        triangulize(in, true, out2);
+        triangulize_earcut(in, &out);
+        triangulize(in, true, &out2);
 
         CHECK(out.size() == 8);
         CHECK(out2.size() == 8);
@@ -616,16 +553,16 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         const auto bytes = file.readAll();
 
         auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
-        BENCHMARK("triangulize cdt")
-        {
-            auto out = triangulize_tile_cdt(tile_data);
-            CHECK(out.size() == 46868);
-        };
-        BENCHMARK("triangulize earcut")
-        {
-            auto out2 = triangulize_tile_earcut(tile_data);
-            CHECK(out2.size() == 46671);
-        };
+        // BENCHMARK("triangulize cdt")
+        // {
+        //     auto out = triangulize_tile_cdt(tile_data);
+        //     CHECK(out.size() == 46868);
+        // };
+        // BENCHMARK("triangulize earcut")
+        // {
+        //     auto out2 = triangulize_tile_earcut(tile_data);
+        //     CHECK(out2.size() == 46671);
+        // };
     }
 
     SECTION("clipping vector tile to cell")
@@ -640,53 +577,22 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
         auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
 
-        // const auto grid = generateGrid(8, 8);
-        const auto clipper_grid = generate_clipper2_grid(64);
-
-        // qDebug() << grid.size();
-        // qDebug() << clipper_grid.size();
-
-        // auto g2 = clipper2_clip(tile_data, grid);
-        // qDebug() << "clipper2:" << g2.size();
+        auto clipper_grid = generate_clipper2_grid(64);
 
         BENCHMARK("clip tile to cells")
         {
             auto g2 = clipper2_clip(tile_data, clipper_grid);
-            // CHECK(g2.size() == 45812);
-            // CHECK(g2.size() == 44942);
             CHECK(g2.size() == 68413);
+
+            return g2;
         };
 
-        const auto style_buffer = style.styles()->buffer();
-
-        BENCHMARK("old method")
-        {
-            auto g = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
-            CHECK(g.vertex_buffer.size() == 57255);
-        };
-
-        // BENCHMARK("clip tile to cells")
+        // const auto style_buffer = style.styles()->buffer();
+        // BENCHMARK("old method")
         // {
-        //     auto g2 = clipper2_clip(tile_data, clipper_grid);
-        //     CHECK(g2.size() == 45812);
+        //     auto g = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
+        //     CHECK(g.vertex_buffer.size() == 57255);
         // };
-
-        // TODO here:
-        // the current problem is not so far that the clipping or the transfer of polygons from one thing to another takes long, but rather that the
-        // triangulator, is called far too often, and since this takes too long, everything takes longer...
-        // ideas: try other triangulators. and benchmark them against each other
-
-        // auto g2 = clip_cells2(tile_data, grid);
-        // qDebug() << "g2:" << g2.size();
-        // auto g1 = clip_cells1(tile_data, grid);
-        // qDebug() << "g1:" << g1.size();
-
-        // CHECK(g1.size() == g2.size());
-        // REQUIRE(g1.size() == g2.size());
-
-        // for (size_t i = 0; i < g1.size(); i++) {
-        //     CHECK(g1[i] == g2[i]);
-        // }
     }
 }
 

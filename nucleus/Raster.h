@@ -27,6 +27,8 @@
 #include <glm/gtx/component_wise.hpp>
 #include <vector>
 
+#include <radix/geometry.h>
+
 namespace nucleus {
 
 template <typename T>
@@ -111,6 +113,26 @@ public:
 
     const T* data() const { return m_data.data(); }
     T* data() { return m_data.data(); }
+
+    // Functor -> [](glm::uvec2 pos, T pixel)
+    template <typename Functor>
+    void visit(const radix::geometry::Aabb2i aabb, Functor func)
+    {
+        assert(aabb.min.x <= aabb.max.x);
+        assert(aabb.min.y <= aabb.max.y);
+
+        constexpr auto a = 0;
+        constexpr auto b = 1;
+        const auto w0 = std::max(aabb.min.x - a, 0);
+        const auto h0 = std::max(aabb.min.y - a, 0);
+        const auto w1 = std::min(unsigned(aabb.max.x + b), width());
+        const auto h1 = std::min(unsigned(aabb.max.y + b), height());
+        for (unsigned x = w0; x < w1; x++) {
+            for (unsigned y = h0; y < h1; y++) {
+                func({ x, y }, pixel({ x, y }));
+            }
+        }
+    }
 };
 
 namespace detail {

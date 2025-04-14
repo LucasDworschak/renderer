@@ -21,6 +21,8 @@
 
 #include <glm/glm.hpp>
 
+#define ALP_RASTERIZER_CDT
+
 namespace nucleus::utils::rasterizer {
 /*
  * Possible future improvements:
