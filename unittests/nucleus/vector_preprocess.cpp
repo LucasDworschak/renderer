@@ -38,7 +38,6 @@
 #include "nucleus/utils/rasterizer.h"
 #include "nucleus/vector_layer/constants.h"
 
-#include <clipper2/clipper.h>
 
 #include <CDT.h>
 
@@ -135,53 +134,6 @@ bool same_cells_are_filled(const nucleus::Raster<uint8_t>& raster1, std::shared_
     return true;
 }
 
-void triangulize(const Clipper2Lib::Paths64& polygon_points, bool remove_duplicate_vertices, std::vector<glm::uvec3>* geometry_buffer)
-{
-
-    // cdt needs to create edges and combine all polygons into one single vector
-    Clipper2Lib::Path64 combined_polygon_points;
-    std::vector<glm::ivec2> edges;
-    for (size_t j = 0; j < polygon_points.size(); ++j) {
-        auto current_edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points[j].size(), combined_polygon_points.size());
-        edges.insert(edges.end(), current_edges.begin(), current_edges.end());
-        combined_polygon_points.insert(combined_polygon_points.end(), polygon_points[j].begin(), polygon_points[j].end());
-    }
-
-    // triangulation
-    CDT::Triangulation<float> cdt;
-
-    if (remove_duplicate_vertices) {
-        CDT::RemoveDuplicatesAndRemapEdges<float>(
-            combined_polygon_points,
-            [](const Clipper2Lib::Point64& p) { return p.x; },
-            [](const Clipper2Lib::Point64& p) { return p.y; },
-            edges.begin(),
-            edges.end(),
-            [](const glm::ivec2& p) { return p.x; },
-            [](const glm::ivec2& p) { return p.y; },
-            [](CDT::VertInd start, CDT::VertInd end) { return glm::ivec2 { start, end }; });
-    }
-
-    cdt.insertVertices(
-        combined_polygon_points.begin(),
-        combined_polygon_points.end(),
-        [](const Clipper2Lib::Point64& p) { return p.x; },
-        [](const Clipper2Lib::Point64& p) { return p.y; });
-    cdt.insertEdges(edges.begin(), edges.end(), [](const glm::ivec2& p) { return p.x; }, [](const glm::ivec2& p) { return p.y; });
-    cdt.eraseOuterTrianglesAndHoles();
-
-    // geometry_buffer.reserve(geometry_buffer.size() + cdt.triangles.size());
-    for (size_t i = 0; i < cdt.triangles.size(); ++i) {
-        const auto tri = cdt.triangles[i];
-        geometry_buffer->push_back(nucleus::vector_layer::details::pack_triangle_data({ cdt.vertices[tri.vertices[0]].x, cdt.vertices[tri.vertices[0]].y },
-            { cdt.vertices[tri.vertices[1]].x, cdt.vertices[tri.vertices[1]].y },
-            { cdt.vertices[tri.vertices[2]].x, cdt.vertices[tri.vertices[2]].y }));
-        // processed_triangles.emplace_back(cdt.vertices[tri.vertices[0]].x, cdt.vertices[tri.vertices[1]].x, cdt.vertices[tri.vertices[2]].x);
-
-        // geometry_buffer.push_back(nucleus::vector_layer::details::pack_triangle_data({ p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }));
-    }
-}
-
 std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes)
 {
     // first index test different since we use the previous size in the for loop
@@ -198,104 +150,6 @@ std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<
     // should not happen -> the index does not match a valid polygon point
     assert(false);
     return { 0, 0 };
-}
-
-// std::vector<glm::uvec3> triangulize_earcut(const std::vector<std::vector<glm::vec2>>& polygon_points)
-void triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, std::vector<glm::uvec3>* geometry_buffer)
-{
-    auto indices = mapbox::earcut<uint32_t>(polygon_points);
-
-    // move all polygons sizes to single accumulated array -> so that we can match the index
-    std::vector<uint32_t> polygon_sizes;
-    polygon_sizes.reserve(polygon_points.size());
-    uint32_t previous_size = 0;
-    for (size_t i = 0; i < polygon_points.size(); ++i) {
-        polygon_sizes.push_back(previous_size + polygon_points[i].size());
-        previous_size += previous_size + polygon_points[i].size();
-    }
-
-    // geometry_buffer.reserve(geometry_buffer.size() + indices.size());
-
-    for (size_t i = 0; i < indices.size() / 3; ++i) {
-        const auto ind0 = get_split_index(indices[i * 3 + 0], polygon_sizes);
-        const auto ind1 = get_split_index(indices[i * 3 + 1], polygon_sizes);
-        const auto ind2 = get_split_index(indices[i * 3 + 2], polygon_sizes);
-
-        const auto p0 = polygon_points[ind0.first][ind0.second];
-        const auto p1 = polygon_points[ind1.first][ind1.second];
-        const auto p2 = polygon_points[ind2.first][ind2.second];
-
-        // qDebug() << p0.x << p0.y;
-        // qDebug() << p1.x << p1.y;
-        // qDebug() << p2.x << p2.y;
-        // qDebug() << "";
-
-        geometry_buffer->push_back(nucleus::vector_layer::details::pack_triangle_data({ p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }));
-    }
-
-}
-
-std::vector<glm::uvec3> triangulize_tile_cdt(const std::vector<nucleus::vector_layer::details::GeometryData>& data)
-{
-    auto geometry_buffer = std::vector<glm::uvec3>();
-    auto acceleration_grid = std::vector<std::vector<uint32_t>>(8 * 8, std::vector<uint32_t>());
-
-    Clipper2Lib::Paths64 all_polygons;
-    all_polygons.reserve(data.size()); // not actual size of polygons -> since we also have polylines
-
-    for (size_t i = 0; i < data.size(); ++i) {
-        if (data[i].is_polygon) {
-
-            // const auto scale = float(8) / float(data[i].extent);
-
-            Clipper2Lib::Paths64 shapes;
-            shapes.reserve(data[i].vertices.size());
-            for (size_t j = 0; j < data[i].vertices.size(); j++) {
-                auto& p = shapes.emplace_back();
-                p.reserve(data[i].vertices[j].size());
-                for (size_t k = 0; k < data[i].vertices[j].size(); k++) {
-                    p.emplace_back(data[i].vertices[j][k].x, data[i].vertices[j][k].y);
-                }
-            }
-
-            // triangulize and add the data to the grid
-            triangulize(shapes, true, &geometry_buffer);
-        }
-    }
-
-    return geometry_buffer;
-}
-
-std::vector<glm::uvec3> triangulize_tile_earcut(const std::vector<nucleus::vector_layer::details::GeometryData>& data)
-{
-    auto geometry_buffer = std::vector<glm::uvec3>();
-    auto acceleration_grid = std::vector<std::vector<uint32_t>>(8 * 8, std::vector<uint32_t>());
-
-    Clipper2Lib::Paths64 all_polygons;
-    all_polygons.reserve(data.size()); // not actual size of polygons -> since we also have polylines
-
-    for (size_t i = 0; i < data.size(); ++i) {
-        if (data[i].is_polygon) {
-
-            // const auto scale = float(8) / float(data[i].extent);
-
-            Clipper2Lib::Paths64 shapes;
-            shapes.reserve(data[i].vertices.size());
-            for (size_t j = 0; j < data[i].vertices.size(); j++) {
-                auto& p = shapes.emplace_back();
-                p.reserve(data[i].vertices[j].size());
-                for (size_t k = 0; k < data[i].vertices[j].size(); k++) {
-                    p.emplace_back(data[i].vertices[j][k].x, data[i].vertices[j][k].y);
-                }
-            }
-
-            // triangulize and add the data to the grid
-            triangulize_earcut(shapes, &geometry_buffer);
-            // geometry_buffer.insert(geometry_buffer.begin(), triangulized_data.begin(), triangulized_data.end());
-        }
-    }
-
-    return geometry_buffer;
 }
 
 // TODOs
@@ -316,70 +170,6 @@ std::vector<glm::uvec3> triangulize_tile_earcut(const std::vector<nucleus::vecto
 // - only if the boundary line falls into the inner clip, the outer clip will be executed
 
 // triangles/polylines coordinates are anchored to cell origin
-
-// move code to preprocessor and visualize in shader
-
-std::vector<glm::uvec3> clipper2_clip(const std::vector<nucleus::vector_layer::details::GeometryData>& data, nucleus::Raster<Clipper2Lib::RectClip64> grid)
-{
-    auto geometry_buffer = std::vector<glm::uvec3>();
-    auto acceleration_grid = std::vector<std::vector<uint32_t>>(8 * 8, std::vector<uint32_t>());
-
-    Clipper2Lib::Paths64 all_polygons;
-
-    all_polygons.reserve(data.size()); // not actual size of polygons -> since we also have polylines
-
-    for (size_t i = 0; i < data.size(); ++i) {
-
-        if (data[i].is_polygon) {
-
-            const auto scale = float(grid.width()) / float(data[i].extent);
-
-            Clipper2Lib::BoundedPaths64 shapes;
-
-            radix::geometry::Aabb2i aabb({ grid.width() * 2, grid.height() * 2 }, { -100, -100 });
-
-            // GetBounds
-            shapes.reserve(data[i].vertices.size());
-            for (size_t j = 0; j < data[i].vertices.size(); j++) {
-
-                auto& p = shapes.emplace_back();
-                p.path.reserve(data[i].vertices[j].size());
-                for (size_t k = 0; k < data[i].vertices[j].size(); k++) {
-                    p.path.emplace_back(data[i].vertices[j][k].x, data[i].vertices[j][k].y);
-                }
-                p.bound = Clipper2Lib::GetBounds(p.path);
-
-                aabb.expand_by({ float(p.bound.left) * scale, float(p.bound.top) * scale });
-                aabb.expand_by({ std::ceil(float(p.bound.right) * scale), std::ceil(float(p.bound.bottom) * scale) });
-            }
-
-            grid.visit(aabb, [&geometry_buffer, &shapes](glm::uvec2, Clipper2Lib::RectClip64 cell) {
-                Clipper2Lib::Paths64 solution = cell.Execute(shapes);
-
-                if (solution.empty())
-                    return;
-
-                triangulize_earcut(solution, &geometry_buffer);
-            });
-        }
-    }
-
-    return geometry_buffer;
-}
-
-nucleus::Raster<Clipper2Lib::RectClip64> generate_clipper2_grid(unsigned steps)
-{
-    constexpr auto tile_extent = 4096u;
-    const auto step_size = tile_extent / steps;
-    std::vector<Clipper2Lib::RectClip64> grid;
-    for (unsigned y = 0; y < steps; y++) {
-        for (unsigned x = 0; x < steps; x++) {
-            grid.emplace_back(Clipper2Lib::Rect64(x * step_size, y * step_size, (x + 1) * step_size, (y + 1) * step_size));
-        }
-    }
-
-    return nucleus::Raster<Clipper2Lib::RectClip64>(steps, std::move(grid));
-}
 
 TEST_CASE("nucleus/vector_preprocess/clipping")
 {
@@ -469,6 +259,28 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         CHECK(triangle_points.size() == 0);
     }
 
+    // SECTION("clip test")
+    // {
+    //     // clipper2 result that is outside rect
+    //     Clipper2Lib::Paths64 shapes = { Clipper2Lib::MakePath({ 128, -64, 91, 150, 77, 150, 114, -64 }) };
+
+    //     Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(64, 64, 127, 127);
+    //     Clipper2Lib::Paths64 solution = RectClip(rect, shapes);
+
+    //     qDebug() << "points:";
+    //     for (size_t i = 0; i < solution.size(); ++i) {
+    //         for (size_t j = 0; j < solution[i].size(); ++j) {
+    //             qDebug() << solution[i][j].x << solution[i][j].y;
+    //         }
+    //     }
+
+    //     // output
+    //     // 91 63
+    //     // 105 63
+    //     // 94 127
+    //     // 80 127
+    // }
+
     SECTION("Clip poly with diamond hole")
     {
         // polygon and hole are outside
@@ -528,42 +340,42 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         CHECK(triangle_points[11] == glm::vec2 { 2, 5 });
     }
 
-    SECTION("triangulize basic")
-    {
-        Clipper2Lib::Paths64 in = { Clipper2Lib::MakePath({ -15, -15, 15, -15, 15, 15, -15, 15 }), Clipper2Lib::MakePath({ 0, -7, -7, 0, 0, 7, 7, 0 }) };
-        // std::vector<std::vector<glm::vec2>> in { { { 0, 0 }, { 0, 1 }, { 1, 1 }, { 1, 0 } } };
+    // SECTION("triangulize basic")
+    // {
+    //     Clipper2Lib::Paths64 in = { Clipper2Lib::MakePath({ -15, -15, 15, -15, 15, 15, -15, 15 }), Clipper2Lib::MakePath({ 0, -7, -7, 0, 0, 7, 7, 0 }) };
+    //     // std::vector<std::vector<glm::vec2>> in { { { 0, 0 }, { 0, 1 }, { 1, 1 }, { 1, 0 } } };
 
-        auto out = std::vector<glm::uvec3>();
-        auto out2 = std::vector<glm::uvec3>();
-        triangulize_earcut(in, &out);
-        triangulize(in, true, &out2);
+    //     auto out = std::vector<glm::uvec3>();
+    //     auto out2 = std::vector<glm::uvec3>();
+    //     triangulize_earcut(in, &out);
+    //     triangulize(in, true, &out2);
 
-        CHECK(out.size() == 8);
-        CHECK(out2.size() == 8);
-    }
+    //     CHECK(out.size() == 8);
+    //     CHECK(out2.size() == 8);
+    // }
 
-    SECTION("triangulize tile")
-    {
-        Style style(":/vectorlayerstyles/openstreetmap.json");
-        style.load();
+    // SECTION("triangulize tile")
+    // {
+    //     Style style(":/vectorlayerstyles/openstreetmap.json");
+    //     style.load();
 
-        auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 8936, 5681 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-        auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_benchmark_14_8936_5681.pbf"));
-        file.open(QFile::ReadOnly);
-        const auto bytes = file.readAll();
+    //     auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 8936, 5681 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+    //     auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_benchmark_14_8936_5681.pbf"));
+    //     file.open(QFile::ReadOnly);
+    //     const auto bytes = file.readAll();
 
-        auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
-        // BENCHMARK("triangulize cdt")
-        // {
-        //     auto out = triangulize_tile_cdt(tile_data);
-        //     CHECK(out.size() == 46868);
-        // };
-        // BENCHMARK("triangulize earcut")
-        // {
-        //     auto out2 = triangulize_tile_earcut(tile_data);
-        //     CHECK(out2.size() == 46671);
-        // };
-    }
+    //     auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
+    //     // BENCHMARK("triangulize cdt")
+    //     // {
+    //     //     auto out = triangulize_tile_cdt(tile_data);
+    //     //     CHECK(out.size() == 46868);
+    //     // };
+    //     // BENCHMARK("triangulize earcut")
+    //     // {
+    //     //     auto out2 = triangulize_tile_earcut(tile_data);
+    //     //     CHECK(out2.size() == 46671);
+    //     // };
+    // }
 
     SECTION("clipping vector tile to cell")
     { // real example
@@ -576,15 +388,29 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         const auto bytes = file.readAll();
 
         auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
+        const auto style_buffer = style.styles()->buffer();
 
-        auto clipper_grid = generate_clipper2_grid(64);
+        // auto clipper_grid = nucleus::vector_layer::details::generate_clipper2_grid(nucleus::vector_layer::constants::grid_size);
+
+        auto temp_grid = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
+
+        // check the size
+        int size = 0;
+        for (const auto& cell : temp_grid) {
+            for (const auto& layers : cell) {
+                size += layers.second.size();
+            }
+        }
+        CHECK(size == 66836);
+        // qDebug() << "size: " << size;
 
         BENCHMARK("clip tile to cells")
         {
-            auto g2 = clipper2_clip(tile_data, clipper_grid);
-            CHECK(g2.size() == 68413);
+            auto temp_grid = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
+            // auto g2 = clipper2_clip(tile_data, clipper_grid);
+            // CHECK(g2.size() == 68413);
 
-            return g2;
+            return temp_grid;
         };
 
         // const auto style_buffer = style.styles()->buffer();
@@ -626,202 +452,144 @@ TEST_CASE("nucleus/vector_preprocess")
         }
     }
 
-    SECTION("Triangle to Grid")
-    {
-        const std::vector<glm::u32vec4> style_buffer = { glm::u32vec4(0, 0, 0, 0) };
+    // SECTION("Triangle to Grid")
+    // { // TODO redo after refactor
+    //     const std::vector<glm::u32vec4> style_buffer = { glm::u32vec4(0, 0, 0, 0) };
 
-        constexpr auto extent = 64u;
-        const std::vector<std::vector<glm::vec2>> triangle_left_hypo = { { glm::vec2(10, 30), glm::vec2(30, 5), glm::vec2(50, 50) } };
-        const std::vector<std::vector<glm::vec2>> triangle_right_hypo = { { glm::vec2(5, 5), glm::vec2(25, 10), glm::vec2(5, 15) } };
+    //     constexpr auto extent = 64u;
+    //     const std::vector<std::vector<glm::vec2>> triangle_left_hypo = { { glm::vec2(10, 30), glm::vec2(30, 5), glm::vec2(50, 50) } };
+    //     const std::vector<std::vector<glm::vec2>> triangle_right_hypo = { { glm::vec2(5, 5), glm::vec2(25, 10), glm::vec2(5, 15) } };
 
-        std::vector<nucleus::vector_layer::details::GeometryData> tile_data { { triangle_left_hypo, extent, { { 0, 0 } }, true }, { triangle_right_hypo, extent, { { 0, 1 } }, true } };
+    //     std::vector<nucleus::vector_layer::details::GeometryData> tile_data { { triangle_left_hypo, extent, { { 0, 0 } }, true }, { triangle_right_hypo,
+    //     extent, { { 0, 1 } }, true } };
 
-        auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
+    //     auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
 
-        auto raster = visualize_grid(processed.acceleration_grid, nucleus::vector_layer::constants::grid_size);
-        auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
+    //     auto raster = visualize_grid(processed, nucleus::vector_layer::constants::grid_size);
+    //     auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
-        auto test_image = example_grid_data_triangles();
-        CHECK(image == test_image);
+    //     auto test_image = example_grid_data_triangles();
+    //     CHECK(image == test_image);
 
-        auto tile = nucleus::vector_layer::details::create_gpu_tile(processed);
+    //     auto tile = nucleus::vector_layer::details::create_gpu_tile(processed);
 
-        CHECK(same_cells_are_filled(raster, tile.acceleration_grid));
+    //     CHECK(same_cells_are_filled(raster, tile.acceleration_grid));
 
-        // we provide two triangles that overlap at one point -> we expect four entries [1], [0], ([1], [0])
-        auto index_buffer = tile.index_buffer->buffer();
-        REQUIRE(index_buffer.size()
-            == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::index_buffer_size_multiplier
-                * nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::index_buffer_size_multiplier);
-        CHECK(index_buffer[0] == nucleus::vector_layer::details::pack_index_buffer(1, 0, true));
-        CHECK(index_buffer[1] == nucleus::vector_layer::details::pack_index_buffer(0, 0, true));
-        CHECK(index_buffer[2] == nucleus::vector_layer::details::pack_index_buffer(1, 0, true));
-        CHECK(index_buffer[3] == nucleus::vector_layer::details::pack_index_buffer(0, 0, true));
-        // the rest should be undefined -> -1u
-        CHECK(index_buffer[4] == -1u);
-        CHECK(index_buffer[5] == -1u);
-        CHECK(index_buffer[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.5] == -1u);
+    //     auto data = tile.vertex_buffer->buffer();
+    //     REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] *
+    //     nucleus::vector_layer::constants::data_size[tile.buffer_info]); CHECK(data[0].x == 1081671760); CHECK(data[0].y == 1076429280); CHECK(data[0].z ==
+    //     1086915360); CHECK(data[1].x == 1075118160); CHECK(data[1].y == 1080361120); CHECK(data[1].z == 1075118320);
+    //     // the rest should be undefined -> -1u
+    //     CHECK(data[2].x == -1u);
+    //     CHECK(data[3].y == -1u);
+    //     CHECK(data[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.7].x == -1u);
 
-        auto data = tile.vertex_buffer->buffer();
-        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
-        CHECK(data[0].x == 1081671760);
-        CHECK(data[0].y == 1076429280);
-        CHECK(data[0].z == 1086915360);
-        CHECK(data[1].x == 1075118160);
-        CHECK(data[1].y == 1080361120);
-        CHECK(data[1].z == 1075118320);
-        // the rest should be undefined -> -1u
-        CHECK(data[2].x == -1u);
-        CHECK(data[3].y == -1u);
-        CHECK(data[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.7].x == -1u);
+    //     // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
+    //     //     std::cout << index_buffer[i] << std::endl;
+    //     // }
 
-        // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
-        //     std::cout << index_buffer[i] << std::endl;
-        // }
+    //     // std::cout << std::endl;
+    //     // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
+    //     //     std::cout << data[i] << std::endl;
+    //     // }
 
-        // std::cout << std::endl;
-        // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
-        //     std::cout << data[i] << std::endl;
-        // }
+    //     // // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
+    //     // image.save(QString("vector_layer_grid_triangles.png"));
+    // }
 
-        // // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
-        // image.save(QString("vector_layer_grid_triangles.png"));
-    }
+    // SECTION("Triangle to Grid (outside vertices)")
+    // { // TODO redo after refactor
+    //     // make sure that the proposed points are still roughly the same (even after tinkering with grid_size)
+    //     // this would still mean that we have to redo the below data every time we chang the grid scale -> but it isn't too problematic for now
+    //     constexpr auto extent = 64u;
 
-    SECTION("Triangle to Grid (outside vertices)")
-    {
-        // make sure that the proposed points are still roughly the same (even after tinkering with grid_size)
-        // this would still mean that we have to redo the below data every time we chang the grid scale -> but it isn't too problematic for now
-        constexpr auto extent = 64u;
+    //     const std::vector<glm::u32vec4> style_buffer = { glm::u32vec4(0, 0, 0, 0) };
 
-        const std::vector<glm::u32vec4> style_buffer = { glm::u32vec4(0, 0, 0, 0) };
+    //     const std::vector<std::vector<glm::vec2>> triangle_left_hypo = { { glm::vec2(-10, 30), glm::vec2(30, 5), glm::vec2(50, 80) } };
+    //     const std::vector<std::vector<glm::vec2>> triangle_right_hypo = { { glm::vec2(5, -5), glm::vec2(90, 10), glm::vec2(5, 15) } };
 
-        const std::vector<std::vector<glm::vec2>> triangle_left_hypo = { { glm::vec2(-10, 30), glm::vec2(30, 5), glm::vec2(50, 80) } };
-        const std::vector<std::vector<glm::vec2>> triangle_right_hypo = { { glm::vec2(5, -5), glm::vec2(90, 10), glm::vec2(5, 15) } };
+    //     std::vector<nucleus::vector_layer::details::GeometryData> tile_data { { triangle_left_hypo, extent, { { 0, 0 } }, true }, { triangle_right_hypo,
+    //     extent, { { 0, 1 } }, true } };
 
-        std::vector<nucleus::vector_layer::details::GeometryData> tile_data { { triangle_left_hypo, extent, { { 0, 0 } }, true }, { triangle_right_hypo, extent, { { 0, 1 } }, true } };
+    //     auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
 
-        auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
+    //     auto raster = visualize_grid(processed, nucleus::vector_layer::constants::grid_size);
+    //     auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
-        auto raster = visualize_grid(processed.acceleration_grid, nucleus::vector_layer::constants::grid_size);
-        auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
+    //     auto tile = nucleus::vector_layer::details::create_gpu_tile(processed);
 
-        auto tile = nucleus::vector_layer::details::create_gpu_tile(processed);
+    //     CHECK(same_cells_are_filled(raster, tile.acceleration_grid));
 
-        CHECK(same_cells_are_filled(raster, tile.acceleration_grid));
+    //     auto data = tile.vertex_buffer->buffer();
+    //     REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] *
+    //     nucleus::vector_layer::constants::data_size[tile.buffer_info]); CHECK(data[0].x == 1081671760); CHECK(data[0].y == 1071186400); CHECK(data[0].z ==
+    //     1086915840); CHECK(data[1].x == 1075118000); CHECK(data[1].y == 1097400480); CHECK(data[1].z == 1075118320);
+    //     // the rest should be undefined -> -1u
+    //     CHECK(data[2].x == -1u);
+    //     CHECK(data[3].y == -1u);
 
-        // we provide two triangles that overlap at one point -> we expect four entries [1], ([1], [0]), [1]
-        auto index_buffer = tile.index_buffer->buffer();
-        REQUIRE(index_buffer.size()
-            == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::index_buffer_size_multiplier
-                * nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::index_buffer_size_multiplier);
-        CHECK(index_buffer[0] == nucleus::vector_layer::details::pack_index_buffer(1, 0, true));
-        CHECK(index_buffer[1] == nucleus::vector_layer::details::pack_index_buffer(1, 0, true));
-        CHECK(index_buffer[2] == nucleus::vector_layer::details::pack_index_buffer(0, 0, true));
-        CHECK(index_buffer[3] == nucleus::vector_layer::details::pack_index_buffer(0, 0, true));
-        // the rest should be undefined -> -1u
-        CHECK(index_buffer[4] == -1u);
-        CHECK(index_buffer[5] == -1u);
-        CHECK(index_buffer[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.5] == -1u);
+    //     CHECK(data[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.7].x == -1u);
 
-        auto data = tile.vertex_buffer->buffer();
-        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
-        CHECK(data[0].x == 1081671760);
-        CHECK(data[0].y == 1071186400);
-        CHECK(data[0].z == 1086915840);
-        CHECK(data[1].x == 1075118000);
-        CHECK(data[1].y == 1097400480);
-        CHECK(data[1].z == 1075118320);
-        // the rest should be undefined -> -1u
-        CHECK(data[2].x == -1u);
-        CHECK(data[3].y == -1u);
+    //     // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
+    //     //     std::cout << index_buffer[i] << std::endl;
+    //     // }
 
-        CHECK(data[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.7].x == -1u);
+    //     // std::cout << std::endl;
+    //     // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
+    //     //     std::cout << data[i] << std::endl;
+    //     // }
 
-        // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
-        //     std::cout << index_buffer[i] << std::endl;
-        // }
+    //     // // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
+    //     // image.save(QString("vector_layer_grid_triangles_outside.png"));
+    // }
 
-        // std::cout << std::endl;
-        // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
-        //     std::cout << data[i] << std::endl;
-        // }
+    // SECTION("Line to Grid")
+    // { // TODO redo after refactor
+    //     const std::vector<glm::u32vec4> style_buffer = { glm::u32vec4(0, 0, 0, 0), glm::u32vec4(1, 0, 0, 0) };
 
-        // // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
-        // image.save(QString("vector_layer_grid_triangles_outside.png"));
-    }
+    //     constexpr auto extent = 64;
+    //     const std::vector<std::vector<glm::vec2>> line0 = { { glm::vec2(10, 30), glm::vec2(30, 50), glm::vec2(50, 30) } };
 
-    SECTION("Line to Grid")
-    {
-        const std::vector<glm::u32vec4> style_buffer = { glm::u32vec4(0, 0, 0, 0), glm::u32vec4(1, 0, 0, 0) };
+    //     std::vector<nucleus::vector_layer::details::GeometryData> tile_data { { line0, extent, { { 0, 0 }, { 1, 1 } }, false } };
 
-        constexpr auto extent = 64;
-        const std::vector<std::vector<glm::vec2>> line0 = { { glm::vec2(10, 30), glm::vec2(30, 50), glm::vec2(50, 30) } };
+    //     auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
 
-        std::vector<nucleus::vector_layer::details::GeometryData> tile_data { { line0, extent, { { 0, 0 }, { 1, 1 } }, false } };
+    //     auto raster = visualize_grid(processed, nucleus::vector_layer::constants::grid_size);
+    //     auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
 
-        auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
+    //     // auto test_image = example_grid_data_triangles();
+    //     // CHECK(image == test_image);
 
-        auto raster = visualize_grid(processed.acceleration_grid, nucleus::vector_layer::constants::grid_size);
-        auto image = nucleus::tile::conversion::u8raster_to_qimage(raster);
+    //     auto tile = nucleus::vector_layer::details::create_gpu_tile(processed);
 
-        // auto test_image = example_grid_data_triangles();
-        // CHECK(image == test_image);
+    //     CHECK(same_cells_are_filled(raster, tile.acceleration_grid));
 
-        auto tile = nucleus::vector_layer::details::create_gpu_tile(processed);
+    //     // we provide two line segments that overlap at one point.
+    //     // the line has two "different" styles on two different layers
+    //     // we expect that the index buffer has indices 1) with only start 2) with only end 3) with both start and end indices
+    //     // furthermore we expect that layer with higher layer indices are stored earlier
 
-        CHECK(same_cells_are_filled(raster, tile.acceleration_grid));
+    //     auto data = tile.vertex_buffer->buffer();
+    //     REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] *
+    //     nucleus::vector_layer::constants::data_size[tile.buffer_info]); CHECK(data[0].x == 1076429280); CHECK(data[0].y == 1081672480); CHECK(data[0].z ==
+    //     1073807360); CHECK(data[1].x == 1081672480); CHECK(data[1].y == 1086915040); CHECK(data[1].z == 1073807360);
+    //     // the rest should be undefined -> -1u
+    //     CHECK(data[2].x == -1u);
+    //     CHECK(data[3].y == -1u);
+    //     CHECK(data[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.7].x == -1u);
 
-        // we provide two line segments that overlap at one point.
-        // the line has two "different" styles on two different layers
-        // we expect that the index buffer has indices 1) with only start 2) with only end 3) with both start and end indices
-        // furthermore we expect that layer with higher layer indices are stored earlier
-        auto index_buffer = tile.index_buffer->buffer();
-        REQUIRE(index_buffer.size()
-            == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::index_buffer_size_multiplier
-                * nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::index_buffer_size_multiplier);
-        // cells with only start
-        CHECK(index_buffer[0] == nucleus::vector_layer::details::pack_index_buffer(0, 1, false));
-        CHECK(index_buffer[1] == nucleus::vector_layer::details::pack_index_buffer(0, 0, false));
-        // cells with only end
-        CHECK(index_buffer[2] == nucleus::vector_layer::details::pack_index_buffer(1, 1, false));
-        CHECK(index_buffer[3] == nucleus::vector_layer::details::pack_index_buffer(1, 0, false));
-        // cells with both start and end
-        CHECK(index_buffer[4] == nucleus::vector_layer::details::pack_index_buffer(1, 1, false));
-        CHECK(index_buffer[5] == nucleus::vector_layer::details::pack_index_buffer(0, 1, false));
-        CHECK(index_buffer[6] == nucleus::vector_layer::details::pack_index_buffer(1, 0, false));
-        CHECK(index_buffer[7] == nucleus::vector_layer::details::pack_index_buffer(0, 0, false));
+    //     // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
+    //     //     std::cout << index_buffer[i] << std::endl;
+    //     // }
 
-        // the rest should be undefined -> -1u
-        CHECK(index_buffer[8] == -1u);
-        CHECK(index_buffer[9] == -1u);
-        CHECK(index_buffer[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.5] == -1u);
+    //     // std::cout << std::endl;
+    //     // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
+    //     //     std::cout << data[i] << std::endl;
+    //     // }
 
-        auto data = tile.vertex_buffer->buffer();
-        REQUIRE(data.size() == nucleus::vector_layer::constants::data_size[tile.buffer_info] * nucleus::vector_layer::constants::data_size[tile.buffer_info]);
-        CHECK(data[0].x == 1076429280);
-        CHECK(data[0].y == 1081672480);
-        CHECK(data[0].z == 1073807360);
-        CHECK(data[1].x == 1081672480);
-        CHECK(data[1].y == 1086915040);
-        CHECK(data[1].z == 1073807360);
-        // the rest should be undefined -> -1u
-        CHECK(data[2].x == -1u);
-        CHECK(data[3].y == -1u);
-        CHECK(data[nucleus::vector_layer::constants::data_size[tile.buffer_info] * 1.7].x == -1u);
-
-        // for (int i = 0; i < 10; ++i) { // DEBUG expected bridge data
-        //     std::cout << index_buffer[i] << std::endl;
-        // }
-
-        // std::cout << std::endl;
-        // for (int i = 0; i < 14; ++i) { // DEBUG expected triangle data
-        //     std::cout << data[i] << std::endl;
-        // }
-
-        // // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
-        image.save(QString("vector_layer_grid_lines.png"));
-    }
+    //     // // DEBUG: save image (image saved to build/Desktop-Profile/unittests/nucleus)
+    //     image.save(QString("vector_layer_grid_lines.png"));
+    // }
     SECTION("Simplify styles")
     {
         {
@@ -994,107 +762,38 @@ TEST_CASE("nucleus/vector_preprocess")
 
     SECTION("Triangle Data packer")
     {
-        {
-            // auto a = glm::ivec2(-4095, 0b000000000000);
-            // auto b = glm::ivec2(4095, 0b000000000000);
-            // auto c = glm::ivec2(-1, 0b000000000000);
-            // uint32_t style = 0b000000000000;
 
-            auto a = glm::ivec2(0b110101010100, 0b111101110100);
-            auto b = glm::ivec2(0b001111000101, 0b001111101101);
-            auto c = glm::ivec2(0b010110011011, 0b100111001110);
+        auto a = glm::i64vec2(0b010100, 0b110100);
+        auto b = glm::i64vec2(0b100101, 0b101101);
+        auto c = glm::i64vec2(0b011011, 0b001110);
 
-            auto packed = nucleus::vector_layer::details::pack_triangle_data(a, b, c);
-            auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
+        uint16_t style = 343u;
 
-            CHECK(a == glm::ivec2(std::get<0>(unpacked)));
-            CHECK(b == glm::ivec2(std::get<1>(unpacked)));
-            CHECK(c == glm::ivec2(std::get<2>(unpacked)));
+        auto packed = nucleus::vector_layer::details::pack_triangle_data(a, b, c, style);
+        auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
 
-            // std::cout << packed << std::endl;
-            // std::cout << a.x << " " << a.y << std::endl;
-            // std::cout << b.x << " " << b.y << std::endl;
-            // std::cout << c.x << " " << c.y << std::endl;
-            // std::cout << std::get<3>(unpacked) << std::endl;
-            // std::cout << int32_t(std::get<0>(unpacked).x) << " " << int32_t(std::get<0>(unpacked).y) << std::endl;
-            // std::cout << int32_t(std::get<1>(unpacked).x) << " " << int32_t(std::get<1>(unpacked).y) << std::endl;
-            // std::cout << int32_t(std::get<2>(unpacked).x) << " " << int32_t(std::get<2>(unpacked).y) << std::endl;
-            // std::cout << std::get<3>(unpacked) << std::endl;
-        }
-
-        {
-            // test with negative numbers
-            auto a = glm::ivec2(-nucleus::vector_layer::constants::tile_extent / 3.0, 0);
-            auto c = glm::ivec2(0, -nucleus::vector_layer::constants::tile_extent / 4.0);
-            auto b = glm::ivec2(nucleus::vector_layer::constants::tile_extent + -nucleus::vector_layer::constants::tile_extent / 5.0, -1);
-
-            auto packed = nucleus::vector_layer::details::pack_triangle_data(a, b, c);
-            auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
-
-            CHECK(a == glm::ivec2(std::get<0>(unpacked)));
-            CHECK(b == glm::ivec2(std::get<1>(unpacked)));
-            CHECK(c == glm::ivec2(std::get<2>(unpacked)));
-
-            // std::cout << packed << std::endl;
-            // std::cout << a.x << " " << a.y << std::endl;
-            // std::cout << b.x << " " << b.y << std::endl;
-            // std::cout << c.x << " " << c.y << std::endl;
-            // std::cout << std::get<3>(unpacked) << std::endl;
-            // std::cout << int32_t(std::get<0>(unpacked).x) << " " << int32_t(std::get<0>(unpacked).y) << std::endl;
-            // std::cout << int32_t(std::get<1>(unpacked).x) << " " << int32_t(std::get<1>(unpacked).y) << std::endl;
-            // std::cout << int32_t(std::get<2>(unpacked).x) << " " << int32_t(std::get<2>(unpacked).y) << std::endl;
-            // std::cout << std::get<3>(unpacked) << std::endl;
-        }
-
-        {
-            // test with negative numbers
-            auto a = glm::ivec2(0b010101010100 * -1, 0b011101110100);
-            auto b = glm::ivec2(0b001111000101, 0b001111101101 * -1);
-            auto c = glm::ivec2(0b010110011011 * -1, 0b010111001110 * -1);
-
-            auto packed = nucleus::vector_layer::details::pack_triangle_data(a, b, c);
-            auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
-
-            CHECK(a == glm::ivec2(std::get<0>(unpacked)));
-            CHECK(b == glm::ivec2(std::get<1>(unpacked)));
-            CHECK(c == glm::ivec2(std::get<2>(unpacked)));
-
-            // std::cout << packed << std::endl;
-            // std::cout << a.x << " " << a.y << std::endl;
-            // std::cout << b.x << " " << b.y << std::endl;
-            // std::cout << c.x << " " << c.y << std::endl;
-            // std::cout << std::get<3>(unpacked) << std::endl;
-            // std::cout << int32_t(std::get<0>(unpacked).x) << " " << int32_t(std::get<0>(unpacked).y) << std::endl;
-            // std::cout << int32_t(std::get<1>(unpacked).x) << " " << int32_t(std::get<1>(unpacked).y) << std::endl;
-            // std::cout << int32_t(std::get<2>(unpacked).x) << " " << int32_t(std::get<2>(unpacked).y) << std::endl;
-            // std::cout << std::get<3>(unpacked) << std::endl;
-        }
+        CHECK(a == glm::i64vec2(std::get<0>(unpacked)));
+        CHECK(b == glm::i64vec2(std::get<1>(unpacked)));
+        CHECK(c == glm::i64vec2(std::get<2>(unpacked)));
+        CHECK(style == std::get<3>(unpacked));
     }
 
     SECTION("Line Data packer")
     {
-        {
-            auto a = glm::ivec2(0b110101010100, 0b111101110100);
-            auto b = glm::ivec2(0b001111000101, 0b001111101101);
-            auto c = glm::ivec2(0, 0);
 
-            auto packed = nucleus::vector_layer::details::pack_line_data(a, b);
-            auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
+        auto a = glm::ivec2(0b010100, 0b110100);
+        auto b = glm::ivec2(0b100101, 0b101101);
+        auto c = glm::ivec2(0, 0);
 
-            CHECK(a == glm::ivec2(std::get<0>(unpacked)));
-            CHECK(b == glm::ivec2(std::get<1>(unpacked)));
-            CHECK(c == glm::ivec2(std::get<2>(unpacked)));
+        uint16_t style = 646u;
 
-            // std::cout << packed << std::endl;
-            // std::cout << a.x << " " << a.y << std::endl;
-            // std::cout << b.x << " " << b.y << std::endl;
-            // std::cout << c.x << " " << c.y << std::endl;
-            // std::cout << std::get<3>(unpacked) << std::endl;
-            // std::cout << int32_t(std::get<0>(unpacked).x) << " " << int32_t(std::get<0>(unpacked).y) << std::endl;
-            // std::cout << int32_t(std::get<1>(unpacked).x) << " " << int32_t(std::get<1>(unpacked).y) << std::endl;
-            // std::cout << int32_t(std::get<2>(unpacked).x) << " " << int32_t(std::get<2>(unpacked).y) << std::endl;
-            // std::cout << std::get<3>(unpacked) << std::endl;
-        }
+        auto packed = nucleus::vector_layer::details::pack_line_data(a, b, style);
+        auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
+
+        CHECK(a == glm::ivec2(std::get<0>(unpacked)));
+        CHECK(b == glm::ivec2(std::get<1>(unpacked)));
+        CHECK(c == glm::ivec2(std::get<2>(unpacked)));
+        CHECK(style == std::get<3>(unpacked));
     }
 
     SECTION("std::map order behaviour")

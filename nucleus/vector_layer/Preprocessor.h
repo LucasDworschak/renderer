@@ -27,6 +27,8 @@
 #include "Style.h"
 #include <radix/hasher.h>
 
+#include <clipper2/clipper.h>
+
 namespace nucleus::vector_layer {
 
 using namespace nucleus::tile;
@@ -38,17 +40,27 @@ namespace details {
     // coordinates 14 bits
     //
     constexpr int all_bits = 32;
-    constexpr int coordinate_bits = 14;
+    constexpr int coordinate_bits = 8;
+    constexpr int coordinate_bits_buffer = 2; // those bits can be used to address coordinates outside cell
 
-    constexpr int style_bits_per_coord = all_bits - (2 * coordinate_bits);
+    constexpr int style_bits = all_bits - (2 * coordinate_bits);
 
     constexpr int coordinate_shift1 = all_bits - coordinate_bits;
     constexpr int coordinate_shift2 = all_bits - (2 * coordinate_bits);
+    constexpr int coordinate_shift3 = all_bits - (3 * coordinate_bits);
+    constexpr int coordinate_shift4 = all_bits - (4 * coordinate_bits);
 
     constexpr uint32_t coordinate_bitmask = (1u << coordinate_bits) - 1u;
+    constexpr int32_t geometry_offset = coordinate_bitmask >> coordinate_bits_buffer;
     //
     // end constants for data packing/unpacking
     /////////////////////////////////////////////
+
+    struct ClipperRect {
+        Clipper2Lib::RectClip64 clipper;
+        Clipper2Lib::Rect64 rect;
+        bool is_done;
+    };
 
     class PointCollectionVec2 : public std::vector<std::vector<glm::vec2>> {
     public:
@@ -74,14 +86,16 @@ namespace details {
         }
     };
 
-    using VectorLayerGrid = std::vector<std::map<uint32_t, uint32_t>>;
+    using VectorLayerCell = std::map<uint32_t, std::vector<glm::u32vec2>>;
+    using VectorLayerGrid = std::vector<VectorLayerCell>;
+    // using VectorLayerGrid = std::vector<std::map<uint32_t, uint32_t>>;
 
-    struct VectorLayerCollection {
-    public:
-        std::vector<glm::u32vec3> vertex_buffer;
-        std::vector<uint32_t> index_buffer;
-        VectorLayerGrid acceleration_grid;
-    };
+    // struct VectorLayerCollection {
+    //     std::vector<glm::u32vec3> geometry_buffer;
+    //     // std::vector<glm::u32vec3> vertex_buffer;
+    //     // std::vector<uint32_t> index_buffer;
+    //     VectorLayerGrid acceleration_grid;
+    // };
 
     struct GeometryData {
         std::vector<std::vector<glm::vec2>> vertices;
@@ -90,19 +104,24 @@ namespace details {
         bool is_polygon;
     };
 
-    VectorLayerCollection preprocess_geometry(const std::vector<GeometryData>& data, const std::vector<glm::u32vec4> style_buffer);
+    VectorLayerGrid preprocess_geometry(const std::vector<GeometryData>& data, const std::vector<glm::u32vec4> style_buffer);
 
-    GpuVectorLayerTile create_gpu_tile(const VectorLayerCollection& layer_collection);
+    nucleus::Raster<ClipperRect> generate_clipper2_grid(unsigned steps);
+    std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes);
+    void triangulize_earcut(const Clipper2Lib::Paths64& polygon_points,
+        std::map<uint32_t, std::vector<glm::u32vec3>>* temp_cell,
+        const std::vector<std::pair<uint32_t, uint32_t>>& style_and_layer_indices);
+
+    GpuVectorLayerTile create_gpu_tile(const VectorLayerGrid& temp_grid);
 
     std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
 
     std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(std::vector<std::pair<uint32_t, uint32_t>> styles, const std::vector<glm::u32vec4> style_buffer);
 
-    uint32_t pack_index_buffer(uint32_t geometry_index, uint32_t style_index, bool polygon);
+    glm::u32vec2 pack_triangle_data(glm::i64vec2 a, glm::i64vec2 b, glm::i64vec2 c, uint16_t style_layer);
+    glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_layer);
+    std::tuple<glm::ivec2, glm::ivec2, glm::ivec2, uint16_t> unpack_triangle_data(glm::uvec2 packed);
 
-    glm::uvec3 pack_triangle_data(glm::vec2 a, glm::vec2 b, glm::vec2 c);
-    glm::uvec3 pack_line_data(glm::vec2 a, glm::vec2 b);
-    std::tuple<glm::vec2, glm::vec2, glm::vec2> unpack_triangle_data(glm::uvec3 packed);
 } // namespace details
 
 GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
