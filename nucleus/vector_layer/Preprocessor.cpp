@@ -32,6 +32,13 @@
 
 #include <earcut.hpp>
 
+// TODO performance
+// - when to sort tile data by layer
+//     - sorting it while parsing
+//          -> duplicates the data -> we have to do the clipping multiple times
+//     - sorting it afterwards (currently)
+//          -> we need the temp_grid structure -> by using other method we might be able to reduce temp data holders
+
 // allow vec2 points for earcut input
 namespace mapbox {
 namespace util {
@@ -64,10 +71,8 @@ GpuVectorLayerTile create_default_gpu_tile()
     GpuVectorLayerTile default_tile;
     default_tile.buffer_info = 0;
     default_tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(glm::uvec2(constants::grid_size), 0));
-    default_tile.index_buffer = std::make_shared<const nucleus::Raster<uint32_t>>(
-        nucleus::Raster<uint32_t>(glm::uvec2(constants::data_size[0] * constants::index_buffer_size_multiplier), -1u));
-    default_tile.vertex_buffer
-        = std::make_shared<const nucleus::Raster<glm::u32vec3>>(nucleus::Raster<glm::u32vec3>(glm::uvec2(constants::data_size[0]), glm::u32vec3(-1u)));
+    default_tile.geometry_buffer
+        = std::make_shared<const nucleus::Raster<glm::u32vec2>>(nucleus::Raster<glm::u32vec2>(glm::uvec2(constants::data_size[0]), glm::u32vec2(-1u)));
 
     return default_tile;
 }
@@ -87,9 +92,13 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
     auto tile_data = details::parse_tile(id, vector_tile_data, style);
 
     const auto style_buffer = style.styles()->buffer();
-    auto temp_grid = details::preprocess_geometry(tile_data, style_buffer);
+    auto temp_data = details::preprocess_geometry(tile_data, style_buffer);
 
-    auto tile = details::create_gpu_tile(temp_grid);
+    // return if not a single thing was written
+    if (temp_data.geometry_amount == 0)
+        return {};
+
+    auto tile = details::create_gpu_tile(temp_data);
     tile.id = id;
 
     return tile;
@@ -180,61 +189,66 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
 glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_layer)
 {
     // TODO -> possibly need to store additional values here in the future -> refactor this and pack_triangle_data to pack it efficiently
-    return pack_triangle_data(a, b, { 0, 0 }, style_layer);
+    return pack_triangle_data({ a, b, { 0, 0 }, style_layer, false });
 }
 
-glm::u32vec2 pack_triangle_data(glm::i64vec2 a, glm::i64vec2 b, glm::i64vec2 c, uint16_t style_layer)
+glm::u32vec2 pack_triangle_data(VectorLayerData data)
 {
     glm::u32vec2 packed_data;
 
-    a += geometry_offset;
-    b += geometry_offset;
-    c += geometry_offset;
+    data.a += geometry_offset;
+    data.b += geometry_offset;
+    data.c += geometry_offset;
 
     // make sure that we do not remove bits from the coordinates
-    assert((uint32_t(a.x) & coordinate_bitmask) == uint32_t(a.x));
-    assert((uint32_t(a.y) & coordinate_bitmask) == uint32_t(a.y));
-    assert((uint32_t(b.x) & coordinate_bitmask) == uint32_t(b.x));
-    assert((uint32_t(b.y) & coordinate_bitmask) == uint32_t(b.y));
-    assert((uint32_t(c.x) & coordinate_bitmask) == uint32_t(c.x));
-    assert((uint32_t(c.y) & coordinate_bitmask) == uint32_t(c.y));
-    assert(style_layer < ((1u << style_bits) - 1u));
+    assert((uint32_t(data.a.x) & coordinate_bitmask) == uint32_t(data.a.x));
+    assert((uint32_t(data.a.y) & coordinate_bitmask) == uint32_t(data.a.y));
+    assert((uint32_t(data.b.x) & coordinate_bitmask) == uint32_t(data.b.x));
+    assert((uint32_t(data.b.y) & coordinate_bitmask) == uint32_t(data.b.y));
+    assert((uint32_t(data.c.x) & coordinate_bitmask) == uint32_t(data.c.x));
+    assert((uint32_t(data.c.y) & coordinate_bitmask) == uint32_t(data.c.y));
+    // assert(style_layer < ((1u << style_bits) - 1u));
+    assert(constants::style_bits + 1 <= available_style_bits); // make sure that the stylebits we need are available here
 
-    packed_data.x = uint32_t(a.x) << coordinate_shift1;
-    packed_data.x = packed_data.x | ((uint32_t(a.y) & coordinate_bitmask) << coordinate_shift2);
+    packed_data.x = uint32_t(data.a.x) << coordinate_shift1;
+    packed_data.x = packed_data.x | ((uint32_t(data.a.y) & coordinate_bitmask) << coordinate_shift2);
 
-    packed_data.x = packed_data.x | ((uint32_t(b.x) & coordinate_bitmask) << coordinate_shift3);
-    packed_data.x = packed_data.x | ((uint32_t(b.y) & coordinate_bitmask) << coordinate_shift4);
+    packed_data.x = packed_data.x | ((uint32_t(data.b.x) & coordinate_bitmask) << coordinate_shift3);
+    packed_data.x = packed_data.x | ((uint32_t(data.b.y) & coordinate_bitmask) << coordinate_shift4);
 
-    packed_data.y = uint32_t(c.x) << coordinate_shift1;
-    packed_data.y = packed_data.y | ((uint32_t(c.y) & coordinate_bitmask) << coordinate_shift2);
+    packed_data.y = uint32_t(data.c.x) << coordinate_shift1;
+    packed_data.y = packed_data.y | ((uint32_t(data.c.y) & coordinate_bitmask) << coordinate_shift2);
 
-    packed_data.y = packed_data.y | style_layer;
+    packed_data.y = packed_data.y | ((data.style_index << 1) | ((data.is_polygon) ? 1u : 0u));
+    // alternative only for neceesary for shader testing
+    // packed_data.y = packed_data.y | ((data.style_index << 2) | (((data.should_blend) ? 1u : 0u) << 1) | ((data.is_polygon) ? 1u : 0u));
 
     return packed_data;
 }
 
-std::tuple<glm::ivec2, glm::ivec2, glm::ivec2, uint16_t> unpack_triangle_data(glm::uvec2 packed_data)
+VectorLayerData unpack_triangle_data(glm::uvec2 packed_data)
 {
-    glm::ivec2 a;
-    glm::ivec2 b;
-    glm::ivec2 c;
-    uint16_t style;
+    VectorLayerData unpacked_data;
 
-    a.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
-    a.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
-    b.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift3)) >> coordinate_shift3);
-    b.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift4)) >> coordinate_shift4);
-    c.x = int((packed_data.y & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
-    c.y = int((packed_data.y & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
+    unpacked_data.a.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
+    unpacked_data.a.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
+    unpacked_data.b.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift3)) >> coordinate_shift3);
+    unpacked_data.b.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift4)) >> coordinate_shift4);
+    unpacked_data.c.x = int((packed_data.y & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
+    unpacked_data.c.y = int((packed_data.y & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
 
-    style = packed_data.y & ((1u << style_bits) - 1u);
+    const uint32_t style_and_blend = (packed_data.y & ((1u << available_style_bits) - 1u)) >> 1;
+    // NOTE: the should_blend bit is only necessary for the shader -> on cpu side we do not need to separate them
+    unpacked_data.style_index = style_and_blend; // >> 1;
+    // unpacked_data.should_blend = (style_and_blend & 1u) == 1u;
 
-    a -= geometry_offset;
-    b -= geometry_offset;
-    c -= geometry_offset;
+    unpacked_data.is_polygon = (packed_data.y & 1u) == 1u;
 
-    return { a, b, c, style };
+    unpacked_data.a -= geometry_offset;
+    unpacked_data.b -= geometry_offset;
+    unpacked_data.c -= geometry_offset;
+
+    return unpacked_data;
 }
 
 std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes)
@@ -255,7 +269,8 @@ std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<
     return { 0, 0 };
 }
 
-void triangulize_earcut(
+// returns how many triangles have been generated;
+size_t triangulize_earcut(
     const Clipper2Lib::Paths64& polygon_points, VectorLayerCell* temp_cell, const std::vector<std::pair<uint32_t, uint32_t>>& style_and_layer_indices)
 {
     auto indices = mapbox::earcut<uint32_t>(polygon_points);
@@ -282,11 +297,15 @@ void triangulize_earcut(
 
         for (const auto& style_layer : style_and_layer_indices) { // TODO currently (at the worst tile we are looking at) there is only one style/layer -> maybe
                                                                   // we could optimize this by not using a for loop?
-            const auto data = nucleus::vector_layer::details::pack_triangle_data({ p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.first);
+            // const auto data = nucleus::vector_layer::details::pack_triangle_data2({ p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.first, true);
+            const auto data = nucleus::vector_layer::details::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.first, true });
 
             (*temp_cell)[style_layer.second].push_back(data);
         }
     }
+
+    // returns how many triangles have been generated;
+    return indices.size() / 3;
 }
 
 nucleus::Raster<ClipperRect> generate_clipper2_grid(unsigned steps)
@@ -296,7 +315,8 @@ nucleus::Raster<ClipperRect> generate_clipper2_grid(unsigned steps)
     std::vector<ClipperRect> grid;
     for (unsigned y = 0; y < steps; y++) {
         for (unsigned x = 0; x < steps; x++) {
-            const auto rect = Clipper2Lib::Rect64(x * step_size, y * step_size, (x + 1) * step_size - 1, (y + 1) * step_size - 1);
+            // const auto rect = Clipper2Lib::Rect64(x * step_size, y * step_size, (x + 1) * step_size - 1, (y + 1) * step_size - 1);
+            const auto rect = Clipper2Lib::Rect64(x * step_size, y * step_size, (x + 1) * step_size, (y + 1) * step_size);
             grid.emplace_back(ClipperRect { Clipper2Lib::RectClip64(rect), rect, false });
         }
     }
@@ -307,20 +327,20 @@ nucleus::Raster<ClipperRect> generate_clipper2_grid(unsigned steps)
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-VectorLayerGrid preprocess_geometry(const std::vector<GeometryData>& data, const std::vector<glm::u32vec4>)
+VectorLayerMeta preprocess_geometry(const std::vector<GeometryData>& data, const std::vector<glm::u32vec4>)
 {
 
     // TODOs
     // - accelleration grid vector<map> to array<map> since size is given from start
     // -- maybe array<array<vector> -> since we also know the max amount of layer_indices and we can then also create the std::vectors with a default size
     // beforehand
-    // - add index to clipper_grid (or use index from visit function?
-    // - use index for accelleration grid and fill it
 
     auto clipper_grid = generate_clipper2_grid(constants::grid_size);
     auto temp_grid = VectorLayerGrid(constants::grid_size * constants::grid_size, VectorLayerCell());
 
     const auto scale = float(clipper_grid.width()) / float(constants::tile_extent);
+
+    size_t geometry_amount = 0;
 
     // create the triangles from polygons
     for (size_t i = 0; i < data.size(); ++i) {
@@ -331,7 +351,7 @@ VectorLayerGrid preprocess_geometry(const std::vector<GeometryData>& data, const
         if (data[i].is_polygon) {
 
             // GetBounds
-            Clipper2Lib::BoundedPaths64 shapes; // TODO move shape generation to previous method (parse_tile)
+            Clipper2Lib::BoundedPaths64 shapes; // TODO move shape generation to parse_tile
             shapes.reserve(data[i].vertices.size());
             for (size_t j = 0; j < data[i].vertices.size(); j++) {
 
@@ -340,6 +360,7 @@ VectorLayerGrid preprocess_geometry(const std::vector<GeometryData>& data, const
                 for (size_t k = 0; k < data[i].vertices[j].size(); k++) {
                     p.path.emplace_back(data[i].vertices[j][k].x, data[i].vertices[j][k].y);
                 }
+                // TODO is it more efficient if we calculate the bounds within for loop? (we do not need to loop over every vertice twice)
                 p.bound = Clipper2Lib::GetBounds(p.path);
 
                 aabb.expand_by({ float(p.bound.left) * scale, float(p.bound.top) * scale });
@@ -348,7 +369,7 @@ VectorLayerGrid preprocess_geometry(const std::vector<GeometryData>& data, const
 
             const auto style_and_layer_indices = data[i].style_and_layer_indices;
 
-            clipper_grid.visit(aabb, [&temp_grid, &shapes, &style_and_layer_indices](glm::uvec2 cell_pos, ClipperRect cell) {
+            clipper_grid.visit(aabb, [&temp_grid, &shapes, &style_and_layer_indices, &geometry_amount](glm::uvec2 cell_pos, ClipperRect cell) {
                 if (cell.is_done)
                     return;
 
@@ -362,9 +383,48 @@ VectorLayerGrid preprocess_geometry(const std::vector<GeometryData>& data, const
 
                 auto& temp_cell = temp_grid[int(cell_pos.x) + constants::grid_size * int(cell_pos.y)];
 
-                triangulize_earcut(solution, &temp_cell, style_and_layer_indices);
+                geometry_amount += triangulize_earcut(solution, &temp_cell, style_and_layer_indices);
             });
         } else {
+            // TODO here
+
+            // polylines
+            // Clipper2Lib::BoundedPaths64 shapes; // TODO move shape generation to parse_tile
+            // shapes.reserve(data[i].vertices.size());
+            // for (size_t j = 0; j < data[i].vertices.size(); j++) {
+
+            //     auto& p = shapes.emplace_back();
+            //     p.path.reserve(data[i].vertices[j].size());
+            //     for (size_t k = 0; k < data[i].vertices[j].size(); k++) {
+            //         p.path.emplace_back(data[i].vertices[j][k].x, data[i].vertices[j][k].y);
+            //     }
+            //     p.bound = Clipper2Lib::GetBounds(p.path);
+
+            //     aabb.expand_by({ float(p.bound.left) * scale, float(p.bound.top) * scale });
+            //     aabb.expand_by({ std::ceil(float(p.bound.right) * scale), std::ceil(float(p.bound.bottom) * scale) });
+            // }
+
+            // const auto style_and_layer_indices = data[i].style_and_layer_indices;
+
+            // clipper_grid.visit(aabb, [&temp_grid, &shapes, &style_and_layer_indices, &geometry_amount](glm::uvec2 cell_pos, ClipperRect cell) {
+            //     if (cell.is_done)
+            //         return;
+
+            //     Clipper2Lib::Paths64 solution = cell.clipper.Execute(shapes);
+
+            //     if (solution.empty())
+            //         return;
+
+            //     // anchor clipped paths to cell origin
+            //     solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
+
+            //     auto& temp_cell = temp_grid[int(cell_pos.x) + constants::grid_size * int(cell_pos.y)];
+
+            //     geometry_amount += triangulize_earcut(solution, &temp_cell, style_and_layer_indices);
+            // });
+
+            // TODO
+
             // // polylines
             // for (size_t j = 0; j < data[i].vertices.size(); ++j) {
             //     for (size_t k = 0; k < data[i].vertices[j].size() - 1; ++k) {
@@ -413,7 +473,7 @@ VectorLayerGrid preprocess_geometry(const std::vector<GeometryData>& data, const
 
     // qDebug() << "num indices: " << data_offset; // DEBUG how many indices are used
 
-    return temp_grid;
+    return { temp_grid, geometry_amount };
 }
 
 /*
@@ -426,109 +486,70 @@ VectorLayerGrid preprocess_geometry(const std::vector<GeometryData>& data, const
  *      nevertheless for more complex entries this might be overkill and take more time to compute than it is worth -> only necessary if we need more buffer space
  * simultaneously we also generate the final grid for the tile that stores the offset and size for lookups into the index_bridge
  */
-GpuVectorLayerTile create_gpu_tile(const VectorLayerGrid& /*temp_grid*/) // TODO
+GpuVectorLayerTile create_gpu_tile(const VectorLayerMeta& meta)
 {
     GpuVectorLayerTile tile;
 
-    // std::unordered_map<std::vector<uint32_t>, uint32_t, Hasher> unique_entries;
-    // std::vector<uint32_t> acceleration_grid;
-    // std::vector<uint32_t> index_buffer;
-    // std::vector<glm::u32vec3> data_triangle = layer_collection.geometry_buffer; // TODO do we need to put this into temp var?
+    uint fitting_cascade_index = uint(-1u);
+    for (uint i = 0; i < constants::data_size.size(); i++) {
+        if (meta.geometry_amount <= constants::data_size[i] * constants::data_size[i]) {
+            fitting_cascade_index = i;
+            break;
+        }
+    }
+    // if assert is triggered -> consider adding a value to constants::data_size
+    if (fitting_cascade_index >= constants::data_size.size())
+        qDebug() << meta.geometry_amount << "data does not fit";
+    assert(fitting_cascade_index < constants::data_size.size());
 
-    // uint32_t start_offset = 0;
+    std::vector<uint32_t> acceleration_grid;
+    std::vector<glm::u32vec2> geometry_buffer;
+    geometry_buffer.reserve(constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index]);
 
-    // // size_t max = 0;
+    // size_t max = 0;
 
-    // // TODO performance: early exit if not a single thing was written -> currently grid is all 0
+    for (size_t i = 0; i < meta.temp_grid.size(); ++i) {
+        // go through every cell
+        if (meta.temp_grid[i].size() == 0) {
+            acceleration_grid.push_back(0); // no data -> only add an emtpy cell
+        } else {
 
-    // for (size_t i = 0; i < layer_collection.acceleration_grid.size(); ++i) {
-    //     // go through every cell
-    //     if (layer_collection.acceleration_grid[i].size() == 0) {
-    //         acceleration_grid.push_back(0); // no data -> only add an emtpy cell
-    //     } else {
-    //         auto cell_indices = std::vector<uint32_t>();
-    //         std::transform(
-    //             layer_collection.acceleration_grid[i].crbegin(), layer_collection.acceleration_grid[i].crend(), std::back_inserter(cell_indices), [](const
-    //             std::pair<uint32_t, uint32_t> pair) {
-    //                 return pair.second;
-    //             });
+            auto start_offset = geometry_buffer.size();
 
-    //         if (unique_entries.contains(cell_indices)) {
-    //             // we already have such an entry -> get the offset_size from there
-    //             acceleration_grid.push_back(unique_entries[cell_indices]);
-    //         } else {
-    //             // we have to add a new element
-    //             // if (layer_collection.acceleration_grid[i].size() > max)
-    //             //     max = layer_collection.acceleration_grid[i].size();
+            for (auto it = meta.temp_grid[i].crbegin(); it != meta.temp_grid[i].crend(); ++it) {
+                geometry_buffer.insert(geometry_buffer.end(), it->second.begin(), it->second.end());
+            }
+            auto cell_size = geometry_buffer.size() - start_offset;
 
-    //             // TODO enable assert again
-    //             // assert(layer_collection.acceleration_grid[i].size() < 256); // make sure that we are not removing indices we want to draw
-    //             size_t index_buffer_size = layer_collection.acceleration_grid[i].size();
-    //             if (index_buffer_size > 255)
-    //                 index_buffer_size = 255; // just cap it to 255 as we currently cant go any higher
+            // we have to add a new element
+            // if (cell_size > max)
+            //     max = cell_size;
 
-    //             const auto offset_size = nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(index_buffer_size));
-    //             unique_entries[cell_indices] = offset_size;
+            // TODO enable assert again
+            // assert(cell_size< 256); // make sure that we are not removing indices we want to draw
+            if (cell_size > 255)
+                cell_size = 255; // just cap it to 255 as we currently cant go any higher
 
-    //             acceleration_grid.push_back(offset_size);
+            const auto offset_size = nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(cell_size));
+            acceleration_grid.push_back(offset_size);
 
-    //             // TODO possible performance
-    //             // change R32UI to RGBA32UI to save 4 indices at the same time
-    //             // -> we most likely want to test a few indices one after another and this might be better
-    //             // also possible to use a 2 bits in the offset_size to indicate the start (to pack the indices tightly even if the previous indices belong to
-    //             previous cell)
+            // TODO possible performance
+            // change geometry buffer to RGBA32UI to save 2 geometries at the same time
+            // -> we most likely want to test a few geometries one after another and this might be better
+            // also possible to use a 1 bit in the offset_size to indicate the start (to pack the data tightly even if the previous geometry belongs to
+            // previous cell)
+        }
+    }
 
-    //             // add the indices to the bridge
-    //             index_buffer.insert(index_buffer.end(), cell_indices.begin(), cell_indices.end());
+    // make sure that the buffer size is still like we expected and resize the data to actual buffer size
+    assert(geometry_buffer.size() < constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index]);
+    geometry_buffer.resize(constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index], glm::u32vec2(-1u));
 
-    //             start_offset += cell_indices.size();
-    //         }
-    //     }
-    // }
+    tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size, std::move(acceleration_grid)));
+    tile.geometry_buffer = std::make_shared<const nucleus::Raster<glm::u32vec2>>(
+        nucleus::Raster<glm::u32vec2>(constants::data_size[fitting_cascade_index], std::move(geometry_buffer)));
 
-    // // find fitting cascades for the index and vertex data
-    // // both index and vertex buffer are set to the same size, as this makes things easier in the GpuMultiArrayHelper
-    // // TODO performance: check how much index and vertex buffer sizes differ from each other if they differ much you might want to use different cascade
-    // levels
-    // // -> but this causes another possible bottleneck by having to add more GpuArrayHelpers, so that we can accurately
-    // //      distinguish between index and vertex buffer in GpuMultiArrayHelper::generate_dictionary()
-    // uint8_t fitting_cascade_index = uint8_t(-1u);
-    // for (uint8_t i = 0; i < constants::data_size.size(); i++) {
-    //     const auto data_size_sq = constants::data_size[i] * constants::data_size[i];
-    //     if (index_buffer.size() <= data_size_sq * constants::index_buffer_size_multiplier * constants::index_buffer_size_multiplier && data_triangle.size()
-    //     <= data_size_sq) {
-    //         fitting_cascade_index = i;
-    //         break;
-    //     }
-    // }
-
-    // // qDebug() << "cascade_data:" << index_buffer.size() << data_triangle.size();
-
-    // // qDebug() << "index: " << start_offset << fitting_cascade_index;
-
-    // // qDebug() << "indices: " << index_buffer.size() << data_triangle.size();
-
-    // // if assert is triggered -> consider adding a value to constants::data_size
-    // if (fitting_cascade_index >= constants::data_size.size())
-    //     qDebug() << index_buffer.size() << data_triangle.size() << "data does not fit";
-    // assert(fitting_cascade_index < constants::data_size.size());
-
-    // // resize data to buffer size
-    // index_buffer.resize(
-    //     constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index] * constants::index_buffer_size_multiplier *
-    //     constants::index_buffer_size_multiplier, -1u);
-    // data_triangle.resize(constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index], glm::u32vec3(-1u));
-
-    // tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size,
-    // std::move(acceleration_grid))); tile.index_buffer
-    //     = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::data_size[fitting_cascade_index] *
-    //     constants::index_buffer_size_multiplier, std::move(index_buffer)));
-    // tile.vertex_buffer = std::make_shared<const nucleus::Raster<glm::u32vec3>>(nucleus::Raster<glm::u32vec3>(constants::data_size[fitting_cascade_index],
-    // std::move(data_triangle)));
-
-    // tile.buffer_info = fitting_cascade_index;
-
-    // TODO do the same for lines
+    tile.buffer_info = fitting_cascade_index;
 
     return tile;
 }

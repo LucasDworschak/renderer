@@ -57,8 +57,7 @@ private:
     std::shared_ptr<ShaderProgram> m_shader;
 
     std::unique_ptr<Texture> m_acceleration_grid_texture;
-    std::vector<std::unique_ptr<Texture>> m_index_buffer_texture;
-    std::vector<std::unique_ptr<Texture>> m_vertex_buffer_texture;
+    std::vector<std::unique_ptr<Texture>> m_geometry_buffer_texture;
     std::unique_ptr<Texture> m_styles_texture;
 
     std::unique_ptr<Texture> m_instanced_zoom;

@@ -32,14 +32,10 @@ uniform highp usampler2D instanced_texture_zoom_sampler;
 
 uniform highp usampler2D styles_sampler;
 
-uniform highp usampler2DArray index_buffer_sampler_0;
-uniform highp usampler2DArray index_buffer_sampler_1;
-uniform highp usampler2DArray index_buffer_sampler_2;
-uniform highp usampler2DArray index_buffer_sampler_3;
-uniform highp usampler2DArray vertex_buffer_sampler_0;
-uniform highp usampler2DArray vertex_buffer_sampler_1;
-uniform highp usampler2DArray vertex_buffer_sampler_2;
-uniform highp usampler2DArray vertex_buffer_sampler_3;
+uniform highp usampler2DArray geometry_buffer_sampler_0;
+uniform highp usampler2DArray geometry_buffer_sampler_1;
+uniform highp usampler2DArray geometry_buffer_sampler_2;
+uniform highp usampler2DArray geometry_buffer_sampler_3;
 
 layout (location = 0) out lowp vec3 texout_albedo;
 layout (location = 1) out highp vec4 texout_position;
@@ -166,65 +162,24 @@ lowp ivec2 to_dict_pixel(mediump uint hash) {
     return ivec2(int(hash & 255u), int(hash >> 8u));
 }
 
-struct DrawData
-{
-    highp uint geometry_index;
-    highp uint style_index;
-    bool is_polygon;
-    bool should_blend;
-};
-
-DrawData parse_index_data(highp uint data)
-{
-    DrawData parsed_data;
-
-    parsed_data.geometry_index = data >> (style_bits + 1);
-    highp uint style_and_blend = (data >> 1) & style_bit_mask;
-    parsed_data.style_index = style_and_blend >> 1;
-    parsed_data.should_blend = (style_and_blend & 1u) == 1u;
-    parsed_data.is_polygon = (data & 1u) == 1u;
-
-    return parsed_data;
-}
-
-DrawData index_sample(lowp uint sampler_index, highp uint pixel_index, highp uint texture_layer)
-{
-    // NOTE index sample currently have double the size of vertex buffer -> we need to double the dict_pixel lookups
-    if(sampler_index == 0u)
-    {
-        return parse_index_data(texelFetch(index_buffer_sampler_0, ivec3(to_dict_pixel_128(pixel_index), texture_layer), 0).r);
-    }
-    else if(sampler_index == 1u)
-    {
-        return parse_index_data(texelFetch(index_buffer_sampler_1, ivec3(to_dict_pixel_256(pixel_index), texture_layer), 0).r);
-    }
-    else if(sampler_index == 2u)
-    {
-        return parse_index_data(texelFetch(index_buffer_sampler_2, ivec3(to_dict_pixel_512(pixel_index), texture_layer), 0).r);
-    }
-    else
-    {
-        return parse_index_data(texelFetch(index_buffer_sampler_3, ivec3(to_dict_pixel_1024(pixel_index), texture_layer), 0).r);
-    }
-}
 
 VectorLayerData vertex_sample(lowp uint sampler_index, highp uint index, highp uint texture_layer)
 {
     if(sampler_index == 0u)
     {
-        return unpack_vectorlayer_data(texelFetch(vertex_buffer_sampler_0, ivec3(to_dict_pixel_64(index), texture_layer), 0).rgb);
+        return unpack_vectorlayer_data(texelFetch(geometry_buffer_sampler_0, ivec3(to_dict_pixel_64(index), texture_layer), 0).rg);
     }
     else if(sampler_index == 1u)
     {
-        return unpack_vectorlayer_data(texelFetch(vertex_buffer_sampler_1, ivec3(to_dict_pixel_128(index), texture_layer), 0).rgb);
+        return unpack_vectorlayer_data(texelFetch(geometry_buffer_sampler_1, ivec3(to_dict_pixel_128(index), texture_layer), 0).rg);
     }
     else if(sampler_index == 2u)
     {
-        return unpack_vectorlayer_data(texelFetch(vertex_buffer_sampler_2, ivec3(to_dict_pixel_256(index), texture_layer), 0).rgb);
+        return unpack_vectorlayer_data(texelFetch(geometry_buffer_sampler_2, ivec3(to_dict_pixel_256(index), texture_layer), 0).rg);
     }
     else
     {
-        return unpack_vectorlayer_data(texelFetch(vertex_buffer_sampler_3, ivec3(to_dict_pixel_512(index), texture_layer), 0).rgb);
+        return unpack_vectorlayer_data(texelFetch(geometry_buffer_sampler_3, ivec3(to_dict_pixel_512(index), texture_layer), 0).rg);
     }
 }
 
@@ -300,11 +255,11 @@ void draw_layer(inout Layer_Style layer_style, inout lowp vec4 pixel_color, high
     }
 }
 
-bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, inout lowp vec4 pixel_color, highp float float_zoom_offset)
+bool check_and_draw_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, inout lowp vec4 pixel_color, highp float float_zoom_offset)
 {
     // we need to make sure that a layer with < 1 opacity does only fill the correct amount of opacity
     // we therefore fill colors per layerstyle
-    if(layer_style.last_style == draw_data.style_index)
+    if(layer_style.last_style == geometry_data.style_index)
     {
         if(layer_style.layer_alpha >= 1.0)
         {
@@ -327,12 +282,12 @@ bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, ino
         // next style (if we blend) will be always +1 (since we only blend one pixel)
         lowp int zoom_offset = 0;
 
-        if(draw_data.should_blend)
+        if(geometry_data.should_blend)
             zoom_offset = int(max(int(floor(float_zoom_offset)), -zoom_blend_steps)); // calculate an integer zoom offset and make sure that we do not go below -zoom_blend_steps
 
         // get and store new style info
-        layer_style.last_style = draw_data.style_index;
-        layer_style.current_zoom_style = parse_style(uint(int(draw_data.style_index) + zoom_offset));
+        layer_style.last_style = geometry_data.style_index;
+        layer_style.current_zoom_style = parse_style(uint(int(geometry_data.style_index) + zoom_offset));
 
         // the outline_width is saved as tile_extent dependent
         // by dividing by tile_extent we get the width we want to draw
@@ -340,16 +295,16 @@ bool check_and_draw_layer(DrawData draw_data, inout Layer_Style layer_style, ino
         mediump float zoomed_tile_extent = tile_extent * pow(2.0, float(zoom_offset));
 
         layer_style.current_zoom_style.outline_width /= zoomed_tile_extent;
-        if(draw_data.should_blend)
+        if(geometry_data.should_blend)
         {
-            layer_style.next_zoom_style = parse_style(uint(int(draw_data.style_index)+zoom_offset+1));
+            layer_style.next_zoom_style = parse_style(uint(int(geometry_data.style_index)+zoom_offset+1));
             layer_style.next_zoom_style.outline_width /= (zoomed_tile_extent * 2.0);
         }
         else
         {
             layer_style.next_zoom_style = layer_style.current_zoom_style;
         }
-        layer_style.should_blend = draw_data.should_blend;
+        layer_style.should_blend = geometry_data.should_blend;
         // how much alpha per layer we accumulate
         layer_style.layer_alpha = 0.0;
     }
@@ -425,6 +380,8 @@ void main() {
             lowp ivec2 grid_cell = ivec2(int(grid_lookup.x), int(grid_lookup.y)); // DEBUG
             lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
 
+            highp vec2 cell_offset = grid_cell * vec2(64);
+
 
             // get the buffer index and extract the correct texture_layer.y
             lowp uint sampler_buffer_index = (texture_layer.y & ((bit_mask_ones << sampler_offset))) >> sampler_offset;
@@ -475,17 +432,19 @@ void main() {
             {
 
                 debug_draw_calls = debug_draw_calls + 1;
-                DrawData draw_data = index_sample(sampler_buffer_index, i, texture_layer.y);
+                VectorLayerData geometry_data = vertex_sample(sampler_buffer_index,i, texture_layer.y);
 
                 highp float d = 0.0;
 
-                if(draw_data.is_polygon)
+                if(geometry_data.is_polygon)
                 {
-                    VectorLayerData triangle_data = vertex_sample(sampler_buffer_index, draw_data.geometry_index, texture_layer.y);
+                    highp vec2 v0 = (vec2(geometry_data.a) + cell_offset) / vec2(tile_extent);
+                    highp vec2 v1 = (vec2(geometry_data.b) + cell_offset) / vec2(tile_extent);
+                    highp vec2 v2 = (vec2(geometry_data.c) + cell_offset) / vec2(tile_extent);
 
-                    highp vec2 v0 = vec2(triangle_data.a) / vec2(tile_extent);
-                    highp vec2 v1 = vec2(triangle_data.b) / vec2(tile_extent);
-                    highp vec2 v2 = vec2(triangle_data.c) / vec2(tile_extent);
+                    // highp vec2 v0 = vec2(0,0) / vec2(64);
+                    // highp vec2 v1 = vec2(64,64) / vec2(64);
+                    // highp vec2 v2 = vec2(0,64) / vec2(64);
 
                     highp float thickness = 0.0;
                     d = sdTriangle(uv, v0, v1, v2) - thickness;
@@ -497,19 +456,18 @@ void main() {
                         continue;
 
                     // calling it here prevents getting the layerstyle if we do not need it yet
-                    bool check_next_geometry = check_and_draw_layer(draw_data, layer_style, pixel_color, zoom_offset);
+                    bool check_next_geometry = check_and_draw_layer(geometry_data, layer_style, pixel_color, zoom_offset);
                     if(check_next_geometry)
                         continue;
                 }
                 else
                 {
-                    VectorLayerData line_data = vertex_sample(sampler_buffer_index, draw_data.geometry_index, texture_layer.y);
 
-                    highp vec2 v0 = vec2(line_data.a) / vec2(tile_extent);
-                    highp vec2 v1 = vec2(line_data.b) / vec2(tile_extent);
+                    highp vec2 v0 = vec2(geometry_data.a) / vec2(tile_extent);
+                    highp vec2 v1 = vec2(geometry_data.b) / vec2(tile_extent);
 
                     // needs to be applied here to get the thickness of the line
-                    bool check_next_geometry = check_and_draw_layer(draw_data, layer_style, pixel_color, zoom_offset);
+                    bool check_next_geometry = check_and_draw_layer(geometry_data, layer_style, pixel_color, zoom_offset);
                     if(check_next_geometry)
                         continue;
 

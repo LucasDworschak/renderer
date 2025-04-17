@@ -387,30 +387,39 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         file.open(QFile::ReadOnly);
         const auto bytes = file.readAll();
 
-        auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
+        // auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
         const auto style_buffer = style.styles()->buffer();
 
         // auto clipper_grid = nucleus::vector_layer::details::generate_clipper2_grid(nucleus::vector_layer::constants::grid_size);
 
-        auto temp_grid = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
+        // auto meta = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
+        // CHECK(meta.geometry_amount == 68413);
+        auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
+        auto temp_data = details::preprocess_geometry(tile_data, style_buffer);
+        auto tile = details::create_gpu_tile(temp_data);
 
-        // check the size
-        int size = 0;
-        for (const auto& cell : temp_grid) {
-            for (const auto& layers : cell) {
-                size += layers.second.size();
-            }
-        }
-        CHECK(size == 66836);
-        // qDebug() << "size: " << size;
-
-        BENCHMARK("clip tile to cells")
+        BENCHMARK("parse tile")
         {
-            auto temp_grid = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
-            // auto g2 = clipper2_clip(tile_data, clipper_grid);
-            // CHECK(g2.size() == 68413);
+            auto output = details::parse_tile(id, bytes, style);
+            return output;
+        };
 
-            return temp_grid;
+        BENCHMARK("preprocess geometry")
+        {
+            auto output = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
+            return output;
+        };
+
+        BENCHMARK("create gpu tile")
+        {
+            auto output = nucleus::vector_layer::details::create_gpu_tile(temp_data);
+            return output;
+        };
+
+        BENCHMARK("complete preprocess")
+        {
+            auto output = nucleus::vector_layer::preprocess(id, bytes, style);
+            return output;
         };
 
         // const auto style_buffer = style.styles()->buffer();
@@ -769,13 +778,13 @@ TEST_CASE("nucleus/vector_preprocess")
 
         uint16_t style = 343u;
 
-        auto packed = nucleus::vector_layer::details::pack_triangle_data(a, b, c, style);
+        auto packed = nucleus::vector_layer::details::pack_triangle_data({ a, b, c, style, true });
         auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
 
-        CHECK(a == glm::i64vec2(std::get<0>(unpacked)));
-        CHECK(b == glm::i64vec2(std::get<1>(unpacked)));
-        CHECK(c == glm::i64vec2(std::get<2>(unpacked)));
-        CHECK(style == std::get<3>(unpacked));
+        CHECK(a == glm::i64vec2(unpacked.a));
+        CHECK(b == glm::i64vec2(unpacked.b));
+        CHECK(c == glm::i64vec2(unpacked.c));
+        CHECK(style == unpacked.style_index);
     }
 
     SECTION("Line Data packer")
@@ -790,10 +799,10 @@ TEST_CASE("nucleus/vector_preprocess")
         auto packed = nucleus::vector_layer::details::pack_line_data(a, b, style);
         auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
 
-        CHECK(a == glm::ivec2(std::get<0>(unpacked)));
-        CHECK(b == glm::ivec2(std::get<1>(unpacked)));
-        CHECK(c == glm::ivec2(std::get<2>(unpacked)));
-        CHECK(style == std::get<3>(unpacked));
+        CHECK(a == glm::ivec2(unpacked.a));
+        CHECK(b == glm::ivec2(unpacked.b));
+        CHECK(c == glm::ivec2(unpacked.c));
+        CHECK(style == unpacked.style_index);
     }
 
     SECTION("std::map order behaviour")

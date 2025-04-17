@@ -200,7 +200,7 @@ void packing_cpp_same_as_glsl(const Id& id)
     }
 }
 
-void vectorlayer_packing_cpp_same_as_glsl(const std::tuple<glm::ivec2, glm::ivec2, glm::ivec2, uint16_t>& data)
+void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::details::VectorLayerData& data)
 {
     {
         Framebuffer b(Framebuffer::DepthFormat::None, { Framebuffer::ColourFormat::RGBA8 }, { 1, 1 });
@@ -212,7 +212,7 @@ void vectorlayer_packing_cpp_same_as_glsl(const std::tuple<glm::ivec2, glm::ivec
             out lowp vec4 out_color;
             void main() {
                 highp uvec2 cpp_packed_data = uvec2(%1u, %2u);
-                VectorLayerData data = VectorLayerData(ivec2(%3, %4),ivec2(%5, %6),ivec2(%7, %8), %9u);
+                VectorLayerData data = VectorLayerData(ivec2(%3, %4),ivec2(%5, %6),ivec2(%7, %8), %9u>>1, (%9u&1u)==1u, bool(%10));
                 VectorLayerData unpacked_data = unpack_vectorlayer_data(cpp_packed_data);
 
                 bool unpack_ok = data == unpacked_data;
@@ -221,15 +221,16 @@ void vectorlayer_packing_cpp_same_as_glsl(const std::tuple<glm::ivec2, glm::ivec
                 out_color = vec4(unpack_ok ? 121.0 / 255.0 : 9.0 / 255.0, pack_ok ? 122.0 / 255.0 : 9.0 / 255.0, 0, 1);
             }
         )")
-                .arg(nucleus::vector_layer::details::pack_triangle_data(std::get<0>(data), std::get<1>(data), std::get<2>(data), std::get<3>(data)).x)
-                .arg(nucleus::vector_layer::details::pack_triangle_data(std::get<0>(data), std::get<1>(data), std::get<2>(data), std::get<3>(data)).y)
-                .arg(std::get<0>(data).x)
-                .arg(std::get<0>(data).y)
-                .arg(std::get<1>(data).x)
-                .arg(std::get<1>(data).y)
-                .arg(std::get<2>(data).x)
-                .arg(std::get<2>(data).y)
-                .arg(std::get<3>(data)));
+                .arg(nucleus::vector_layer::details::pack_triangle_data(data).x)
+                .arg(nucleus::vector_layer::details::pack_triangle_data(data).y)
+                .arg(data.a.x)
+                .arg(data.a.y)
+                .arg(data.b.x)
+                .arg(data.b.y)
+                .arg(data.c.x)
+                .arg(data.c.y)
+                .arg(data.style_index)
+                .arg(data.is_polygon));
         shader.bind();
         gl_engine::helpers::create_screen_quad_geometry().draw();
 
@@ -256,7 +257,7 @@ void vectorlayer_packing_cpp_same_as_glsl(const std::tuple<glm::ivec2, glm::ivec
             flat out lowp vec2 ok;
             void main() {
                 highp uvec2 cpp_packed_data = uvec2(%1u, %2u);
-                VectorLayerData data = VectorLayerData(ivec2(%3, %4),ivec2(%5, %6),ivec2(%7, %8), %9u);
+                VectorLayerData data = VectorLayerData(ivec2(%3, %4),ivec2(%5, %6),ivec2(%7, %8), %9u>>1, (%9u&1u)==1u, bool(%10));
                 VectorLayerData unpacked_data = unpack_vectorlayer_data(cpp_packed_data);
 
                 bool unpack_ok = data == unpacked_data;
@@ -268,15 +269,16 @@ void vectorlayer_packing_cpp_same_as_glsl(const std::tuple<glm::ivec2, glm::ivec
                 gl_Position = vec4(vertices[gl_VertexID], 0.0, 1.0);
                 texcoords = 0.5 * gl_Position.xy + vec2(0.5);
             })")
-                .arg(nucleus::vector_layer::details::pack_triangle_data(std::get<0>(data), std::get<1>(data), std::get<2>(data), std::get<3>(data)).x)
-                .arg(nucleus::vector_layer::details::pack_triangle_data(std::get<0>(data), std::get<1>(data), std::get<2>(data), std::get<3>(data)).y)
-                .arg(std::get<0>(data).x)
-                .arg(std::get<0>(data).y)
-                .arg(std::get<1>(data).x)
-                .arg(std::get<1>(data).y)
-                .arg(std::get<2>(data).x)
-                .arg(std::get<2>(data).y)
-                .arg(std::get<3>(data)));
+                .arg(nucleus::vector_layer::details::pack_triangle_data(data).x)
+                .arg(nucleus::vector_layer::details::pack_triangle_data(data).y)
+                .arg(data.a.x)
+                .arg(data.a.y)
+                .arg(data.b.x)
+                .arg(data.b.y)
+                .arg(data.c.x)
+                .arg(data.c.y)
+                .arg(data.style_index)
+                .arg(data.is_polygon));
         shader.bind();
         gl_engine::helpers::create_screen_quad_geometry().draw();
 
@@ -335,26 +337,27 @@ TEST_CASE("glsl tile functions")
 
     SECTION("vectorlayer packing c++ same as glsl")
     {
-        const auto data = std::vector<std::tuple<glm::ivec2, glm::ivec2, glm::ivec2, uint16_t>> {
-            { glm::ivec2(8, 3), glm::ivec2(40, 36), glm::ivec2(28, 44), 289u },
-            { glm::ivec2(34, 60), glm::ivec2(50, 52), glm::ivec2(1, 24), 565u },
-            { glm::ivec2(16, 32), glm::ivec2(40, 5), glm::ivec2(36, 46), 630u },
-            { glm::ivec2(46, 45), glm::ivec2(31, 4), glm::ivec2(21, 61), 546u },
-            { glm::ivec2(27, 16), glm::ivec2(46, 7), glm::ivec2(44, 24), 610u },
-            { glm::ivec2(48, 49), glm::ivec2(4, 11), glm::ivec2(25, 45), 103u },
-            { glm::ivec2(44, 63), glm::ivec2(2, 10), glm::ivec2(30, 24), 852u },
-            { glm::ivec2(55, 17), glm::ivec2(2, 47), glm::ivec2(21, 3), 912u },
-            { glm::ivec2(32, 56), glm::ivec2(52, 56), glm::ivec2(48, 61), 124u },
-            { glm::ivec2(45, 35), glm::ivec2(19, 46), glm::ivec2(55, 54), 873u },
-            { glm::ivec2(5, 33), glm::ivec2(14, 32), glm::ivec2(51, 4), 478u },
-            { glm::ivec2(43, 56), glm::ivec2(12, 49), glm::ivec2(16, 64), 389u },
-            { glm::ivec2(63, 38), glm::ivec2(26, 60), glm::ivec2(37, 9), 192u },
-            { glm::ivec2(27, 27), glm::ivec2(39, 33), glm::ivec2(63, 16), 179u },
-            { glm::ivec2(0, 18), glm::ivec2(55, 14), glm::ivec2(30, 57), 34u },
-            { glm::ivec2(17, 63), glm::ivec2(40, 33), glm::ivec2(12, 46), 15u },
-            { glm::ivec2(5, 19), glm::ivec2(64, 34), glm::ivec2(53, 58), 303u },
-            { glm::ivec2(40, 44), glm::ivec2(32, 29), glm::ivec2(38, 46), 151u },
-            { glm::ivec2(16, 0), glm::ivec2(44, 55), glm::ivec2(48, 46), 819u },
+        const auto data = std::vector<nucleus::vector_layer::details::VectorLayerData> {
+            // style_layer << 1 | 1u -> simulates setting a blend style or not
+            { glm::ivec2(8, 3), glm::ivec2(40, 36), glm::ivec2(28, 44), (289u << 1) | 1u, true },
+            { glm::ivec2(34, 60), glm::ivec2(50, 52), glm::ivec2(1, 24), (565u << 1) | 1u, true },
+            { glm::ivec2(16, 32), glm::ivec2(40, 5), glm::ivec2(36, 46), (630u << 1) | 0u, true },
+            { glm::ivec2(46, 45), glm::ivec2(31, 4), glm::ivec2(21, 61), (546u << 1) | 1u, true },
+            { glm::ivec2(27, 16), glm::ivec2(46, 7), glm::ivec2(44, 24), (610u << 1) | 1u, true },
+            { glm::ivec2(48, 49), glm::ivec2(4, 11), glm::ivec2(25, 45), (103u << 1) | 0u, true },
+            { glm::ivec2(44, 63), glm::ivec2(2, 10), glm::ivec2(30, 24), (852u << 1) | 1u, true },
+            { glm::ivec2(55, 17), glm::ivec2(2, 47), glm::ivec2(21, 3), (912u << 1) | 0u, true },
+            { glm::ivec2(32, 56), glm::ivec2(52, 56), glm::ivec2(48, 61), (124u << 1) | 1u, true },
+            { glm::ivec2(45, 35), glm::ivec2(19, 46), glm::ivec2(55, 54), (482u << 1) | 1u, true },
+            { glm::ivec2(5, 33), glm::ivec2(14, 32), glm::ivec2(51, 4), (478u << 1) | 0u, true },
+            { glm::ivec2(43, 56), glm::ivec2(12, 49), glm::ivec2(16, 64), (389u << 1) | 1u, true },
+            { glm::ivec2(63, 38), glm::ivec2(26, 60), glm::ivec2(37, 9), (192u << 1) | 0u, true },
+            { glm::ivec2(27, 27), glm::ivec2(39, 33), glm::ivec2(63, 16), (179u << 1) | 1u, true },
+            { glm::ivec2(0, 18), glm::ivec2(55, 14), glm::ivec2(30, 57), (34u << 1) | 1u, true },
+            { glm::ivec2(17, 63), glm::ivec2(40, 33), glm::ivec2(12, 46), (15u << 1) | 0u, true },
+            { glm::ivec2(5, 19), glm::ivec2(64, 34), glm::ivec2(53, 58), (303u << 1) | 1u, true },
+            { glm::ivec2(40, 44), glm::ivec2(32, 29), glm::ivec2(38, 46), (151u << 1) | 0u, true },
+            { glm::ivec2(16, 0), glm::ivec2(44, 55), glm::ivec2(48, 46), (819u << 1) | 1u, true },
 
         };
 

@@ -55,19 +55,13 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_instanced_array_index = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RG16UI);
     m_instanced_array_index->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
 
-    m_index_buffer_texture.resize(constants::array_layer_tile_amount.size());
-    m_vertex_buffer_texture.resize(constants::array_layer_tile_amount.size());
+    m_geometry_buffer_texture.resize(constants::array_layer_tile_amount.size());
     for (uint8_t i = 0; i < constants::array_layer_tile_amount.size(); i++) {
         const auto layer_amount = m_gpu_multi_array_helper.layer_amount(i);
 
-        m_index_buffer_texture[i] = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
-        m_index_buffer_texture[i]->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
-        m_index_buffer_texture[i]->allocate_array(
-            constants::data_size[i] * constants::index_buffer_size_multiplier, constants::data_size[i] * constants::index_buffer_size_multiplier, layer_amount);
-
-        m_vertex_buffer_texture[i] = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::RGB32UI);
-        m_vertex_buffer_texture[i]->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
-        m_vertex_buffer_texture[i]->allocate_array(constants::data_size[i], constants::data_size[i], layer_amount);
+        m_geometry_buffer_texture[i] = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::RG32UI);
+        m_geometry_buffer_texture[i]->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
+        m_geometry_buffer_texture[i]->allocate_array(constants::data_size[i], constants::data_size[i], layer_amount);
     }
 
     m_styles_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RGBA32UI);
@@ -107,16 +101,12 @@ void VectorLayer::draw(
     m_shader->set_uniform("styles_sampler", 7);
     m_styles_texture->bind(7);
 
-    // upload all index and vertex buffer
+    // upload all geometry buffers
     // binds the buffers to "...buffer_sampler_[0-max]"
-    constexpr uint8_t triangle_index_buffer_start = 8;
-    constexpr uint8_t triangle_vertex_buffer_start = triangle_index_buffer_start + constants::array_layer_tile_amount.size();
+    constexpr uint8_t triangle_vertex_buffer_start = 8;
     for (uint8_t i = 0; i < constants::array_layer_tile_amount.size(); i++) {
-        m_shader->set_uniform("index_buffer_sampler_" + std::to_string(i), triangle_index_buffer_start + i);
-        m_index_buffer_texture[i]->bind(triangle_index_buffer_start + i);
-
-        m_shader->set_uniform("vertex_buffer_sampler_" + std::to_string(i), triangle_vertex_buffer_start + i);
-        m_vertex_buffer_texture[i]->bind(triangle_vertex_buffer_start + i);
+        m_shader->set_uniform("geometry_buffer_sampler_" + std::to_string(i), triangle_vertex_buffer_start + i);
+        m_geometry_buffer_texture[i]->bind(triangle_vertex_buffer_start + i);
     }
 
     tile_geometry.draw(m_shader.get(), camera, draw_list);
@@ -140,16 +130,14 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
         //     continue; // nothing here
 
         assert(tile.acceleration_grid);
-        assert(tile.index_buffer);
-        assert(tile.vertex_buffer);
+        assert(tile.geometry_buffer);
 
         // find empty spot and upload texture
         const auto layer_index = m_gpu_multi_array_helper.add_tile(tile.id, tile.buffer_info);
 
         m_acceleration_grid_texture->upload(*tile.acceleration_grid, layer_index[0]);
 
-        m_index_buffer_texture[tile.buffer_info]->upload(*tile.index_buffer, layer_index[1]);
-        m_vertex_buffer_texture[tile.buffer_info]->upload(*tile.vertex_buffer, layer_index[1]);
+        m_geometry_buffer_texture[tile.buffer_info]->upload(*tile.geometry_buffer, layer_index[1]);
     }
 }
 
@@ -157,8 +145,7 @@ void VectorLayer::set_tile_limit(unsigned int new_limit)
 {
     assert(new_limit <= 2048); // array textures with size > 2048 are not supported on all devices
     assert(!m_acceleration_grid_texture);
-    assert(m_index_buffer_texture.size() == 0);
-    assert(m_vertex_buffer_texture.size() == 0);
+    assert(m_geometry_buffer_texture.size() == 0);
 
     m_gpu_multi_array_helper.set_tile_limit(new_limit);
 }
