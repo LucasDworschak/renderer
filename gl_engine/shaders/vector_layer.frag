@@ -167,19 +167,19 @@ VectorLayerData vertex_sample(lowp uint sampler_index, highp uint index, highp u
 {
     if(sampler_index == 0u)
     {
-        return unpack_vectorlayer_data(texelFetch(geometry_buffer_sampler_0, ivec3(to_dict_pixel_64(index), texture_layer), 0).rg);
+        return unpack_data(texelFetch(geometry_buffer_sampler_0, ivec3(to_dict_pixel_64(index), texture_layer), 0).rg);
     }
     else if(sampler_index == 1u)
     {
-        return unpack_vectorlayer_data(texelFetch(geometry_buffer_sampler_1, ivec3(to_dict_pixel_128(index), texture_layer), 0).rg);
+        return unpack_data(texelFetch(geometry_buffer_sampler_1, ivec3(to_dict_pixel_128(index), texture_layer), 0).rg);
     }
     else if(sampler_index == 2u)
     {
-        return unpack_vectorlayer_data(texelFetch(geometry_buffer_sampler_2, ivec3(to_dict_pixel_256(index), texture_layer), 0).rg);
+        return unpack_data(texelFetch(geometry_buffer_sampler_2, ivec3(to_dict_pixel_256(index), texture_layer), 0).rg);
     }
     else
     {
-        return unpack_vectorlayer_data(texelFetch(geometry_buffer_sampler_3, ivec3(to_dict_pixel_512(index), texture_layer), 0).rg);
+        return unpack_data(texelFetch(geometry_buffer_sampler_3, ivec3(to_dict_pixel_512(index), texture_layer), 0).rg);
     }
 }
 
@@ -462,9 +462,8 @@ void main() {
                 }
                 else
                 {
-
-                    highp vec2 v0 = vec2(geometry_data.a) / vec2(tile_extent);
-                    highp vec2 v1 = vec2(geometry_data.b) / vec2(tile_extent);
+                    highp vec2 v0 = (vec2(geometry_data.a) + cell_offset) / vec2(tile_extent);
+                    highp vec2 v1 = (vec2(geometry_data.b) + cell_offset) / vec2(tile_extent);
 
                     // needs to be applied here to get the thickness of the line
                     bool check_next_geometry = check_and_draw_layer(geometry_data, layer_style, pixel_color, zoom_offset);

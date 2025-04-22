@@ -340,6 +340,35 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         CHECK(triangle_points[11] == glm::vec2 { 2, 5 });
     }
 
+    SECTION("clip lines")
+    {
+        // 4 points forming 3 line segments
+        // first line clipped on both ends
+        // second line completely outside
+        // third line outside to middle
+        Clipper2Lib::Paths64 in = { Clipper2Lib::MakePath({ -15, -15, 15, 15, 30, 30, 0, 0 }) };
+        Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(-5, -5, 5, 5);
+
+        auto clipper = Clipper2Lib::RectClipLines64({ rect });
+        Clipper2Lib::Paths64 solution = clipper.Execute(in);
+
+        CHECK(solution.size() == 2);
+        CHECK(solution[0].size() == 2);
+        CHECK(solution[1].size() == 2);
+
+        // first line segment
+        CHECK(solution[0][0].x == -5);
+        CHECK(solution[0][0].y == -5);
+        CHECK(solution[0][1].x == 5);
+        CHECK(solution[0][1].y == 5);
+
+        // second line segment
+        CHECK(solution[1][0].x == 5);
+        CHECK(solution[1][0].y == 5);
+        CHECK(solution[1][1].x == 0);
+        CHECK(solution[1][1].y == 0);
+    }
+
     // SECTION("triangulize basic")
     // {
     //     Clipper2Lib::Paths64 in = { Clipper2Lib::MakePath({ -15, -15, 15, -15, 15, 15, -15, 15 }), Clipper2Lib::MakePath({ 0, -7, -7, 0, 0, 7, 7, 0 }) };
@@ -397,6 +426,8 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
         auto temp_data = details::preprocess_geometry(tile_data, style_buffer);
         auto tile = details::create_gpu_tile(temp_data);
+
+        CHECK(temp_data.geometry_amount == 148388);
 
         BENCHMARK("parse tile")
         {
@@ -797,7 +828,7 @@ TEST_CASE("nucleus/vector_preprocess")
         uint16_t style = 646u;
 
         auto packed = nucleus::vector_layer::details::pack_line_data(a, b, style);
-        auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
+        auto unpacked = nucleus::vector_layer::details::unpack_line_data(packed);
 
         CHECK(a == glm::ivec2(unpacked.a));
         CHECK(b == glm::ivec2(unpacked.b));

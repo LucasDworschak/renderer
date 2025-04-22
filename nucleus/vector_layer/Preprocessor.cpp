@@ -21,6 +21,8 @@
 #include <QImage>
 #include <QString>
 
+#include <unordered_set>
+
 #include "nucleus/Raster.h"
 #include <nucleus/utils/bit_coding.h>
 
@@ -186,38 +188,69 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
     return data;
 }
 
-glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_layer)
+glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index)
 {
-    // TODO -> possibly need to store additional values here in the future -> refactor this and pack_triangle_data to pack it efficiently
-    return pack_triangle_data({ a, b, { 0, 0 }, style_layer, false });
+
+    glm::u32vec2 packed_data;
+
+    a += geometry_offset_line;
+    b += geometry_offset_line;
+
+    // if (data.a.x < 0 || data.a.x > 255 || data.a.y < 0 || data.a.y > 255 || data.b.x < 0 || data.b.x > 255 || data.b.y < 0 || data.b.y > 255 || data.c.x < 0
+    //     || data.c.x > 255 || data.c.y < 0 || data.c.y > 255)
+    //     qDebug() << geometry_offset << data.a.x << data.a.y << data.b.x << data.b.y << data.c.x << data.c.y;
+
+    // make sure that we do not remove bits from the coordinates
+    assert((uint32_t(a.x) & coordinate_bitmask_line) == uint32_t(a.x));
+    assert((uint32_t(a.y) & coordinate_bitmask_line) == uint32_t(a.y));
+    assert((uint32_t(b.x) & coordinate_bitmask_line) == uint32_t(b.x));
+    assert((uint32_t(b.y) & coordinate_bitmask_line) == uint32_t(b.y));
+    // assert(style_layer < ((1u << style_bits) - 1u));
+    assert(constants::style_bits + 1 <= available_style_bits_line); // make sure that the stylebits we need are available here
+
+    packed_data.x = uint32_t(a.x) << coordinate_shift1_line;
+    packed_data.x = packed_data.x | ((uint32_t(a.y) & coordinate_bitmask_line) << coordinate_shift2_line);
+
+    packed_data.x = packed_data.x | ((uint32_t(b.x) & coordinate_bitmask_line) << coordinate_shift3_line);
+    packed_data.y = uint32_t(b.y) << coordinate_shift1_line;
+
+    packed_data.y = packed_data.y | (style_index << 1); // | ((is_polygon) ? 1u : 0u));
+    // alternative only for neceesary for shader testing
+    // packed_data.y = packed_data.y | ((data.style_index << 2) | (((data.should_blend) ? 1u : 0u) << 1) | ((data.is_polygon) ? 1u : 0u));
+
+    return packed_data;
 }
 
 glm::u32vec2 pack_triangle_data(VectorLayerData data)
 {
     glm::u32vec2 packed_data;
 
-    data.a += geometry_offset;
-    data.b += geometry_offset;
-    data.c += geometry_offset;
+    data.a += geometry_offset_triangle;
+    data.b += geometry_offset_triangle;
+    data.c += geometry_offset_triangle;
+
+    // if (data.a.x < 0 || data.a.x > 255 || data.a.y < 0 || data.a.y > 255 || data.b.x < 0 || data.b.x > 255 || data.b.y < 0 || data.b.y > 255 || data.c.x < 0
+    //     || data.c.x > 255 || data.c.y < 0 || data.c.y > 255)
+    //     qDebug() << geometry_offset << data.a.x << data.a.y << data.b.x << data.b.y << data.c.x << data.c.y;
 
     // make sure that we do not remove bits from the coordinates
-    assert((uint32_t(data.a.x) & coordinate_bitmask) == uint32_t(data.a.x));
-    assert((uint32_t(data.a.y) & coordinate_bitmask) == uint32_t(data.a.y));
-    assert((uint32_t(data.b.x) & coordinate_bitmask) == uint32_t(data.b.x));
-    assert((uint32_t(data.b.y) & coordinate_bitmask) == uint32_t(data.b.y));
-    assert((uint32_t(data.c.x) & coordinate_bitmask) == uint32_t(data.c.x));
-    assert((uint32_t(data.c.y) & coordinate_bitmask) == uint32_t(data.c.y));
+    assert((uint32_t(data.a.x) & coordinate_bitmask_triangle) == uint32_t(data.a.x));
+    assert((uint32_t(data.a.y) & coordinate_bitmask_triangle) == uint32_t(data.a.y));
+    assert((uint32_t(data.b.x) & coordinate_bitmask_triangle) == uint32_t(data.b.x));
+    assert((uint32_t(data.b.y) & coordinate_bitmask_triangle) == uint32_t(data.b.y));
+    assert((uint32_t(data.c.x) & coordinate_bitmask_triangle) == uint32_t(data.c.x));
+    assert((uint32_t(data.c.y) & coordinate_bitmask_triangle) == uint32_t(data.c.y));
     // assert(style_layer < ((1u << style_bits) - 1u));
-    assert(constants::style_bits + 1 <= available_style_bits); // make sure that the stylebits we need are available here
+    assert(constants::style_bits + 1 <= available_style_bits_triangle); // make sure that the stylebits we need are available here
 
-    packed_data.x = uint32_t(data.a.x) << coordinate_shift1;
-    packed_data.x = packed_data.x | ((uint32_t(data.a.y) & coordinate_bitmask) << coordinate_shift2);
+    packed_data.x = uint32_t(data.a.x) << coordinate_shift1_triangle;
+    packed_data.x = packed_data.x | ((uint32_t(data.a.y) & coordinate_bitmask_triangle) << coordinate_shift2_triangle);
 
-    packed_data.x = packed_data.x | ((uint32_t(data.b.x) & coordinate_bitmask) << coordinate_shift3);
-    packed_data.x = packed_data.x | ((uint32_t(data.b.y) & coordinate_bitmask) << coordinate_shift4);
+    packed_data.x = packed_data.x | ((uint32_t(data.b.x) & coordinate_bitmask_triangle) << coordinate_shift3_triangle);
+    packed_data.x = packed_data.x | ((uint32_t(data.b.y) & coordinate_bitmask_triangle) << coordinate_shift4_triangle);
 
-    packed_data.y = uint32_t(data.c.x) << coordinate_shift1;
-    packed_data.y = packed_data.y | ((uint32_t(data.c.y) & coordinate_bitmask) << coordinate_shift2);
+    packed_data.y = uint32_t(data.c.x) << coordinate_shift1_triangle;
+    packed_data.y = packed_data.y | ((uint32_t(data.c.y) & coordinate_bitmask_triangle) << coordinate_shift2_triangle);
 
     packed_data.y = packed_data.y | ((data.style_index << 1) | ((data.is_polygon) ? 1u : 0u));
     // alternative only for neceesary for shader testing
@@ -226,29 +259,62 @@ glm::u32vec2 pack_triangle_data(VectorLayerData data)
     return packed_data;
 }
 
-VectorLayerData unpack_triangle_data(glm::uvec2 packed_data)
+VectorLayerData unpack_line_data(glm::uvec2 packed_data)
 {
     VectorLayerData unpacked_data;
+    unpacked_data.c = glm::ivec2(0, 0);
 
-    unpacked_data.a.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
-    unpacked_data.a.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
-    unpacked_data.b.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift3)) >> coordinate_shift3);
-    unpacked_data.b.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift4)) >> coordinate_shift4);
-    unpacked_data.c.x = int((packed_data.y & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
-    unpacked_data.c.y = int((packed_data.y & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
+    unpacked_data.a.x = int((packed_data.x & (coordinate_bitmask_line << coordinate_shift1_line)) >> coordinate_shift1_line);
+    unpacked_data.a.y = int((packed_data.x & (coordinate_bitmask_line << coordinate_shift2_line)) >> coordinate_shift2_line);
+    unpacked_data.b.x = int((packed_data.x & (coordinate_bitmask_line << coordinate_shift3_line)) >> coordinate_shift3_line);
+    unpacked_data.b.y = int((packed_data.y & (coordinate_bitmask_line << coordinate_shift1_line)) >> coordinate_shift1_line);
 
-    const uint32_t style_and_blend = (packed_data.y & ((1u << available_style_bits) - 1u)) >> 1;
+    const uint32_t style_and_blend = (packed_data.y & ((1u << available_style_bits_triangle) - 1u)) >> 1;
     // NOTE: the should_blend bit is only necessary for the shader -> on cpu side we do not need to separate them
     unpacked_data.style_index = style_and_blend; // >> 1;
     // unpacked_data.should_blend = (style_and_blend & 1u) == 1u;
 
     unpacked_data.is_polygon = (packed_data.y & 1u) == 1u;
 
-    unpacked_data.a -= geometry_offset;
-    unpacked_data.b -= geometry_offset;
-    unpacked_data.c -= geometry_offset;
+    unpacked_data.a -= geometry_offset_line;
+    unpacked_data.b -= geometry_offset_line;
 
     return unpacked_data;
+}
+
+VectorLayerData unpack_triangle_data(glm::uvec2 packed_data)
+{
+    VectorLayerData unpacked_data;
+
+    unpacked_data.a.x = int((packed_data.x & (coordinate_bitmask_triangle << coordinate_shift1_triangle)) >> coordinate_shift1_triangle);
+    unpacked_data.a.y = int((packed_data.x & (coordinate_bitmask_triangle << coordinate_shift2_triangle)) >> coordinate_shift2_triangle);
+    unpacked_data.b.x = int((packed_data.x & (coordinate_bitmask_triangle << coordinate_shift3_triangle)) >> coordinate_shift3_triangle);
+    unpacked_data.b.y = int((packed_data.x & (coordinate_bitmask_triangle << coordinate_shift4_triangle)) >> coordinate_shift4_triangle);
+    unpacked_data.c.x = int((packed_data.y & (coordinate_bitmask_triangle << coordinate_shift1_triangle)) >> coordinate_shift1_triangle);
+    unpacked_data.c.y = int((packed_data.y & (coordinate_bitmask_triangle << coordinate_shift2_triangle)) >> coordinate_shift2_triangle);
+
+    const uint32_t style_and_blend = (packed_data.y & ((1u << available_style_bits_triangle) - 1u)) >> 1;
+    // NOTE: the should_blend bit is only necessary for the shader -> on cpu side we do not need to separate them
+    unpacked_data.style_index = style_and_blend; // >> 1;
+    // unpacked_data.should_blend = (style_and_blend & 1u) == 1u;
+
+    unpacked_data.is_polygon = (packed_data.y & 1u) == 1u;
+
+    unpacked_data.a -= geometry_offset_triangle;
+    unpacked_data.b -= geometry_offset_triangle;
+    unpacked_data.c -= geometry_offset_triangle;
+
+    return unpacked_data;
+}
+
+VectorLayerData unpack_data(glm::uvec2 packed_data)
+{
+
+    if ((packed_data.y & 1u) == 1u) {
+        return unpack_triangle_data(packed_data);
+    } else {
+        return unpack_line_data(packed_data);
+    }
 }
 
 std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes)
@@ -308,26 +374,36 @@ size_t triangulize_earcut(
     return indices.size() / 3;
 }
 
-nucleus::Raster<ClipperRect> generate_clipper2_grid(unsigned steps)
+nucleus::Raster<ClipperRect> generate_clipper2_grid()
 {
-    constexpr auto tile_extent = constants::tile_extent;
-    const auto step_size = tile_extent / steps;
+    // make sure that bits we have declared for the cell width are exactly the same amount as the bits we need
+    assert(constants::tile_extent / constants::grid_size <= cell_width);
+
+    assert(cell_width < max_cell_width_line - 50); // make sure that we have plenty of space for big lines
+
+    constexpr auto clipper_margin = 1; // since clipper sometimes returns shapes slightly outside rect -> we need a small margin
+
     std::vector<ClipperRect> grid;
-    for (unsigned y = 0; y < steps; y++) {
-        for (unsigned x = 0; x < steps; x++) {
-            // const auto rect = Clipper2Lib::Rect64(x * step_size, y * step_size, (x + 1) * step_size - 1, (y + 1) * step_size - 1);
-            const auto rect = Clipper2Lib::Rect64(x * step_size, y * step_size, (x + 1) * step_size, (y + 1) * step_size);
-            grid.emplace_back(ClipperRect { Clipper2Lib::RectClip64(rect), rect, false });
+    for (int y = 0; y < constants::grid_size; y++) {
+        for (int x = 0; x < constants::grid_size; x++) {
+            // const auto rect = Clipper2Lib::Rect64(x * cell_width, y * cell_width, (x + 1) * cell_width - 1, (y + 1) * cell_width - 1);
+            const auto rect = Clipper2Lib::Rect64(x * cell_width, y * cell_width, (x + 1) * cell_width, (y + 1) * cell_width);
+            // for clip lines we are using +0 since we are adding the max_cell_width_line
+            const auto rect_lines = Clipper2Lib::Rect64(x * cell_width - geometry_offset_line + clipper_margin,
+                y * cell_width - geometry_offset_line + clipper_margin,
+                (x + 0) * cell_width - geometry_offset_line + max_cell_width_line - clipper_margin,
+                (y + 0) * cell_width - geometry_offset_line + max_cell_width_line - clipper_margin);
+            grid.emplace_back(ClipperRect { Clipper2Lib::RectClip64(rect), Clipper2Lib::RectClipLines64(rect_lines), rect, false });
         }
     }
 
-    return nucleus::Raster<ClipperRect>(steps, std::move(grid));
+    return nucleus::Raster<ClipperRect>(constants::grid_size, std::move(grid));
 }
 
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-VectorLayerMeta preprocess_geometry(const std::vector<GeometryData>& data, const std::vector<glm::u32vec4>)
+VectorLayerMeta preprocess_geometry(const std::vector<GeometryData>& data, const std::vector<glm::u32vec4> style_buffer)
 {
 
     // TODOs
@@ -335,7 +411,7 @@ VectorLayerMeta preprocess_geometry(const std::vector<GeometryData>& data, const
     // -- maybe array<array<vector> -> since we also know the max amount of layer_indices and we can then also create the std::vectors with a default size
     // beforehand
 
-    auto clipper_grid = generate_clipper2_grid(constants::grid_size);
+    auto clipper_grid = generate_clipper2_grid();
     auto temp_grid = VectorLayerGrid(constants::grid_size * constants::grid_size, VectorLayerCell());
 
     const auto scale = float(clipper_grid.width()) / float(constants::tile_extent);
@@ -386,83 +462,68 @@ VectorLayerMeta preprocess_geometry(const std::vector<GeometryData>& data, const
                 geometry_amount += triangulize_earcut(solution, &temp_cell, style_and_layer_indices);
             });
         } else {
-            // TODO here
 
-            // polylines
-            // Clipper2Lib::BoundedPaths64 shapes; // TODO move shape generation to parse_tile
-            // shapes.reserve(data[i].vertices.size());
-            // for (size_t j = 0; j < data[i].vertices.size(); j++) {
+            for (const auto& style_layer : data[i].style_and_layer_indices) {
+                const auto line_width = float(style_buffer[style_layer.first >> 1].z) / float(constants::style_precision);
 
-            //     auto& p = shapes.emplace_back();
-            //     p.path.reserve(data[i].vertices[j].size());
-            //     for (size_t k = 0; k < data[i].vertices[j].size(); k++) {
-            //         p.path.emplace_back(data[i].vertices[j][k].x, data[i].vertices[j][k].y);
-            //     }
-            //     p.bound = Clipper2Lib::GetBounds(p.path);
+                // std::unordered_set<glm::uvec2, Hasher> cell_list;
+                std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
 
-            //     aabb.expand_by({ float(p.bound.left) * scale, float(p.bound.top) * scale });
-            //     aabb.expand_by({ std::ceil(float(p.bound.right) * scale), std::ceil(float(p.bound.bottom) * scale) });
-            // }
+                const auto cell_writer = [&cell_list](glm::vec2 pos, const glm::uvec2& data_index) {
+                    // if in grid_size bounds and not already present -> than add index to vector
+                    if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(constants::grid_size), pos))) {
+                        cell_list[glm::uvec2(pos)].insert(data_index);
+                    }
+                };
 
-            // const auto style_and_layer_indices = data[i].style_and_layer_indices;
+                const auto scale = float(constants::grid_size) / float(data[i].extent);
 
-            // clipper_grid.visit(aabb, [&temp_grid, &shapes, &style_and_layer_indices, &geometry_amount](glm::uvec2 cell_pos, ClipperRect cell) {
-            //     if (cell.is_done)
-            //         return;
+                for (size_t j = 0; j < data[i].vertices.size(); ++j) {
+                    // TODO: according to Task #151 -> we doubled the line width that goes into the acceleration structure because we are looking at tiles
+                    // that are bigger
+                    // Nevertheless, we artificially worsened the performance by introducing more cells where a line could be (although it is only there on
+                    // specific zoom levels)
+                    // This performance issue will be solved with Task #198 (mipmaps)
+                    nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 2.0, scale);
+                }
 
-            //     Clipper2Lib::Paths64 solution = cell.clipper.Execute(shapes);
+                for (const auto& [cell_pos, indices] : cell_list) {
+                    auto cell = clipper_grid.pixel(cell_pos);
 
-            //     if (solution.empty())
-            //         return;
+                    if (cell.is_done)
+                        continue;
 
-            //     // anchor clipped paths to cell origin
-            //     solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
+                    auto shapes = Clipper2Lib::Paths64 {};
+                    for (const auto& index : indices) {
 
-            //     auto& temp_cell = temp_grid[int(cell_pos.x) + constants::grid_size * int(cell_pos.y)];
+                        // assert(data[i].vertices[0].size() > size_t(index + 1));
+                        shapes.emplace_back(Clipper2Lib::Path64 { { long(data[i].vertices[index.x][index.y].x), long(data[i].vertices[index.x][index.y].y) },
+                            { long(data[i].vertices[index.x][index.y + 1].x), long(data[i].vertices[index.x][index.y + 1].y) } });
+                    }
 
-            //     geometry_amount += triangulize_earcut(solution, &temp_cell, style_and_layer_indices);
-            // });
+                    // TODO clipper rect needs to be larger (also probably best if created outside)
+                    // auto clipper = Clipper2Lib::RectClipLines64(cell.rect);
+                    Clipper2Lib::Paths64 solution = cell.clipper_lines.Execute(shapes);
 
-            // TODO
+                    if (solution.empty())
+                        continue;
 
-            // // polylines
-            // for (size_t j = 0; j < data[i].vertices.size(); ++j) {
-            //     for (size_t k = 0; k < data[i].vertices[j].size() - 1; ++k) {
-            //         auto packed = pack_line_data(data[i].vertices[j][k], data[i].vertices[j][k + 1]);
-            //         layer_collection.vertex_buffer.push_back(packed);
-            //     }
-            // }
+                    // anchor clipped paths to cell origin
+                    solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
 
-            // for (const auto& style_layer : data[i].style_and_layer_indices) {
-            //     const auto line_width = float(style_buffer[style_layer.first >> 1].z) / float(constants::style_precision);
+                    auto& temp_cell = temp_grid[int(cell_pos.x) + constants::grid_size * int(cell_pos.y)];
 
-            //     const auto cell_writer = [&layer_collection, data_offset, style_layer](glm::vec2 pos, int data_index) {
-            //         // if in grid_size bounds and not already present -> than add index to vector
-            //         if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(constants::grid_size), pos))) {
-            //             // index:
-            //             // 18 bits for the index in geometry buffer
-            //             // 13 bits for style (see constants if still the same)
-            //             // 1 bit to encode if this is a polygon or not
-            //             const auto index = pack_index_buffer((data_index + data_offset), style_layer.first, false);
-            //             const auto layer = (style_layer.second << (32 - constants::style_bits)) | (data_index + data_offset);
-            //             layer_collection.acceleration_grid[int(pos.x) + constants::grid_size * int(pos.y)][layer] = index;
-            //         }
-            //     };
+                    for (const auto& line : solution) {
 
-            //     const auto scale = float(constants::grid_size) / float(data[i].extent);
+                        const auto data = nucleus::vector_layer::details::pack_line_data({ line[0].x, line[0].y }, { line[1].x, line[1].y }, style_layer.first);
+                        temp_cell[style_layer.second].push_back(data);
+                    }
+                    geometry_amount += solution.size();
 
-            //     for (size_t j = 0; j < data[i].vertices.size(); ++j) {
-            //         // TODO: according to Task #151 -> we doubled the line width that goes into the acceleration structure because we are looking at tiles
-            //         that are bigger
-            //         // Nevertheless, we artificially worsened the performance by introducing more cells where a line could be (although it is only there on
-            //         specific zoom levels)
-            //         // This performance issue will be solved with Task #198 (mipmaps)
-            //         nucleus::utils::rasterizer::rasterize_line(cell_writer, data[i].vertices[j], line_width * scale * 2.0, scale);
-            //     }
-            // }
-            // for (size_t j = 0; j < data[i].vertices.size(); ++j) {
-            //     data_offset += data[i].vertices[j].size() - 1u;
-            // }
+                    // geometry_amount += triangulize_earcut(solution, &temp_cell, style_and_layer_indices);
+                    // TODO call pack_line and insert it into the temp_cell
+                }
+            }
         }
     }
 
@@ -542,7 +603,7 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerMeta& meta)
     }
 
     // make sure that the buffer size is still like we expected and resize the data to actual buffer size
-    assert(geometry_buffer.size() < constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index]);
+    assert(geometry_buffer.size() <= constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index]);
     geometry_buffer.resize(constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index], glm::u32vec2(-1u));
 
     tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size, std::move(acceleration_grid)));

@@ -41,7 +41,7 @@ void triangle_sdf(const PixelWriterFunction& pixel_writer,
     const std::array<glm::vec2, 3> points,
     const std::array<glm::vec2, 3> edges,
     float s,
-    unsigned int data_index,
+    glm::uvec2 data_index,
     float distance)
 {
     glm::vec2 v0 = current_position - points[0], v1 = current_position - points[1], v2 = current_position - points[2];
@@ -68,7 +68,8 @@ void triangle_sdf(const PixelWriterFunction& pixel_writer,
  *  * uses line segment distance calculation from: https://iquilezles.org/articles/distfunctions2d/
  */
 template <nucleus::utils::rasterizer::PixelWriterFunctionConcept PixelWriterFunction>
-void line_sdf(const PixelWriterFunction& pixel_writer, const glm::vec2 current_position, const glm::vec2 origin, glm::vec2 edge, unsigned int data_index, float distance)
+void line_sdf(
+    const PixelWriterFunction& pixel_writer, const glm::vec2 current_position, const glm::vec2 origin, glm::vec2 edge, glm::uvec2 data_index, float distance)
 {
     glm::vec2 v0 = current_position - origin;
 
@@ -104,7 +105,7 @@ void rasterize_triangle_sdf(const PixelWriterFunction& pixel_writer, const std::
             for (size_t y = min_bound.y; y < max_bound.y; y++) {
                 auto current_position = glm::vec2 { x + 0.5, y + 0.5 };
 
-                triangle_sdf(pixel_writer, current_position, points, edges, s, i, distance);
+                triangle_sdf(pixel_writer, current_position, points, edges, s, { 0, i }, distance);
             }
         }
     }
@@ -129,7 +130,7 @@ void rasterize_line_sdf(const PixelWriterFunction& pixel_writer, const std::vect
             for (size_t y = min_bound.y; y < max_bound.y; y++) {
                 auto current_position = glm::vec2 { x + 0.5, y + 0.5 };
 
-                line_sdf(pixel_writer, current_position, points[0], edge, i, distance);
+                line_sdf(pixel_writer, current_position, points[0], edge, { 0, i }, distance);
             }
         }
     }
@@ -413,9 +414,9 @@ TEST_CASE("nucleus/rasterizer")
             if (bounds.contains(pos))
                 output.pixel(pos) = 255;
         };
-        nucleus::utils::rasterizer::details::add_circle_end_cap(pixel_writer, triangles[0], 1, distance);
-        nucleus::utils::rasterizer::details::add_circle_end_cap(pixel_writer, triangles[1], 1, distance);
-        nucleus::utils::rasterizer::details::add_circle_end_cap(pixel_writer, triangles[2], 1, distance);
+        nucleus::utils::rasterizer::details::add_circle_end_cap(pixel_writer, triangles[0], { 0, 1 }, distance);
+        nucleus::utils::rasterizer::details::add_circle_end_cap(pixel_writer, triangles[1], { 0, 1 }, distance);
+        nucleus::utils::rasterizer::details::add_circle_end_cap(pixel_writer, triangles[2], { 0, 1 }, distance);
 
         nucleus::Raster<uint8_t> output2(size, 0u);
         const auto pixel_writer2 = [&output2, bounds](glm::ivec2 pos) {

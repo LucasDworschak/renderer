@@ -41,7 +41,7 @@ template <typename Func>
 concept PixelWriterFunctionConcept = requires(Func f) {
     { f(glm::ivec2(11, 22)) };
 } || requires(Func f) {
-    { f(glm::ivec2(11, 22), 123456u) };
+    { f(glm::ivec2(11, 22), glm::uvec2(10u, 123456u)) };
 };
 
 namespace details {
@@ -49,9 +49,10 @@ namespace details {
     /*
      * This function calls either the 1 parameter or the 2 parameter pixelwriter (determined at runtime)
      */
-    template <PixelWriterFunctionConcept PixelWriterFunction> inline void invokePixelWriter(const PixelWriterFunction& pixel_writer, glm::ivec2 position, unsigned int data_index)
+    template <PixelWriterFunctionConcept PixelWriterFunction>
+    inline void invokePixelWriter(const PixelWriterFunction& pixel_writer, glm::ivec2 position, const glm::uvec2& data_index)
     {
-        if constexpr (std::is_invocable_v<PixelWriterFunction, glm::ivec2, unsigned int>) {
+        if constexpr (std::is_invocable_v<PixelWriterFunction, glm::ivec2, glm::uvec2>) {
             pixel_writer(position, data_index);
         } else if constexpr (std::is_invocable_v<PixelWriterFunction, glm::ivec2>) {
             pixel_writer(position);
@@ -95,7 +96,8 @@ namespace details {
     /*
      * fills a scanline in the intveral [x1,x2] (inclusive)
      */
-    template <PixelWriterFunctionConcept PixelWriterFunction> inline void fill_between(const PixelWriterFunction& pixel_writer, int y, int x1, int x2, unsigned int data_index)
+    template <PixelWriterFunctionConcept PixelWriterFunction>
+    inline void fill_between(const PixelWriterFunction& pixel_writer, int y, int x1, int x2, const glm::uvec2& data_index)
     {
         int fill_direction = (x1 < x2) ? 1 : -1;
 
@@ -112,7 +114,7 @@ namespace details {
      */
     template <PixelWriterFunctionConcept PixelWriterFunction>
     void render_line(const PixelWriterFunction& pixel_writer,
-        unsigned int data_index,
+        const glm::uvec2& data_index,
         const glm::vec2& line_point,
         const glm::vec2& line,
         const int fill_direction = 0,
@@ -230,7 +232,8 @@ namespace details {
     /*
      * renders a circle at the given position
      */
-    template <PixelWriterFunctionConcept PixelWriterFunction> void add_circle_end_cap(const PixelWriterFunction& pixel_writer, const glm::vec2& position, unsigned int data_index, float distance)
+    template <PixelWriterFunctionConcept PixelWriterFunction>
+    void add_circle_end_cap(const PixelWriterFunction& pixel_writer, const glm::vec2& position, const glm::uvec2& data_index, float distance)
     {
         distance += sqrt(0.5);
         float distance_test = ceil(distance);
@@ -261,7 +264,7 @@ namespace details {
      * lastly we have to add endcaps on each original vertice position with the given distance
      */
     template <PixelWriterFunctionConcept PixelWriterFunction>
-    void render_triangle(const PixelWriterFunction& pixel_writer, const std::array<glm::vec2, 3> triangle, unsigned int triangle_index, float distance)
+    void render_triangle(const PixelWriterFunction& pixel_writer, const std::array<glm::vec2, 3> triangle, const glm::uvec2& triangle_index, float distance)
     {
         assert(triangle[0].y <= triangle[1].y);
         assert(triangle[1].y <= triangle[2].y);
@@ -384,7 +387,8 @@ namespace details {
     }
 
     template <PixelWriterFunctionConcept PixelWriterFunction>
-    void render_line_preprocess(const PixelWriterFunction& pixel_writer, const std::array<glm::vec2, 2> line_points, unsigned int line_index, float distance)
+    void render_line_preprocess(
+        const PixelWriterFunction& pixel_writer, const std::array<glm::vec2, 2> line_points, const glm::uvec2& line_index, float distance)
     {
         // edge from top to bottom
         glm::vec2 origin;
@@ -525,7 +529,8 @@ template <PixelWriterFunctionConcept PixelWriterFunction>
 void rasterize_triangle(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& triangles, float distance = 0.0, float scale = 1.0)
 {
     for (size_t i = 0; i < triangles.size() / 3; ++i) {
-        details::render_triangle(pixel_writer, { triangles[i * 3 + 0] * scale, triangles[i * 3 + 1] * scale, triangles[i * 3 + 2] * scale }, i, distance);
+        details::render_triangle(
+            pixel_writer, { triangles[i * 3 + 0] * scale, triangles[i * 3 + 1] * scale, triangles[i * 3 + 2] * scale }, { 0, i }, distance);
     }
 }
 
@@ -547,7 +552,17 @@ template <PixelWriterFunctionConcept PixelWriterFunction>
 void rasterize_line(const PixelWriterFunction& pixel_writer, const std::vector<glm::vec2>& line_points, float distance = 0.0, float scale = 1.0)
 {
     for (size_t i = 0; i < line_points.size() - 1; ++i) {
-        details::render_line_preprocess(pixel_writer, { line_points[i + 0] * scale, line_points[i + 1] * scale }, i, distance);
+        details::render_line_preprocess(pixel_writer, { line_points[i + 0] * scale, line_points[i + 1] * scale }, { 0, i }, distance);
+    }
+}
+
+template <PixelWriterFunctionConcept PixelWriterFunction>
+void rasterize_lines(const PixelWriterFunction& pixel_writer, const std::vector<std::vector<glm::vec2>>& line_points, float distance = 0.0, float scale = 1.0)
+{
+    for (size_t i = 0; i < line_points.size(); ++i) {
+        for (size_t j = 0; j < line_points[i].size() - 1; ++j) {
+            details::render_line_preprocess(pixel_writer, { line_points[i][j + 0] * scale, line_points[i][j + 1] * scale }, { i, j }, distance);
+        }
     }
 }
 

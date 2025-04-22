@@ -206,6 +206,12 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::details::
         Framebuffer b(Framebuffer::DepthFormat::None, { Framebuffer::ColourFormat::RGBA8 }, { 1, 1 });
         b.bind();
 
+        glm::uvec2 packed_data;
+        if (data.is_polygon)
+            packed_data = nucleus::vector_layer::details::pack_triangle_data(data);
+        else
+            packed_data = nucleus::vector_layer::details::pack_line_data(data.a, data.b, data.style_index);
+
         ShaderProgram shader = create_debug_shader(QString(R"(
             #include "vector_layer.glsl"
 
@@ -213,7 +219,7 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::details::
             void main() {
                 highp uvec2 cpp_packed_data = uvec2(%1u, %2u);
                 VectorLayerData data = VectorLayerData(ivec2(%3, %4),ivec2(%5, %6),ivec2(%7, %8), %9u>>1, (%9u&1u)==1u, bool(%10));
-                VectorLayerData unpacked_data = unpack_vectorlayer_data(cpp_packed_data);
+                VectorLayerData unpacked_data = unpack_data(cpp_packed_data);
 
                 bool unpack_ok = data == unpacked_data;
                 highp uvec2 packed_data = pack_vectorlayer_data(data);
@@ -221,8 +227,8 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::details::
                 out_color = vec4(unpack_ok ? 121.0 / 255.0 : 9.0 / 255.0, pack_ok ? 122.0 / 255.0 : 9.0 / 255.0, 0, 1);
             }
         )")
-                .arg(nucleus::vector_layer::details::pack_triangle_data(data).x)
-                .arg(nucleus::vector_layer::details::pack_triangle_data(data).y)
+                .arg(packed_data.x)
+                .arg(packed_data.y)
                 .arg(data.a.x)
                 .arg(data.a.y)
                 .arg(data.b.x)
@@ -243,6 +249,12 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::details::
         Framebuffer b(Framebuffer::DepthFormat::None, { Framebuffer::ColourFormat::RGBA8 }, { 1, 1 });
         b.bind();
 
+        glm::uvec2 packed_data;
+        if (data.is_polygon)
+            packed_data = nucleus::vector_layer::details::pack_triangle_data(data);
+        else
+            packed_data = nucleus::vector_layer::details::pack_line_data(data.a, data.b, data.style_index);
+
         ShaderProgram shader = create_debug_shader(QString(R"(
             out lowp vec4 out_color;
             flat in lowp vec2 ok;
@@ -258,7 +270,7 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::details::
             void main() {
                 highp uvec2 cpp_packed_data = uvec2(%1u, %2u);
                 VectorLayerData data = VectorLayerData(ivec2(%3, %4),ivec2(%5, %6),ivec2(%7, %8), %9u>>1, (%9u&1u)==1u, bool(%10));
-                VectorLayerData unpacked_data = unpack_vectorlayer_data(cpp_packed_data);
+                VectorLayerData unpacked_data = unpack_data(cpp_packed_data);
 
                 bool unpack_ok = data == unpacked_data;
                 highp uvec2 packed_data = pack_vectorlayer_data(data);
@@ -269,8 +281,8 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::details::
                 gl_Position = vec4(vertices[gl_VertexID], 0.0, 1.0);
                 texcoords = 0.5 * gl_Position.xy + vec2(0.5);
             })")
-                .arg(nucleus::vector_layer::details::pack_triangle_data(data).x)
-                .arg(nucleus::vector_layer::details::pack_triangle_data(data).y)
+                .arg(packed_data.x)
+                .arg(packed_data.y)
                 .arg(data.a.x)
                 .arg(data.a.y)
                 .arg(data.b.x)
@@ -358,6 +370,16 @@ TEST_CASE("glsl tile functions")
             { glm::ivec2(5, 19), glm::ivec2(64, 34), glm::ivec2(53, 58), (303u << 1) | 1u, true },
             { glm::ivec2(40, 44), glm::ivec2(32, 29), glm::ivec2(38, 46), (151u << 1) | 0u, true },
             { glm::ivec2(16, 0), glm::ivec2(44, 55), glm::ivec2(48, 46), (819u << 1) | 1u, true },
+
+            { glm::ivec2(5, 33), glm::ivec2(14, 32), glm::ivec2(0, 0), (478u << 1) | 0u, false },
+            { glm::ivec2(43, 56), glm::ivec2(12, 49), glm::ivec2(0, 0), (389u << 1) | 1u, false },
+            { glm::ivec2(63, 38), glm::ivec2(26, 60), glm::ivec2(0, 0), (192u << 1) | 0u, false },
+            { glm::ivec2(27, 27), glm::ivec2(39, 33), glm::ivec2(0, 0), (179u << 1) | 1u, false },
+            { glm::ivec2(0, 18), glm::ivec2(55, 14), glm::ivec2(0, 0), (34u << 1) | 1u, false },
+            { glm::ivec2(17, 63), glm::ivec2(40, 33), glm::ivec2(0, 0), (15u << 1) | 0u, false },
+            { glm::ivec2(5, 19), glm::ivec2(64, 34), glm::ivec2(0, 0), (303u << 1) | 1u, false },
+            { glm::ivec2(40, 44), glm::ivec2(32, 29), glm::ivec2(0, 0), (151u << 1) | 0u, false },
+            { glm::ivec2(16, 0), glm::ivec2(44, 55), glm::ivec2(0, 0), (819u << 1) | 1u, false },
 
         };
 
