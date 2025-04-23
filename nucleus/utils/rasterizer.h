@@ -21,6 +21,8 @@
 
 #include <glm/glm.hpp>
 
+#include <clipper2/clipper.core.h>
+
 #define ALP_RASTERIZER_CDT
 
 namespace nucleus::utils::rasterizer {
@@ -562,6 +564,19 @@ void rasterize_lines(const PixelWriterFunction& pixel_writer, const std::vector<
     for (size_t i = 0; i < line_points.size(); ++i) {
         for (size_t j = 0; j < line_points[i].size() - 1; ++j) {
             details::render_line_preprocess(pixel_writer, { line_points[i][j + 0] * scale, line_points[i][j + 1] * scale }, { i, j }, distance);
+        }
+    }
+}
+
+template <PixelWriterFunctionConcept PixelWriterFunction>
+void rasterize_lines(const PixelWriterFunction& pixel_writer, const Clipper2Lib::Paths64& line_points, float distance = 0.0, float scale = 1.0)
+{
+    for (size_t i = 0; i < line_points.size(); ++i) {
+        for (size_t j = 0; j < line_points[i].size() - 1; ++j) {
+            details::render_line_preprocess(pixel_writer,
+                { glm::vec2(line_points[i][j + 0].x, line_points[i][j + 0].y) * scale, glm::vec2(line_points[i][j + 1].x, line_points[i][j + 1].y) * scale },
+                { i, j },
+                distance);
         }
     }
 }

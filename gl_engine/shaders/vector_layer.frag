@@ -380,7 +380,7 @@ void main() {
             lowp ivec2 grid_cell = ivec2(int(grid_lookup.x), int(grid_lookup.y)); // DEBUG
             lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
 
-            highp vec2 cell_offset = grid_cell * vec2(64);
+            highp vec2 cell_offset = grid_cell * grid_size;
 
 
             // get the buffer index and extract the correct texture_layer.y
@@ -428,6 +428,7 @@ void main() {
 
             lowp float geometry_influence = 0.0; // how much is the current line/polygon visible
             for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
+                // for(highp uint i = offset_size.x; i < offset_size.x + min(6u,offset_size.y); i++) // show only x layers
             // for(highp uint i = offset_size.x+ offset_size.y; i --> offset_size.x ; ) // reverse traversal
             {
 

@@ -89,14 +89,15 @@ namespace details {
         bool is_done;
     };
 
-    class PointCollectionVec2 : public std::vector<std::vector<glm::vec2>> {
+    // Clipper2Lib::Paths64
+    class PointCollectionVec2 : public Clipper2Lib::Paths64 {
     public:
-        using coordinate_type = float;
+        using coordinate_type = int64_t;
         static inline bool check_limits = false;
         static inline bool round = false;
         template <class... Args>
         PointCollectionVec2(Args&&... args)
-            : std::vector<std::vector<glm::vec2>>(std::forward<Args>(args)...)
+            : Clipper2Lib::Paths64(std::forward<Args>(args)...)
         {
         }
     };
@@ -122,6 +123,16 @@ namespace details {
         }
     };
 
+    struct GeometryData {
+        Clipper2Lib::Paths64 vertices;
+        std::vector<Clipper2Lib::Rect64> bounds;
+
+        radix::geometry::Aabb2i aabb;
+        std::pair<uint32_t, uint32_t> style_layer;
+        bool is_polygon;
+    };
+
+    using VectorLayers = std::map<uint32_t, std::vector<GeometryData>>;
     using VectorLayerCell = std::map<uint32_t, std::vector<glm::u32vec2>>;
     using VectorLayerGrid = std::vector<VectorLayerCell>;
 
@@ -130,24 +141,15 @@ namespace details {
         size_t geometry_amount;
     };
 
-    struct GeometryData {
-        std::vector<std::vector<glm::vec2>> vertices;
-        uint32_t extent;
-        std::vector<std::pair<uint32_t, uint32_t>> style_and_layer_indices;
-        bool is_polygon;
-    };
-
-    VectorLayerMeta preprocess_geometry(const std::vector<GeometryData>& data, const std::vector<glm::u32vec4> style_buffer);
-
     nucleus::Raster<ClipperRect> generate_clipper2_grid();
     std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes);
 
     size_t triangulize_earcut(
         const Clipper2Lib::Paths64& polygon_points, VectorLayerCell* temp_cell, const std::vector<std::pair<uint32_t, uint32_t>>& style_and_layer_indices);
 
+    VectorLayers parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
+    VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vector<glm::u32vec4> style_buffer);
     GpuVectorLayerTile create_gpu_tile(const VectorLayerMeta& meta);
-
-    std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
 
     std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(std::vector<std::pair<uint32_t, uint32_t>> styles, const std::vector<glm::u32vec4> style_buffer);
 
@@ -156,6 +158,8 @@ namespace details {
     VectorLayerData unpack_line_data(glm::uvec2 packed_data);
     VectorLayerData unpack_triangle_data(glm::uvec2 packed_data);
     VectorLayerData unpack_data(glm::uvec2 packed_data);
+
+    bool fully_covers(const Clipper2Lib::Paths64& solution, const Clipper2Lib::Rect64& rect);
 
 } // namespace details
 

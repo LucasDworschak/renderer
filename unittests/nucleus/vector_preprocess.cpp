@@ -369,6 +369,22 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         CHECK(solution[1][1].y == 0);
     }
 
+    SECTION("fully covers cell")
+    {
+        Clipper2Lib::Paths64 shapes1 = { Clipper2Lib::MakePath({ -10, -10, -10, 10, 10, 10, 10, -10 }) };
+        Clipper2Lib::Paths64 shapes2 = { Clipper2Lib::MakePath({ -10, -10, -10, 10, 10, 10, 10, -10 }) };
+        Clipper2Lib::Paths64 shapes3 = { Clipper2Lib::MakePath({ 0, -7, -7, 0, 0, 7, 7, 0 }) }; // all are outside but in a diamond shape -> not fully
+
+        Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(-5, -5, 5, 5);
+        Clipper2Lib::Paths64 solution1 = RectClip(rect, shapes1);
+        Clipper2Lib::Paths64 solution2 = RectClip(rect, shapes2);
+        Clipper2Lib::Paths64 solution3 = RectClip(rect, shapes3);
+
+        CHECK(nucleus::vector_layer::details::fully_covers(solution1, rect));
+        CHECK(nucleus::vector_layer::details::fully_covers(solution2, rect));
+        CHECK(!nucleus::vector_layer::details::fully_covers(solution3, rect));
+    }
+
     // SECTION("triangulize basic")
     // {
     //     Clipper2Lib::Paths64 in = { Clipper2Lib::MakePath({ -15, -15, 15, -15, 15, 15, -15, 15 }), Clipper2Lib::MakePath({ 0, -7, -7, 0, 0, 7, 7, 0 }) };

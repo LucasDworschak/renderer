@@ -34,13 +34,6 @@
 
 #include <earcut.hpp>
 
-// TODO performance
-// - when to sort tile data by layer
-//     - sorting it while parsing
-//          -> duplicates the data -> we have to do the clipping multiple times
-//     - sorting it afterwards (currently)
-//          -> we need the temp_grid structure -> by using other method we might be able to reduce temp data holders
-
 // allow vec2 points for earcut input
 namespace mapbox {
 namespace util {
@@ -142,17 +135,18 @@ std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(std::vector<std::pair
     return out_styles;
 }
 
-std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
+VectorLayers parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
 {
     const auto d = vector_tile_data.toStdString();
     const mapbox::vector_tile::buffer tile(d);
 
-    bool first_layer = true;
-    float scale = 1.0;
+    // bool first_layer = true;
+    // uint32_t extent;
+    constexpr float scale = 1.0;
 
-    std::vector<GeometryData> data;
+    constexpr auto cell_scale = float(constants::grid_size) / float(constants::tile_extent);
 
-    uint32_t extent;
+    VectorLayers data;
 
     const auto style_buffer = style.styles()->buffer();
 
@@ -162,12 +156,14 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
         const mapbox::vector_tile::layer layer = tile.getLayer(layer_name);
         std::size_t feature_count = layer.featureCount();
 
-        if (first_layer) {
-            first_layer = false;
-            extent = constants::tile_extent;
+        // if (first_layer) {
+        //     first_layer = false;
+        //     extent = constants::tile_extent;
 
-            scale = float(constants::tile_extent) / layer.getExtent();
-        }
+        //     scale = float(constants::tile_extent) / layer.getExtent();
+        // }
+
+        assert(layer.getExtent() == constants::tile_extent);
 
         for (std::size_t i = 0; i < feature_count; ++i) {
             const auto feature = mapbox::vector_tile::feature(layer.getFeature(i), layer);
@@ -181,7 +177,21 @@ std::vector<GeometryData> parse_tile(tile::Id id, const QByteArray& vector_tile_
 
             const auto is_polygon = feature.getType() == mapbox::vector_tile::GeomType::POLYGON;
             PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
-            data.emplace_back(std::vector<std::vector<glm::vec2>>(geom.begin(), geom.end()), extent, style_and_layer_indices, is_polygon);
+
+            radix::geometry::Aabb2i aabb({ constants::grid_size * 2, constants::grid_size * 2 }, { -constants::grid_size * 2, -constants::grid_size * 2 });
+            // calculate bounds
+            std::vector<Clipper2Lib::Rect64> bounds;
+            bounds.reserve(geom.size());
+            for (size_t j = 0; j < geom.size(); j++) {
+                const auto bound = Clipper2Lib::GetBounds(geom[j]);
+
+                aabb.expand_by({ float(bound.left) * cell_scale, float(bound.top) * cell_scale });
+                aabb.expand_by({ std::ceil(float(bound.right) * cell_scale), std::ceil(float(bound.bottom) * cell_scale) });
+                bounds.push_back(bound);
+            }
+            for (const auto& style_layer : style_and_layer_indices) {
+                data[style_layer.second].emplace_back(Clipper2Lib::Paths64(geom.begin(), geom.end()), std::move(bounds), aabb, style_layer, is_polygon);
+            }
         }
     }
 
@@ -336,8 +346,7 @@ std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<
 }
 
 // returns how many triangles have been generated;
-size_t triangulize_earcut(
-    const Clipper2Lib::Paths64& polygon_points, VectorLayerCell* temp_cell, const std::vector<std::pair<uint32_t, uint32_t>>& style_and_layer_indices)
+size_t triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, VectorLayerCell* temp_cell, const std::pair<uint32_t, uint32_t>& style_layer)
 {
     auto indices = mapbox::earcut<uint32_t>(polygon_points);
 
@@ -361,13 +370,9 @@ size_t triangulize_earcut(
         const auto p1 = polygon_points[ind1.first][ind1.second];
         const auto p2 = polygon_points[ind2.first][ind2.second];
 
-        for (const auto& style_layer : style_and_layer_indices) { // TODO currently (at the worst tile we are looking at) there is only one style/layer -> maybe
-                                                                  // we could optimize this by not using a for loop?
-            // const auto data = nucleus::vector_layer::details::pack_triangle_data2({ p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.first, true);
-            const auto data = nucleus::vector_layer::details::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.first, true });
+        const auto data = nucleus::vector_layer::details::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.first, true });
 
-            (*temp_cell)[style_layer.second].push_back(data);
-        }
+        (*temp_cell)[style_layer.second].push_back(data);
     }
 
     // returns how many triangles have been generated;
@@ -400,10 +405,35 @@ nucleus::Raster<ClipperRect> generate_clipper2_grid()
     return nucleus::Raster<ClipperRect>(constants::grid_size, std::move(grid));
 }
 
+bool fully_covers(const Clipper2Lib::Paths64& solution, const Clipper2Lib::Rect64& rect)
+{
+    if (solution.size() != 1 || solution[0].size() != 4)
+        return false; // the solution either has holes or does not fully cover the rect since we do not have exactly 4 points
+
+    bool top_left = false;
+    bool top_right = false;
+    bool bottom_left = false;
+    bool bottom_right = false;
+    for (int i = 0; i < 4; i++) {
+        if (solution[0][i].x <= rect.left && solution[0][i].y <= rect.top)
+            top_left = true;
+        if (solution[0][i].x >= rect.right && solution[0][i].y <= rect.top)
+            top_right = true;
+        else if (solution[0][i].x <= rect.left && solution[0][i].y >= rect.bottom)
+            bottom_left = true;
+        else if (solution[0][i].x >= rect.right && solution[0][i].y >= rect.bottom)
+            bottom_right = true;
+    }
+
+    // qDebug() << top_left << top_right << bottom_left << bottom_right;
+
+    return top_left && top_right && bottom_left && bottom_right;
+}
+
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-VectorLayerMeta preprocess_geometry(const std::vector<GeometryData>& data, const std::vector<glm::u32vec4> style_buffer)
+VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vector<glm::u32vec4> style_buffer)
 {
 
     // TODOs
@@ -414,57 +444,42 @@ VectorLayerMeta preprocess_geometry(const std::vector<GeometryData>& data, const
     auto clipper_grid = generate_clipper2_grid();
     auto temp_grid = VectorLayerGrid(constants::grid_size * constants::grid_size, VectorLayerCell());
 
-    const auto scale = float(clipper_grid.width()) / float(constants::tile_extent);
-
     size_t geometry_amount = 0;
+    constexpr auto scale = float(constants::grid_size) / float(constants::tile_extent);
 
-    // create the triangles from polygons
-    for (size_t i = 0; i < data.size(); ++i) {
+    for (const auto& [layer_index, data] : layers) {
 
-        radix::geometry::Aabb2i aabb({ clipper_grid.width() * 2, clipper_grid.height() * 2 }, { -100, -100 });
-        assert(data[i].extent == constants::tile_extent);
+        for (size_t i = 0; i < data.size(); ++i) {
+            if (data[i].is_polygon) {
 
-        if (data[i].is_polygon) {
+                const auto& style_layer = data[i].style_layer;
+                const auto& vertices = data[i].vertices;
+                const auto& bounds = data[i].bounds;
 
-            // GetBounds
-            Clipper2Lib::BoundedPaths64 shapes; // TODO move shape generation to parse_tile
-            shapes.reserve(data[i].vertices.size());
-            for (size_t j = 0; j < data[i].vertices.size(); j++) {
+                clipper_grid.visit(data[i].aabb, [&temp_grid, &vertices, &bounds, &style_layer, &geometry_amount](glm::uvec2 cell_pos, ClipperRect cell) {
+                    if (cell.is_done) {
+                        // qDebug() << "cell_done";
+                        return;
+                    }
 
-                auto& p = shapes.emplace_back();
-                p.path.reserve(data[i].vertices[j].size());
-                for (size_t k = 0; k < data[i].vertices[j].size(); k++) {
-                    p.path.emplace_back(data[i].vertices[j][k].x, data[i].vertices[j][k].y);
-                }
-                // TODO is it more efficient if we calculate the bounds within for loop? (we do not need to loop over every vertice twice)
-                p.bound = Clipper2Lib::GetBounds(p.path);
+                    Clipper2Lib::Paths64 solution = cell.clipper.Execute(vertices, bounds);
 
-                aabb.expand_by({ float(p.bound.left) * scale, float(p.bound.top) * scale });
-                aabb.expand_by({ std::ceil(float(p.bound.right) * scale), std::ceil(float(p.bound.bottom) * scale) });
-            }
+                    if (solution.empty())
+                        return;
 
-            const auto style_and_layer_indices = data[i].style_and_layer_indices;
+                    if (fully_covers(solution, cell.rect))
+                        cell.is_done = true;
 
-            clipper_grid.visit(aabb, [&temp_grid, &shapes, &style_and_layer_indices, &geometry_amount](glm::uvec2 cell_pos, ClipperRect cell) {
-                if (cell.is_done)
-                    return;
+                    // anchor clipped paths to cell origin
+                    solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
 
-                Clipper2Lib::Paths64 solution = cell.clipper.Execute(shapes);
+                    auto& temp_cell = temp_grid[int(cell_pos.x) + constants::grid_size * int(cell_pos.y)];
 
-                if (solution.empty())
-                    return;
+                    geometry_amount += triangulize_earcut(solution, &temp_cell, style_layer);
+                });
+            } else {
 
-                // anchor clipped paths to cell origin
-                solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
-
-                auto& temp_cell = temp_grid[int(cell_pos.x) + constants::grid_size * int(cell_pos.y)];
-
-                geometry_amount += triangulize_earcut(solution, &temp_cell, style_and_layer_indices);
-            });
-        } else {
-
-            for (const auto& style_layer : data[i].style_and_layer_indices) {
-                const auto line_width = float(style_buffer[style_layer.first >> 1].z) / float(constants::style_precision);
+                const auto line_width = float(style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision);
 
                 // std::unordered_set<glm::uvec2, Hasher> cell_list;
                 std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
@@ -475,8 +490,6 @@ VectorLayerMeta preprocess_geometry(const std::vector<GeometryData>& data, const
                         cell_list[glm::uvec2(pos)].insert(data_index);
                     }
                 };
-
-                const auto scale = float(constants::grid_size) / float(data[i].extent);
 
                 for (size_t j = 0; j < data[i].vertices.size(); ++j) {
                     // TODO: according to Task #151 -> we doubled the line width that goes into the acceleration structure because we are looking at tiles
@@ -490,8 +503,10 @@ VectorLayerMeta preprocess_geometry(const std::vector<GeometryData>& data, const
                 for (const auto& [cell_pos, indices] : cell_list) {
                     auto cell = clipper_grid.pixel(cell_pos);
 
-                    if (cell.is_done)
+                    if (cell.is_done) {
+                        // qDebug() << "cell_done";
                         continue;
+                    }
 
                     auto shapes = Clipper2Lib::Paths64 {};
                     for (const auto& index : indices) {
@@ -515,8 +530,9 @@ VectorLayerMeta preprocess_geometry(const std::vector<GeometryData>& data, const
 
                     for (const auto& line : solution) {
 
-                        const auto data = nucleus::vector_layer::details::pack_line_data({ line[0].x, line[0].y }, { line[1].x, line[1].y }, style_layer.first);
-                        temp_cell[style_layer.second].push_back(data);
+                        const auto packed_data
+                            = nucleus::vector_layer::details::pack_line_data({ line[0].x, line[0].y }, { line[1].x, line[1].y }, data[i].style_layer.first);
+                        temp_cell[data[i].style_layer.second].push_back(packed_data);
                     }
                     geometry_amount += solution.size();
 
@@ -526,13 +542,6 @@ VectorLayerMeta preprocess_geometry(const std::vector<GeometryData>& data, const
             }
         }
     }
-
-    // layer_collection.geometry_buffer = std::move(geometry_buffer);
-
-    // make sure that data_offset is not truncated
-    // assert(data_offset < (1u << (32 - constants::style_bits - 1)));
-
-    // qDebug() << "num indices: " << data_offset; // DEBUG how many indices are used
 
     return { temp_grid, geometry_amount };
 }
@@ -601,6 +610,8 @@ GpuVectorLayerTile create_gpu_tile(const VectorLayerMeta& meta)
             // previous cell)
         }
     }
+
+    // qDebug() << "max: " << max;
 
     // make sure that the buffer size is still like we expected and resize the data to actual buffer size
     assert(geometry_buffer.size() <= constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index]);
