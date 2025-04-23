@@ -20,14 +20,13 @@
 
 #include <vector>
 
+#include <clipper2/clipper.h>
 #include <glm/glm.hpp>
-
-#include "nucleus/tile/types.h"
-
-#include "Style.h"
 #include <radix/hasher.h>
 
-#include <clipper2/clipper.h>
+#include "nucleus/tile/types.h"
+#include "nucleus/vector_layer/Style.h"
+#include "nucleus/vector_layer/constants.h"
 
 namespace nucleus::vector_layer {
 
@@ -45,7 +44,6 @@ namespace details {
     constexpr int all_bits = 32; // per output channel
     constexpr int coordinate_bits_triangle = 8;
     constexpr int coordinate_bits_line = 10;
-    constexpr int coordinate_bits_cell = 6; // those bits can be used to address coordinates outside cell
 
     constexpr int available_style_bits_triangle = all_bits - (2 * coordinate_bits_triangle);
     constexpr int available_style_bits_line = all_bits - (2 * coordinate_bits_triangle);
@@ -62,7 +60,7 @@ namespace details {
     constexpr uint32_t coordinate_bitmask_triangle = (1u << coordinate_bits_triangle) - 1u;
     constexpr uint32_t coordinate_bitmask_line = (1u << coordinate_bits_line) - 1u;
 
-    constexpr int32_t cell_width = (1 << (coordinate_bits_cell));
+    constexpr int32_t cell_width = constants::tile_extent / constants::grid_size;
 
     constexpr int32_t max_cell_width_triangle = (1 << (coordinate_bits_triangle));
     constexpr int32_t geometry_offset_triangle = (max_cell_width_triangle - cell_width) / 2;

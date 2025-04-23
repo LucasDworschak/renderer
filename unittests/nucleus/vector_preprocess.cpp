@@ -444,6 +444,7 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         auto tile = details::create_gpu_tile(temp_data);
 
         CHECK(temp_data.geometry_amount == 148388);
+        // CHECK(temp_data.geometry_amount == 321063);// 128 grid
 
         BENCHMARK("parse tile")
         {

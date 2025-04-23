@@ -27,9 +27,10 @@
 namespace nucleus::vector_layer::constants {
 // sizes are all only one side -> and have to be squared to get the actual amount of data stored in the buffer
 // if values here change -> you also need to change them in the shader
-// constexpr auto grid_size = 64;
 constexpr auto grid_size = 64;
+// constexpr auto grid_size = 128;
 constexpr auto data_size = std::array<uint32_t, 4> { 64u, 128u, 256u, 512u }; // needs to be in ascending order
+// constexpr auto data_size = std::array<uint32_t, 4> { 128u, 64u, 512u, 1024u }; // needs to be in ascending order
 // how many array layers tiles per data size
 // NOTE: -1u is used to say that we should use the upper limit determined by renderingcontext, if renderingcontext gives us a lower value than set, it is
 // automatically lowered IMPORTANT: only set -1u for the first values since those values will be combined to only one array_helper

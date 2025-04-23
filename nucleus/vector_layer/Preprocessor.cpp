@@ -181,16 +181,21 @@ VectorLayers parse_tile(tile::Id id, const QByteArray& vector_tile_data, const S
             radix::geometry::Aabb2i aabb({ constants::grid_size * 2, constants::grid_size * 2 }, { -constants::grid_size * 2, -constants::grid_size * 2 });
             // calculate bounds
             std::vector<Clipper2Lib::Rect64> bounds;
-            bounds.reserve(geom.size());
-            for (size_t j = 0; j < geom.size(); j++) {
-                const auto bound = Clipper2Lib::GetBounds(geom[j]);
+            if (is_polygon) {
+                // only needed for polygons
+                bounds.reserve(geom.size());
+                for (size_t j = 0; j < geom.size(); j++) {
+                    const auto bound = Clipper2Lib::GetBounds(geom[j]);
 
-                aabb.expand_by({ float(bound.left) * cell_scale, float(bound.top) * cell_scale });
-                aabb.expand_by({ std::ceil(float(bound.right) * cell_scale), std::ceil(float(bound.bottom) * cell_scale) });
-                bounds.push_back(bound);
+                    aabb.expand_by({ std::floor(float(bound.left) * cell_scale), std::floor(float(bound.top) * cell_scale) });
+                    aabb.expand_by({ std::ceil(float(bound.right) * cell_scale), std::ceil(float(bound.bottom) * cell_scale) });
+                    bounds.push_back(bound);
+                }
+
+                // TODO if aabb does not intersect with grid at all -> continue;
             }
             for (const auto& style_layer : style_and_layer_indices) {
-                data[style_layer.second].emplace_back(Clipper2Lib::Paths64(geom.begin(), geom.end()), std::move(bounds), aabb, style_layer, is_polygon);
+                data[style_layer.second].emplace_back(Clipper2Lib::Paths64(geom.begin(), geom.end()), bounds, aabb, style_layer, is_polygon);
             }
         }
     }
@@ -385,6 +390,7 @@ nucleus::Raster<ClipperRect> generate_clipper2_grid()
     assert(constants::tile_extent / constants::grid_size <= cell_width);
 
     assert(cell_width < max_cell_width_line - 50); // make sure that we have plenty of space for big lines
+    assert(cell_width <= max_cell_width_triangle); // make sure that we have plenty of space for triangles
 
     constexpr auto clipper_margin = 1; // since clipper sometimes returns shapes slightly outside rect -> we need a small margin
 
@@ -399,6 +405,8 @@ nucleus::Raster<ClipperRect> generate_clipper2_grid()
                 (x + 0) * cell_width - geometry_offset_line + max_cell_width_line - clipper_margin,
                 (y + 0) * cell_width - geometry_offset_line + max_cell_width_line - clipper_margin);
             grid.emplace_back(ClipperRect { Clipper2Lib::RectClip64(rect), Clipper2Lib::RectClipLines64(rect_lines), rect, false });
+
+            // qDebug() << rect.left << rect.top << rect.right << rect.bottom;
         }
     }
 
@@ -456,27 +464,39 @@ VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vecto
                 const auto& vertices = data[i].vertices;
                 const auto& bounds = data[i].bounds;
 
-                clipper_grid.visit(data[i].aabb, [&temp_grid, &vertices, &bounds, &style_layer, &geometry_amount](glm::uvec2 cell_pos, ClipperRect cell) {
-                    if (cell.is_done) {
-                        // qDebug() << "cell_done";
-                        return;
-                    }
+                size_t cells_visited = 0;
 
-                    Clipper2Lib::Paths64 solution = cell.clipper.Execute(vertices, bounds);
+                clipper_grid.visit(
+                    data[i].aabb, [&cells_visited, &temp_grid, &vertices, &bounds, &style_layer, &geometry_amount](glm::uvec2 cell_pos, ClipperRect cell) {
+                        if (cell.is_done) {
+                            // qDebug() << "cell_done";
+                            return;
+                        }
 
-                    if (solution.empty())
-                        return;
+                        cells_visited++;
 
-                    if (fully_covers(solution, cell.rect))
-                        cell.is_done = true;
+                        // qDebug() << "cell: " << cell_pos.x << cell_pos.y;
 
-                    // anchor clipped paths to cell origin
-                    solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
+                        Clipper2Lib::Paths64 solution = cell.clipper.Execute(vertices, bounds);
 
-                    auto& temp_cell = temp_grid[int(cell_pos.x) + constants::grid_size * int(cell_pos.y)];
+                        if (solution.empty())
+                            return;
 
-                    geometry_amount += triangulize_earcut(solution, &temp_cell, style_layer);
-                });
+                        if (fully_covers(solution, cell.rect))
+                            cell.is_done = true;
+
+                        // anchor clipped paths to cell origin
+                        solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
+
+                        auto& temp_cell = temp_grid[int(cell_pos.x) + constants::grid_size * int(cell_pos.y)];
+
+                        geometry_amount += triangulize_earcut(solution, &temp_cell, style_layer);
+                    });
+
+                // if (cells_visited == 0) {
+                //     qDebug() << "no cells: " << data[i].aabb.min.x << data[i].aabb.min.y << data[i].aabb.max.x << data[i].aabb.max.y;
+                // }
+
             } else {
 
                 const auto line_width = float(style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision);
@@ -541,6 +561,8 @@ VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vecto
                 }
             }
         }
+
+        // qDebug() << geometry_amount;
     }
 
     return { temp_grid, geometry_amount };

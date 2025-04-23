@@ -73,8 +73,6 @@ struct Layer_Style
 ///////////////////////////////////////////////
 // CPP CONFIG CONSTANTS
 
-// const lowp int grid_size = 64;
-const highp vec2 grid_size = vec2(64.0,64.0); // not a singular int variable because there might be some precision problems with webgl if cast at later point
 
 const lowp uint sampler_offset = 16u - 2u; // used to calculate how many bits are used to determine the sampler index, and how many are used for the layer
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
@@ -181,6 +179,24 @@ VectorLayerData vertex_sample(lowp uint sampler_index, highp uint index, highp u
     {
         return unpack_data(texelFetch(geometry_buffer_sampler_3, ivec3(to_dict_pixel_512(index), texture_layer), 0).rg);
     }
+
+
+    // if(sampler_index == 0u)
+    // {
+    //     return unpack_data(texelFetch(geometry_buffer_sampler_0, ivec3(to_dict_pixel_128(index), texture_layer), 0).rg);
+    // }
+    // else if(sampler_index == 1u)
+    // {
+    //     return unpack_data(texelFetch(geometry_buffer_sampler_1, ivec3(to_dict_pixel_256(index), texture_layer), 0).rg);
+    // }
+    // else if(sampler_index == 2u)
+    // {
+    //     return unpack_data(texelFetch(geometry_buffer_sampler_2, ivec3(to_dict_pixel_512(index), texture_layer), 0).rg);
+    // }
+    // else
+    // {
+    //     return unpack_data(texelFetch(geometry_buffer_sampler_3, ivec3(to_dict_pixel_1024(index), texture_layer), 0).rg);
+    // }
 }
 
 mediump float float_zoom_interpolation()
@@ -381,6 +397,10 @@ void main() {
             lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
 
             highp vec2 cell_offset = grid_cell * grid_size;
+            // highp vec2 cell_offset = grid_cell * vec2(128.0,128.0);
+            // highp vec2 cell_offset = grid_cell * vec2(64.0,64.0);
+
+            // texout_albedo = vec3(cell_offset / tile_extent, 0.0);
 
 
             // get the buffer index and extract the correct texture_layer.y

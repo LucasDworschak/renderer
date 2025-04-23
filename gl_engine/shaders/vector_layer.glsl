@@ -18,6 +18,10 @@
 
 const highp float tile_extent = 4096.0;
 
+const highp vec2 grid_size = vec2(64.0,64.0); // not a singular int variable because there might be some precision problems with webgl if cast at later point
+// const highp vec2 grid_size = vec2(128.0,128.0); // not a singular int variable because there might be some precision problems with webgl if cast at later point
+
+
 struct VectorLayerData{
     highp ivec2 a;
     highp ivec2 b;
@@ -33,7 +37,6 @@ struct VectorLayerData{
 const lowp int  all_bits = 32; // per output channel
 const lowp int  coordinate_bits_triangle = 8;
 const lowp int  coordinate_bits_line = 10;
-const lowp int  coordinate_bits_cell = 6; // those bits can be used to address coordinates outside cell
 
 const lowp int  available_style_bits_triangle = all_bits - (2 * coordinate_bits_triangle);
 const lowp int  available_style_bits_line = all_bits - (2 * coordinate_bits_triangle);
@@ -50,7 +53,7 @@ const lowp int  coordinate_shift3_line = all_bits - (3 * coordinate_bits_line);
 const highp uint coordinate_bitmask_triangle = (1u << coordinate_bits_triangle) - 1u;
 const highp uint coordinate_bitmask_line = (1u << coordinate_bits_line) - 1u;
 
-const highp int cell_width = (1 << (coordinate_bits_cell));
+const highp int cell_width = int(tile_extent / grid_size.x);
 
 const highp int max_cell_width_triangle = (1 << (coordinate_bits_triangle));
 const highp int geometry_offset_triangle = (max_cell_width_triangle - cell_width) / 2;
