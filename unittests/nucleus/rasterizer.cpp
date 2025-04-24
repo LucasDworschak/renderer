@@ -167,7 +167,7 @@ TEST_CASE("nucleus/rasterizer")
         CHECK(vertices.size() == 9);
         // while the triangles are the same, the order the triangles are send might be different between rasterizers
 
-#ifdef ALP_RASTERIZER_CDT
+#ifdef ALP_VECTOR_LAYER_TESSELATOR_CDT
 
         // // 1st triangle
         CHECK(vertices[0].x == 1.0);
@@ -194,7 +194,7 @@ TEST_CASE("nucleus/rasterizer")
         CHECK(vertices[8].y == 1.0);
 
 #endif
-#ifdef ALP_RASTERIZER_EARCUT
+#ifdef ALP_VECTOR_LAYER_TESSELATOR_EARCUT
 
         // 1st triangle
         CHECK(vertices[0].x == 2.0);
@@ -235,7 +235,7 @@ TEST_CASE("nucleus/rasterizer")
         CHECK(vertices.size() == 6);
 
         // while the triangles are the same, the order the triangles are send might be different between rasterizers
-#ifdef ALP_RASTERIZER_CDT
+#ifdef ALP_VECTOR_LAYER_TESSELATOR_CDT
         // 1st triangle
         CHECK(vertices[0].x == 1.0);
         CHECK(vertices[0].y == 1.0);
@@ -252,7 +252,7 @@ TEST_CASE("nucleus/rasterizer")
         CHECK(vertices[5].x == 1.0);
         CHECK(vertices[5].y == 1.0);
 #endif
-#ifdef ALP_RASTERIZER_EARCUT
+#ifdef ALP_VECTOR_LAYER_TESSELATOR_EARCUT
 
         // 1st triangle
         CHECK(vertices[0].x == 2.0);

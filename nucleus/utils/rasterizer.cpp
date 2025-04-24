@@ -18,11 +18,11 @@
 
 #include "rasterizer.h"
 
-#ifdef ALP_RASTERIZER_CDT
+#ifdef ALP_VECTOR_LAYER_TESSELATOR_CDT
 #include <CDT.h>
 #endif
 
-#ifdef ALP_RASTERIZER_EARCUT
+#ifdef ALP_VECTOR_LAYER_TESSELATOR_EARCUT
 #include <earcut.hpp>
 
 // allow vec2 points for earcut input
@@ -43,7 +43,7 @@ namespace util {
 #endif
 
 namespace nucleus::utils::rasterizer {
-#ifdef ALP_RASTERIZER_CDT
+#ifdef ALP_VECTOR_LAYER_TESSELATOR_CDT
 std::vector<glm::ivec2> generate_neighbour_edges(size_t num_points, const size_t start_offset)
 {
     std::vector<glm::ivec2> edges;
@@ -134,7 +134,7 @@ std::vector<glm::vec2> triangulize(std::vector<std::vector<glm::vec2>> polygon_p
 
 #endif
 
-#ifdef ALP_RASTERIZER_EARCUT
+#ifdef ALP_VECTOR_LAYER_TESSELATOR_EARCUT
 
 std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes)
 {

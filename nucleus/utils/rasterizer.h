@@ -23,7 +23,7 @@
 
 #include <clipper2/clipper.core.h>
 
-#define ALP_RASTERIZER_CDT
+#define ALP_VECTOR_LAYER_TESSELATOR_CDT
 
 namespace nucleus::utils::rasterizer {
 /*
@@ -495,7 +495,7 @@ namespace details {
 
 } // namespace details
 
-#ifdef ALP_RASTERIZER_CDT
+#ifdef ALP_VECTOR_LAYER_TESSELATOR_CDT
 /*
  * generates edges of a polygon
  * this assumes that polygons neighbouring in the vector should form an edge and the first and last edge are also connected
