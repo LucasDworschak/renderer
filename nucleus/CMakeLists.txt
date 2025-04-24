@@ -32,7 +32,7 @@ alp_add_git_repository(goofy_tc URL https://github.com/AlpineMapsOrgDependencies
 
 alp_add_git_repository(cdt URL https://github.com/artem-ogre/CDT.git COMMITISH 46f1ce1f495a97617d90e8c833d0d29406335fdf DO_NOT_ADD_SUBPROJECT)
 alp_add_git_repository(earcut URL https://github.com/mapbox/earcut.hpp.git COMMITISH 7fa7aa30183849e988ae79ab2eef19f9ae97acf4 DO_NOT_ADD_SUBPROJECT)
-alp_add_git_repository(clipper2 URL https://github.com/AlpineMapsOrgDependencies/Clipper2.git COMMITISH d88c7838a8a7b11a15e89e9245d409eaa4bcbe1f DO_NOT_ADD_SUBPROJECT)
+alp_add_git_repository(clipper2 URL https://github.com/AlpineMapsOrgDependencies/Clipper2.git COMMITISH 5dffe1ecaacf3ddfceea2600530ebe7ee7f7d1de DO_NOT_ADD_SUBPROJECT)
 
 add_library(zppbits INTERFACE)
 target_include_directories(zppbits SYSTEM INTERFACE ${zppbits_SOURCE_DIR})
