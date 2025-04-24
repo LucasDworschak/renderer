@@ -396,7 +396,7 @@ void main() {
             lowp ivec2 grid_cell = ivec2(int(grid_lookup.x), int(grid_lookup.y)); // DEBUG
             lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
 
-            highp vec2 cell_offset = grid_cell * grid_size;
+            highp vec2 cell_offset = vec2(grid_cell) * grid_size;
             // highp vec2 cell_offset = grid_cell * vec2(128.0,128.0);
             // highp vec2 cell_offset = grid_cell * vec2(64.0,64.0);
 
