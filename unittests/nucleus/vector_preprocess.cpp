@@ -113,6 +113,35 @@ nucleus::Raster<uint8_t> visualize_grid(const nucleus::vector_layer::details::Ve
     return nucleus::Raster<uint8_t>(grid_width, std::move(output_grid));
 }
 
+void visualize_acceleration_grid(std::shared_ptr<const nucleus::Raster<uint32_t>> raster)
+{
+    std::vector<uint8_t> output_grid;
+
+    const auto& grid = raster->buffer();
+
+    for (size_t i = 0; i < grid.size(); ++i) {
+
+        const auto data = nucleus::utils::bit_coding::u32_to_u24_u8(grid[i]);
+
+        // grid is a singular uint32_t value that encodes the start index of the triangle list and the amount of triangles
+        if (data.y == 0) {
+            output_grid.push_back(0);
+        } else if (data.y == 1) {
+            output_grid.push_back(60u);
+        } else if (data.y == 2) {
+            output_grid.push_back(120u);
+        } else if (data.y == 3) {
+            output_grid.push_back(180u);
+        } else {
+            output_grid.push_back(255u);
+        }
+    }
+
+    auto output_raster = nucleus::Raster<uint8_t>(nucleus::vector_layer::constants::grid_size, std::move(output_grid));
+    auto image = nucleus::tile::conversion::u8raster_to_qimage(output_raster);
+    image.save(QString("vector_layer_amounts.png"));
+}
+
 /*
  *  both raster either have 0 or some value
  *  the value does not have to be the same
@@ -425,9 +454,46 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
     //     // };
     // }
 
+    SECTION("preprocess simple tile")
+    {
+        // the main reason for this test case is to check if the amount of data within a certain cell is correct
+        // we look at a tile on a mountain at a cell where only one polygon should be present
+
+        Style style(":/vectorlayerstyles/openstreetmap.json");
+        style.load();
+
+        auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 8781, 5760 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+        auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_mountain_14_8781_5760.pbf"));
+        file.open(QFile::ReadOnly);
+        const auto bytes = file.readAll();
+
+        const auto style_buffer = style.styles()->buffer();
+
+        auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
+        auto temp_data = details::preprocess_geometry(tile_data, style_buffer);
+        auto tile = details::create_gpu_tile(temp_data);
+
+        const auto& pixel = tile.acceleration_grid->pixel({ 40, 40 });
+        const auto data = nucleus::utils::bit_coding::u32_to_u24_u8(pixel);
+
+        // investigate geometry in detail
+        // const auto geom1 = nucleus::vector_layer::details::unpack_data(tile.geometry_buffer->buffer()[data.x]);
+        // const auto geom2 = nucleus::vector_layer::details::unpack_data(tile.geometry_buffer->buffer()[data.x + 1]);
+        // qDebug() << geom1.a.x << geom1.a.y << geom1.b.x << geom1.b.y << geom1.c.x << geom1.c.y << geom1.style_index;
+        // qDebug() << geom2.a.x << geom2.a.y << geom2.b.x << geom2.b.y << geom2.c.x << geom2.c.y << geom2.style_index;
+
+        // make sure that the amount of geometry at the cell is exactly 2
+        // 2 because we triangulate a square to two triangles
+        CHECK(data.y == 2);
+
+        // visualize_acceleration_grid(tile.acceleration_grid);
+    }
+
     SECTION("clipping vector tile to cell")
     { // real example
         Style style(":/vectorlayerstyles/openstreetmap.json");
+        // Style style(":/vectorlayerstyles/qwant.json");
+        // Style style(":/vectorlayerstyles/osm-bright.json");
         style.load();
 
         auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 8936, 5681 }, .scheme = nucleus::tile::Scheme::SlippyMap };
@@ -446,7 +512,7 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         auto temp_data = details::preprocess_geometry(tile_data, style_buffer);
         auto tile = details::create_gpu_tile(temp_data);
 
-        CHECK(temp_data.geometry_amount == 148388);
+        CHECK(temp_data.geometry_amount == 147725);
         // CHECK(temp_data.geometry_amount == 321063);// 128 grid
 
         BENCHMARK("parse tile")

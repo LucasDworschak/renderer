@@ -563,7 +563,7 @@ void main() {
             if(debug_draw_calls > int(upper_limit))
                 texout_albedo = vec3(1.0, 0.0, 0.0);
             else if (debug_draw_calls == 0)
-                texout_albedo = vec3(1.0, 0.0, 1.0);
+                texout_albedo = vec3(0.0, 0.0, 0.0);
             else
                 texout_albedo = vec3(0.0, float(debug_draw_calls) / upper_limit, 0.0);
         }

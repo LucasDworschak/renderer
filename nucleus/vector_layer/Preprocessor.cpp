@@ -455,7 +455,9 @@ VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vecto
     size_t geometry_amount = 0;
     constexpr auto scale = float(constants::grid_size) / float(constants::tile_extent);
 
-    for (const auto& [layer_index, data] : layers) {
+    for (auto it = layers.crbegin(); it != layers.crend(); ++it) {
+
+        auto& data = it->second;
 
         for (size_t i = 0; i < data.size(); ++i) {
             if (data[i].is_polygon) {
@@ -467,7 +469,7 @@ VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vecto
                 size_t cells_visited = 0;
 
                 clipper_grid.visit(
-                    data[i].aabb, [&cells_visited, &temp_grid, &vertices, &bounds, &style_layer, &geometry_amount](glm::uvec2 cell_pos, ClipperRect cell) {
+                    data[i].aabb, [&cells_visited, &temp_grid, &vertices, &bounds, &style_layer, &geometry_amount](glm::uvec2 cell_pos, ClipperRect& cell) {
                         if (cell.is_done) {
                             // qDebug() << "cell_done";
                             return;
