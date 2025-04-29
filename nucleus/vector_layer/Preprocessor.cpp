@@ -23,16 +23,14 @@
 
 #include <unordered_set>
 
+#include "constants.h"
 #include "nucleus/Raster.h"
+#include "nucleus/utils/rasterizer.h"
 #include <nucleus/utils/bit_coding.h>
 
-#include "nucleus/utils/rasterizer.h"
-
-#include <mapbox/vector_tile.hpp>
-
-#include "constants.h"
-
 #include <earcut.hpp>
+#include <glm/gtx/closest_point.hpp>
+#include <mapbox/vector_tile.hpp>
 
 // allow vec2 points for earcut input
 namespace mapbox {
@@ -194,6 +192,7 @@ VectorLayers parse_tile(tile::Id id, const QByteArray& vector_tile_data, const S
 
                 // TODO if aabb does not intersect with grid at all -> continue;
             }
+
             for (const auto& style_layer : style_and_layer_indices) {
                 data[style_layer.second].emplace_back(Clipper2Lib::Paths64(geom.begin(), geom.end()), bounds, aabb, style_layer, is_polygon);
             }
@@ -353,7 +352,7 @@ std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<
 // returns how many triangles have been generated;
 size_t triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, VectorLayerCell* temp_cell, const std::pair<uint32_t, uint32_t>& style_layer)
 {
-    auto indices = mapbox::earcut<uint32_t>(polygon_points);
+    const auto& indices = mapbox::earcut<uint32_t>(polygon_points);
 
     // move all polygons sizes to single accumulated array -> so that we can match the index
     std::vector<uint32_t> polygon_sizes;
@@ -367,17 +366,17 @@ size_t triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, VectorLaye
     // geometry_buffer.reserve(geometry_buffer.size() + indices.size());
 
     for (size_t i = 0; i < indices.size() / 3; ++i) {
-        const auto ind0 = get_split_index(indices[i * 3 + 0], polygon_sizes);
-        const auto ind1 = get_split_index(indices[i * 3 + 1], polygon_sizes);
-        const auto ind2 = get_split_index(indices[i * 3 + 2], polygon_sizes);
+        const auto& ind0 = get_split_index(indices[i * 3 + 0], polygon_sizes);
+        const auto& ind1 = get_split_index(indices[i * 3 + 1], polygon_sizes);
+        const auto& ind2 = get_split_index(indices[i * 3 + 2], polygon_sizes);
 
-        const auto p0 = polygon_points[ind0.first][ind0.second];
-        const auto p1 = polygon_points[ind1.first][ind1.second];
-        const auto p2 = polygon_points[ind2.first][ind2.second];
+        const auto& p0 = polygon_points[ind0.first][ind0.second];
+        const auto& p1 = polygon_points[ind1.first][ind1.second];
+        const auto& p2 = polygon_points[ind2.first][ind2.second];
 
-        const auto data = nucleus::vector_layer::details::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.first, true });
+        const auto& data = nucleus::vector_layer::details::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.first, true });
 
-        (*temp_cell)[style_layer.second].push_back(data);
+        (*temp_cell)[style_layer.second].emplace_back(data);
     }
 
     // returns how many triangles have been generated;
@@ -438,6 +437,44 @@ bool fully_covers(const Clipper2Lib::Paths64& solution, const Clipper2Lib::Rect6
     return top_left && top_right && bottom_left && bottom_right;
 }
 
+// checks if a line fully covers the cell with the given line width
+// if it does the result is the index of the line index where this is the case, else -1u is returned
+size_t line_fully_covers(const Clipper2Lib::Paths64& solution, float line_width, const Clipper2Lib::Rect64& rect)
+{
+
+    const auto rect_center = glm::vec2(rect.left + (rect.right - rect.left) / 2, rect.top + (rect.bottom - rect.top) / 2); // TODO could be calculated once
+    const auto diagonal_dist_from_center = glm::distance(glm::vec2(rect.left, rect.top), rect_center); // TODO can be calculated outside once
+
+    // qDebug() << "dist_from_center" << diagonal_dist_from_center;
+
+    // no line will ever fill the cell
+    if (line_width < diagonal_dist_from_center) {
+        return -1u;
+    }
+
+    for (size_t i = 0; i < solution.size(); i++) {
+        const auto line = solution[i];
+
+        // const auto y_diff = line[1].y - line[0].y;
+        // const auto x_diff = line[1].x - line[0].x;
+
+        // // dist to center
+        // const auto line_dist_to_furthest_point
+        //     = abs(y_diff * rect_center.x - x_diff * rect_center.y + float(line[1].x) * float(line[0].y) - float(line[1].y) * float(line[0].x))
+        //         / sqrt(y_diff * y_diff + x_diff * x_diff)
+        //     + diagonal_dist_from_center;
+
+        const auto line_dist_to_furthest_point
+            = glm::distance(glm::closestPointOnLine(rect_center, glm::vec2(line[0].x, line[0].y), glm::vec2(line[1].x, line[1].y)), rect_center)
+            + diagonal_dist_from_center;
+
+        if (line_width >= line_dist_to_furthest_point)
+            return size_t(i);
+    }
+
+    return -1u;
+}
+
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
@@ -491,7 +528,6 @@ VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vecto
                         solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
 
                         auto& temp_cell = temp_grid[int(cell_pos.x) + constants::grid_size * int(cell_pos.y)];
-
                         geometry_amount += triangulize_earcut(solution, &temp_cell, style_layer);
                     });
 
@@ -513,17 +549,15 @@ VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vecto
                     }
                 };
 
-                for (size_t j = 0; j < data[i].vertices.size(); ++j) {
-                    // TODO: according to Task #151 -> we doubled the line width that goes into the acceleration structure because we are looking at tiles
-                    // that are bigger
-                    // Nevertheless, we artificially worsened the performance by introducing more cells where a line could be (although it is only there on
-                    // specific zoom levels)
-                    // This performance issue will be solved with Task #198 (mipmaps)
-                    nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 2.0, scale);
-                }
+                // TODO: according to Task #151 -> we doubled the line width that goes into the acceleration structure because we are looking at tiles
+                // that are bigger
+                // Nevertheless, we artificially worsened the performance by introducing more cells where a line could be (although it is only there on
+                // specific zoom levels)
+                // This performance issue will be solved with Task #198 (mipmaps)
+                nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 2.0, scale);
 
                 for (const auto& [cell_pos, indices] : cell_list) {
-                    auto cell = clipper_grid.pixel(cell_pos);
+                    auto& cell = clipper_grid.pixel(cell_pos);
 
                     if (cell.is_done) {
                         // qDebug() << "cell_done";
@@ -538,13 +572,23 @@ VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vecto
                             { long(data[i].vertices[index.x][index.y + 1].x), long(data[i].vertices[index.x][index.y + 1].y) } });
                     }
 
-                    // TODO clipper rect needs to be larger (also probably best if created outside)
-                    // auto clipper = Clipper2Lib::RectClipLines64(cell.rect);
                     Clipper2Lib::Paths64 solution = cell.clipper_lines.Execute(shapes);
 
                     if (solution.empty())
                         continue;
 
+                    // TODO this would set cells to is_done if a line fully covers it. but:
+                    //  1) this does not fully work for some zoom levels -> investigate why we have some white cells in certain circumstances
+                    //      -> currently I think it has something to do with the * 2.0 multiplier when selecting cells, and/or the blending between 2 zooms
+                    //  2) this does not really work for the most troublesome zoom levels (like 13/14) since the lines are too small to be much of concern there
+                    //      -> maybe more useful when we reduce the grid cell size and or for optimizing close cells
+
+                    // size_t full_cover_line_index = line_fully_covers(solution, line_width, cell.rect);
+                    // if (full_cover_line_index != -1u) {
+                    //     cell.is_done = true;
+                    // }
+
+                    // TODO move translate before clipping and only clip with one single cell
                     // anchor clipped paths to cell origin
                     solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
 
@@ -557,9 +601,6 @@ VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vecto
                         temp_cell[data[i].style_layer.second].push_back(packed_data);
                     }
                     geometry_amount += solution.size();
-
-                    // geometry_amount += triangulize_earcut(solution, &temp_cell, style_and_layer_indices);
-                    // TODO call pack_line and insert it into the temp_cell
                 }
             }
         }
@@ -567,7 +608,7 @@ VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vecto
         // qDebug() << geometry_amount;
     }
 
-    return { temp_grid, geometry_amount };
+    return { std::move(temp_grid), geometry_amount };
 }
 
 /*

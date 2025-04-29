@@ -417,42 +417,30 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         CHECK(nucleus::vector_layer::details::fully_covers(solution4, rect));
     }
 
-    // SECTION("triangulize basic")
-    // {
-    //     Clipper2Lib::Paths64 in = { Clipper2Lib::MakePath({ -15, -15, 15, -15, 15, 15, -15, 15 }), Clipper2Lib::MakePath({ 0, -7, -7, 0, 0, 7, 7, 0 }) };
-    //     // std::vector<std::vector<glm::vec2>> in { { { 0, 0 }, { 0, 1 }, { 1, 1 }, { 1, 0 } } };
+    SECTION("line fully covers cell")
+    {
+        Clipper2Lib::Paths64 shapes1 = { Clipper2Lib::MakePath({ 0, -5, 0, 5 }) };
+        Clipper2Lib::Paths64 shapes2 = { Clipper2Lib::MakePath({ 1, -5, 1, 5 }) }; // barely not fully covered with 7.5 width
+        Clipper2Lib::Paths64 shapes3 = { Clipper2Lib::MakePath({ 0, -15, 0, -5 }) }; // one end point is barely at the edge of the rect
 
-    //     auto out = std::vector<glm::uvec3>();
-    //     auto out2 = std::vector<glm::uvec3>();
-    //     triangulize_earcut(in, &out);
-    //     triangulize(in, true, &out2);
+        Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(-5, -5, 5, 5);
 
-    //     CHECK(out.size() == 8);
-    //     CHECK(out2.size() == 8);
-    // }
+        // auto clipper = Clipper2Lib::RectClipLines64({ rect });
+        // Clipper2Lib::Paths64 solution1 = clipper.Execute(shapes1);
+        // Clipper2Lib::Paths64 solution2 = clipper.Execute(shapes2);
 
-    // SECTION("triangulize tile")
-    // {
-    //     Style style(":/vectorlayerstyles/openstreetmap.json");
-    //     style.load();
+        // line_width is too small -> we do not even try
+        CHECK(nucleus::vector_layer::details::line_fully_covers(shapes1, 5.0, rect) == -1u);
+        // barely fully covers
+        CHECK(nucleus::vector_layer::details::line_fully_covers(shapes1, 7.5, rect) == 0);
+        // barely not fully covered since translated by 1 unit
+        CHECK(nucleus::vector_layer::details::line_fully_covers(shapes2, 7.5, rect) == -1u);
 
-    //     auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 8936, 5681 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-    //     auto file = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_benchmark_14_8936_5681.pbf"));
-    //     file.open(QFile::ReadOnly);
-    //     const auto bytes = file.readAll();
+        CHECK(nucleus::vector_layer::details::line_fully_covers(shapes3, 7.1 + 5.0, rect) == 0); // barely full cover
+        CHECK(nucleus::vector_layer::details::line_fully_covers(shapes3, 7.0 + 5.0, rect) == -1u); // barely outside full cover
 
-    //     auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
-    //     // BENCHMARK("triangulize cdt")
-    //     // {
-    //     //     auto out = triangulize_tile_cdt(tile_data);
-    //     //     CHECK(out.size() == 46868);
-    //     // };
-    //     // BENCHMARK("triangulize earcut")
-    //     // {
-    //     //     auto out2 = triangulize_tile_earcut(tile_data);
-    //     //     CHECK(out2.size() == 46671);
-    //     // };
-    // }
+        // CHECK(nucleus::vector_layer::details::line_fully_covers(solution1, 5.0, rect));
+    }
 
     SECTION("preprocess simple tile")
     {
@@ -538,13 +526,6 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
             auto output = nucleus::vector_layer::preprocess(id, bytes, style);
             return output;
         };
-
-        // const auto style_buffer = style.styles()->buffer();
-        // BENCHMARK("old method")
-        // {
-        //     auto g = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
-        //     CHECK(g.vertex_buffer.size() == 57255);
-        // };
     }
 }
 

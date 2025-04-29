@@ -46,7 +46,7 @@ namespace details {
     constexpr int coordinate_bits_line = 10;
 
     constexpr int available_style_bits_triangle = all_bits - (2 * coordinate_bits_triangle);
-    constexpr int available_style_bits_line = all_bits - (2 * coordinate_bits_triangle);
+    constexpr int available_style_bits_line = all_bits - (2 * coordinate_bits_triangle); // TODO this should be bits_line
 
     constexpr int coordinate_shift1_triangle = all_bits - coordinate_bits_triangle;
     constexpr int coordinate_shift2_triangle = all_bits - (2 * coordinate_bits_triangle);
@@ -158,6 +158,7 @@ namespace details {
     VectorLayerData unpack_data(glm::uvec2 packed_data);
 
     bool fully_covers(const Clipper2Lib::Paths64& solution, const Clipper2Lib::Rect64& rect);
+    size_t line_fully_covers(const Clipper2Lib::Paths64& solution, float line_width, const Clipper2Lib::Rect64& rect);
 
 } // namespace details
 
