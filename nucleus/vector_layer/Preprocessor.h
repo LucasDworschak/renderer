@@ -130,7 +130,7 @@ struct GeometryData {
 
 using VectorLayers = std::map<uint32_t, std::vector<GeometryData>>;
 using VectorLayerCell = std::map<uint32_t, std::vector<glm::u32vec2>>;
-using VectorLayerGrid = std::vector<VectorLayerCell>;
+using VectorLayerGrid = std::array<VectorLayerCell, constants::grid_size * constants::grid_size>;
 
 struct VectorLayerMeta {
     VectorLayerGrid temp_grid;
@@ -139,12 +139,12 @@ struct VectorLayerMeta {
 
 class Preprocessor {
 public:
-    Preprocessor() { }
+    Preprocessor(Style&& style);
 
-    GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
+    GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data);
 
-    VectorLayers parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style);
-    VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vector<glm::u32vec4> style_buffer);
+    VectorLayers parse_tile(tile::Id id, const QByteArray& vector_tile_data);
+    VectorLayerMeta preprocess_geometry(const VectorLayers& layers);
     GpuVectorLayerTile create_gpu_tile(const VectorLayerMeta& meta);
 
     static glm::u32vec2 pack_triangle_data(VectorLayerData data);
@@ -161,12 +161,19 @@ public:
     static std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(
         std::vector<std::pair<uint32_t, uint32_t>> styles, const std::vector<glm::u32vec4> style_buffer);
 
+    const Style& style();
+
 private:
     std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes);
 
     size_t triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, VectorLayerCell* temp_cell, const std::pair<uint32_t, uint32_t>& style_layer);
 
-    nucleus::Raster<ClipperRect> generate_clipper2_grid();
+    void generate_clipper_grid();
+
+    const Style m_style;
+    const std::vector<glm::u32vec4> m_style_buffer;
+
+    nucleus::Raster<ClipperRect> m_clipper_grid;
 };
 
 } // namespace nucleus::vector_layer

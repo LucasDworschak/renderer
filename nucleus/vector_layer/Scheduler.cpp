@@ -25,8 +25,8 @@ namespace nucleus::vector_layer {
 
 Scheduler::Scheduler(const Scheduler::Settings& settings, Style&& style)
     : nucleus::tile::Scheduler(settings)
-    , m_style(std::move(style))
     , m_needs_to_update_style(true)
+    , m_preprocessor(std::move(style))
 {
     m_default_tile = nucleus::vector_layer::Preprocessor::create_default_gpu_tile();
 }
@@ -41,7 +41,7 @@ void Scheduler::transform_and_emit(const std::vector<tile::DataQuad>& new_quads,
     for (const auto& quad : new_quads) {
         for (unsigned i = 0; i < 4; ++i) {
 
-            GpuVectorLayerTile gpu_tile = m_preprocessor.preprocess(quad.tiles[i].id, *quad.tiles[i].data, m_style);
+            GpuVectorLayerTile gpu_tile = m_preprocessor.preprocess(quad.tiles[i].id, *quad.tiles[i].data);
             if (gpu_tile.id != quad.tiles[i].id) {
                 gpu_tile = m_default_tile;
                 gpu_tile.id = quad.tiles[i].id;
@@ -58,7 +58,7 @@ void Scheduler::set_enabled(bool new_enabled)
     nucleus::tile::Scheduler::set_enabled(new_enabled);
 
     if (m_needs_to_update_style) {
-        emit style_updated(m_style.styles());
+        emit style_updated(m_preprocessor.style().styles());
         m_needs_to_update_style = false;
     }
 }

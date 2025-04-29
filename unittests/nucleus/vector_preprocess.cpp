@@ -455,12 +455,12 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         file.open(QFile::ReadOnly);
         const auto bytes = file.readAll();
 
-        const auto style_buffer = style.styles()->buffer();
+        // const auto style_buffer = style.styles()->buffer();
 
-        Preprocessor preprocessor;
+        Preprocessor preprocessor(std::move(style));
 
-        auto tile_data = preprocessor.parse_tile(id, bytes, style);
-        auto temp_data = preprocessor.preprocess_geometry(tile_data, style_buffer);
+        auto tile_data = preprocessor.parse_tile(id, bytes);
+        auto temp_data = preprocessor.preprocess_geometry(tile_data);
         auto tile = preprocessor.create_gpu_tile(temp_data);
 
         const auto& pixel = tile.acceleration_grid->pixel({ 40, 40 });
@@ -492,16 +492,15 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         const auto bytes = file.readAll();
 
         // auto tile_data = nucleus::vector_layer::Preprocessor::parse_tile(id, bytes, style);
-        const auto style_buffer = style.styles()->buffer();
 
-        Preprocessor preprocessor;
+        Preprocessor preprocessor(std::move(style));
 
         // auto clipper_grid = nucleus::vector_layer::Preprocessor::generate_clipper2_grid(nucleus::vector_layer::constants::grid_size);
 
         // auto meta = nucleus::vector_layer::Preprocessor::preprocess_geometry(tile_data, style_buffer);
         // CHECK(meta.geometry_amount == 68413);
-        auto tile_data = preprocessor.parse_tile(id, bytes, style);
-        auto temp_data = preprocessor.preprocess_geometry(tile_data, style_buffer);
+        auto tile_data = preprocessor.parse_tile(id, bytes);
+        auto temp_data = preprocessor.preprocess_geometry(tile_data);
         auto tile = preprocessor.create_gpu_tile(temp_data);
 
         CHECK(temp_data.geometry_amount == 147725);
@@ -509,13 +508,13 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
         BENCHMARK("parse tile")
         {
-            auto output = preprocessor.parse_tile(id, bytes, style);
+            auto output = preprocessor.parse_tile(id, bytes);
             return output;
         };
 
         BENCHMARK("preprocess geometry")
         {
-            auto output = preprocessor.preprocess_geometry(tile_data, style_buffer);
+            auto output = preprocessor.preprocess_geometry(tile_data);
             return output;
         };
 
@@ -527,7 +526,7 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
         BENCHMARK("complete preprocess")
         {
-            auto output = preprocessor.preprocess(id, bytes, style);
+            auto output = preprocessor.preprocess(id, bytes);
             return output;
         };
     }

@@ -59,6 +59,15 @@ namespace util {
 
 namespace nucleus::vector_layer {
 
+Preprocessor::Preprocessor(Style&& style)
+    : m_style(std::move(style))
+    , m_style_buffer(m_style.styles()->buffer())
+{
+    generate_clipper_grid();
+}
+
+const Style& Preprocessor::style() { return m_style; }
+
 GpuVectorLayerTile Preprocessor::create_default_gpu_tile()
 {
     GpuVectorLayerTile default_tile;
@@ -70,7 +79,7 @@ GpuVectorLayerTile Preprocessor::create_default_gpu_tile()
     return default_tile;
 }
 
-GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
+GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vector_tile_data)
 {
     if (vector_tile_data.isEmpty())
         return {};
@@ -82,10 +91,9 @@ GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vecto
     //     glm::vec2(50.5 / 64.0 * constants::grid_size, 50.5 / 64.0 * constants::grid_size) } };
     // const std::vector<unsigned int> style_indices = { 1 };
 
-    auto tile_data = parse_tile(id, vector_tile_data, style);
+    auto tile_data = parse_tile(id, vector_tile_data);
 
-    const auto style_buffer = style.styles()->buffer();
-    auto temp_data = preprocess_geometry(tile_data, style_buffer);
+    auto temp_data = preprocess_geometry(tile_data);
 
     // return if not a single thing was written
     if (temp_data.geometry_amount == 0)
@@ -131,7 +139,7 @@ std::vector<std::pair<uint32_t, uint32_t>> Preprocessor::simplify_styles(
     return out_styles;
 }
 
-VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
+VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile_data)
 {
     const auto d = vector_tile_data.toStdString();
     const mapbox::vector_tile::buffer tile(d);
@@ -144,7 +152,6 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
 
     VectorLayers data;
 
-    const auto style_buffer = style.styles()->buffer();
 
     for (const auto& layer_name : tile.layerNames()) {
         // qDebug() << layer_name << id.zoom_level;
@@ -165,8 +172,8 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
             const auto feature = mapbox::vector_tile::feature(layer.getFeature(i), layer);
 
             const auto type = (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) ? "line" : "fill";
-            auto style_and_layer_indices = style.indices(layer_name, type, id.zoom_level, feature);
-            style_and_layer_indices = simplify_styles(style_and_layer_indices, style_buffer);
+            auto style_and_layer_indices = m_style.indices(layer_name, type, id.zoom_level, feature);
+            style_and_layer_indices = simplify_styles(style_and_layer_indices, m_style_buffer);
 
             if (style_and_layer_indices.size() == 0) // no styles found -> we do not visualize it
                 continue;
@@ -382,7 +389,7 @@ size_t Preprocessor::triangulize_earcut(
     return indices.size() / 3;
 }
 
-nucleus::Raster<ClipperRect> Preprocessor::generate_clipper2_grid()
+void Preprocessor::generate_clipper_grid()
 {
     // make sure that bits we have declared for the cell width are exactly the same amount as the bits we need
     assert(constants::tile_extent / constants::grid_size <= cell_width);
@@ -408,7 +415,7 @@ nucleus::Raster<ClipperRect> Preprocessor::generate_clipper2_grid()
         }
     }
 
-    return nucleus::Raster<ClipperRect>(constants::grid_size, std::move(grid));
+    m_clipper_grid = nucleus::Raster<ClipperRect>(constants::grid_size, std::move(grid));
 }
 
 bool Preprocessor::fully_covers(const Clipper2Lib::Paths64& solution, const Clipper2Lib::Rect64& rect)
@@ -477,7 +484,7 @@ size_t Preprocessor::line_fully_covers(const Clipper2Lib::Paths64& solution, flo
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers, const std::vector<glm::u32vec4> style_buffer)
+VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers)
 {
 
     // TODOs
@@ -485,8 +492,13 @@ VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers, co
     // -- maybe array<array<vector> -> since we also know the max amount of layer_indices and we can then also create the std::vectors with a default size
     // beforehand
 
-    auto clipper_grid = generate_clipper2_grid();
-    auto temp_grid = VectorLayerGrid(constants::grid_size * constants::grid_size, VectorLayerCell());
+    // reset clipper grid
+    for (auto& cell : m_clipper_grid) {
+        cell.is_done = false;
+    }
+
+    // auto temp_grid = VectorLayerGrid(constants::grid_size * constants::grid_size, VectorLayerCell());
+    VectorLayerGrid temp_grid;
 
     size_t geometry_amount = 0;
     constexpr auto scale = float(constants::grid_size) / float(constants::tile_extent);
@@ -504,7 +516,7 @@ VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers, co
 
                 size_t cells_visited = 0;
 
-                clipper_grid.visit(data[i].aabb,
+                m_clipper_grid.visit(data[i].aabb,
                     [this, &cells_visited, &temp_grid, &vertices, &bounds, &style_layer, &geometry_amount](glm::uvec2 cell_pos, ClipperRect& cell) {
                         if (cell.is_done) {
                             // qDebug() << "cell_done";
@@ -536,7 +548,7 @@ VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers, co
 
             } else {
 
-                const auto line_width = float(style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision);
+                const auto line_width = float(m_style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision);
 
                 // std::unordered_set<glm::uvec2, Hasher> cell_list;
                 std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
@@ -556,7 +568,7 @@ VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers, co
                 nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 2.0, scale);
 
                 for (const auto& [cell_pos, indices] : cell_list) {
-                    auto& cell = clipper_grid.pixel(cell_pos);
+                    auto& cell = m_clipper_grid.pixel(cell_pos);
 
                     if (cell.is_done) {
                         // qDebug() << "cell_done";

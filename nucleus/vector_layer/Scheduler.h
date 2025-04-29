@@ -43,7 +43,6 @@ protected:
     void transform_and_emit(const std::vector<tile::DataQuad>& new_quads, const std::vector<tile::Id>& deleted_quads) override;
 
 private:
-    Style m_style;
     bool m_needs_to_update_style;
     nucleus::tile::GpuVectorLayerTile m_default_tile;
 
