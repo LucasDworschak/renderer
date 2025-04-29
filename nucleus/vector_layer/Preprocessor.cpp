@@ -63,10 +63,11 @@ Preprocessor::Preprocessor(Style&& style)
     : m_style(std::move(style))
     , m_style_buffer(m_style.styles()->buffer())
 {
-    generate_clipper_grid();
+    generate_preprocess_grid();
 }
 
 const Style& Preprocessor::style() { return m_style; }
+size_t Preprocessor::processed_amount() { return m_processed_amount; }
 
 GpuVectorLayerTile Preprocessor::create_default_gpu_tile()
 {
@@ -93,13 +94,13 @@ GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vecto
 
     auto tile_data = parse_tile(id, vector_tile_data);
 
-    auto temp_data = preprocess_geometry(tile_data);
+    preprocess_geometry(tile_data);
 
     // return if not a single thing was written
-    if (temp_data.geometry_amount == 0)
+    if (m_processed_amount == 0u)
         return {};
 
-    auto tile = create_gpu_tile(temp_data);
+    auto tile = create_gpu_tile();
     tile.id = id;
 
     return tile;
@@ -389,7 +390,7 @@ size_t Preprocessor::triangulize_earcut(
     return indices.size() / 3;
 }
 
-void Preprocessor::generate_clipper_grid()
+void Preprocessor::generate_preprocess_grid()
 {
     // make sure that bits we have declared for the cell width are exactly the same amount as the bits we need
     assert(constants::tile_extent / constants::grid_size <= cell_width);
@@ -399,7 +400,7 @@ void Preprocessor::generate_clipper_grid()
 
     constexpr auto clipper_margin = 1; // since clipper sometimes returns shapes slightly outside rect -> we need a small margin
 
-    std::vector<ClipperRect> grid;
+    std::vector<PreprocessCell> grid;
     for (int y = 0; y < constants::grid_size; y++) {
         for (int x = 0; x < constants::grid_size; x++) {
             // const auto rect = Clipper2Lib::Rect64(x * cell_width, y * cell_width, (x + 1) * cell_width - 1, (y + 1) * cell_width - 1);
@@ -409,13 +410,14 @@ void Preprocessor::generate_clipper_grid()
                 y * cell_width - geometry_offset_line + clipper_margin,
                 (x + 0) * cell_width - geometry_offset_line + max_cell_width_line - clipper_margin,
                 (y + 0) * cell_width - geometry_offset_line + max_cell_width_line - clipper_margin);
-            grid.emplace_back(ClipperRect { Clipper2Lib::RectClip64(rect), Clipper2Lib::RectClipLines64(rect_lines), rect, false });
+
+            grid.emplace_back(PreprocessCell { Clipper2Lib::RectClip64(rect), Clipper2Lib::RectClipLines64(rect_lines), rect, VectorLayerCell(), false });
 
             // qDebug() << rect.left << rect.top << rect.right << rect.bottom;
         }
     }
 
-    m_clipper_grid = nucleus::Raster<ClipperRect>(constants::grid_size, std::move(grid));
+    m_preprocess_grid = nucleus::Raster<PreprocessCell>(constants::grid_size, std::move(grid));
 }
 
 bool Preprocessor::fully_covers(const Clipper2Lib::Paths64& solution, const Clipper2Lib::Rect64& rect)
@@ -484,7 +486,7 @@ size_t Preprocessor::line_fully_covers(const Clipper2Lib::Paths64& solution, flo
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers)
+void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 {
 
     // TODOs
@@ -492,15 +494,16 @@ VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers)
     // -- maybe array<array<vector> -> since we also know the max amount of layer_indices and we can then also create the std::vectors with a default size
     // beforehand
 
-    // reset clipper grid
-    for (auto& cell : m_clipper_grid) {
+    // reset grid
+    for (auto& cell : m_preprocess_grid) {
         cell.is_done = false;
+
+        for (auto& data : cell.cell_data) {
+            data.second.clear();
+        }
     }
 
-    // auto temp_grid = VectorLayerGrid(constants::grid_size * constants::grid_size, VectorLayerCell());
-    VectorLayerGrid temp_grid;
-
-    size_t geometry_amount = 0;
+    m_processed_amount = 0;
     constexpr auto scale = float(constants::grid_size) / float(constants::tile_extent);
 
     for (auto it = layers.crbegin(); it != layers.crend(); ++it) {
@@ -516,31 +519,29 @@ VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers)
 
                 size_t cells_visited = 0;
 
-                m_clipper_grid.visit(data[i].aabb,
-                    [this, &cells_visited, &temp_grid, &vertices, &bounds, &style_layer, &geometry_amount](glm::uvec2 cell_pos, ClipperRect& cell) {
-                        if (cell.is_done) {
-                            // qDebug() << "cell_done";
-                            return;
-                        }
+                m_preprocess_grid.visit(data[i].aabb, [this, &cells_visited, &vertices, &bounds, &style_layer](glm::uvec2, PreprocessCell& cell) {
+                    if (cell.is_done) {
+                        // qDebug() << "cell_done";
+                        return;
+                    }
 
-                        cells_visited++;
+                    cells_visited++;
 
-                        // qDebug() << "cell: " << cell_pos.x << cell_pos.y;
+                    // qDebug() << "cell: " << cell_pos.x << cell_pos.y;
 
-                        Clipper2Lib::Paths64 solution = cell.clipper.Execute(vertices, bounds);
+                    Clipper2Lib::Paths64 solution = cell.clipper.Execute(vertices, bounds);
 
-                        if (solution.empty())
-                            return;
+                    if (solution.empty())
+                        return;
 
-                        if (fully_covers(solution, cell.rect))
-                            cell.is_done = true;
+                    if (fully_covers(solution, cell.rect))
+                        cell.is_done = true;
 
-                        // anchor clipped paths to cell origin
-                        solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
+                    // anchor clipped paths to cell origin
+                    solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
 
-                        auto& temp_cell = temp_grid[int(cell_pos.x) + constants::grid_size * int(cell_pos.y)];
-                        geometry_amount += triangulize_earcut(solution, &temp_cell, style_layer);
-                    });
+                    m_processed_amount += triangulize_earcut(solution, &cell.cell_data, style_layer);
+                });
 
                 // if (cells_visited == 0) {
                 //     qDebug() << "no cells: " << data[i].aabb.min.x << data[i].aabb.min.y << data[i].aabb.max.x << data[i].aabb.max.y;
@@ -568,7 +569,7 @@ VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers)
                 nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 2.0, scale);
 
                 for (const auto& [cell_pos, indices] : cell_list) {
-                    auto& cell = m_clipper_grid.pixel(cell_pos);
+                    auto& cell = m_preprocess_grid.pixel(cell_pos);
 
                     if (cell.is_done) {
                         // qDebug() << "cell_done";
@@ -603,23 +604,19 @@ VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers)
                     // anchor clipped paths to cell origin
                     solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
 
-                    auto& temp_cell = temp_grid[int(cell_pos.x) + constants::grid_size * int(cell_pos.y)];
-
                     for (const auto& line : solution) {
 
                         const auto packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(
                             { line[0].x, line[0].y }, { line[1].x, line[1].y }, data[i].style_layer.first);
-                        temp_cell[data[i].style_layer.second].push_back(packed_data);
+                        cell.cell_data[data[i].style_layer.second].push_back(packed_data);
                     }
-                    geometry_amount += solution.size();
+                    m_processed_amount += solution.size();
                 }
             }
         }
 
         // qDebug() << geometry_amount;
     }
-
-    return { std::move(temp_grid), geometry_amount };
 }
 
 /*
@@ -632,20 +629,20 @@ VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers)
  *      nevertheless for more complex entries this might be overkill and take more time to compute than it is worth -> only necessary if we need more buffer space
  * simultaneously we also generate the final grid for the tile that stores the offset and size for lookups into the index_bridge
  */
-GpuVectorLayerTile Preprocessor::create_gpu_tile(const VectorLayerMeta& meta)
+GpuVectorLayerTile Preprocessor::create_gpu_tile()
 {
     GpuVectorLayerTile tile;
 
     uint fitting_cascade_index = uint(-1u);
     for (uint i = 0; i < constants::data_size.size(); i++) {
-        if (meta.geometry_amount <= constants::data_size[i] * constants::data_size[i]) {
+        if (m_processed_amount <= constants::data_size[i] * constants::data_size[i]) {
             fitting_cascade_index = i;
             break;
         }
     }
     // if assert is triggered -> consider adding a value to constants::data_size
     if (fitting_cascade_index >= constants::data_size.size())
-        qDebug() << meta.geometry_amount << "data does not fit";
+        qDebug() << m_processed_amount << "data does not fit";
     assert(fitting_cascade_index < constants::data_size.size());
 
     std::vector<uint32_t> acceleration_grid;
@@ -654,16 +651,17 @@ GpuVectorLayerTile Preprocessor::create_gpu_tile(const VectorLayerMeta& meta)
 
     // size_t max = 0;
 
-    for (size_t i = 0; i < meta.temp_grid.size(); ++i) {
+    for (const auto& cell : m_preprocess_grid) {
         // go through every cell
-        if (meta.temp_grid[i].size() == 0) {
+        if (cell.cell_data.size() == 0) {
             acceleration_grid.push_back(0); // no data -> only add an emtpy cell
         } else {
 
             auto start_offset = geometry_buffer.size();
 
-            for (auto it = meta.temp_grid[i].crbegin(); it != meta.temp_grid[i].crend(); ++it) {
-                geometry_buffer.insert(geometry_buffer.end(), it->second.begin(), it->second.end());
+            for (auto it = cell.cell_data.crbegin(); it != cell.cell_data.crend(); ++it) {
+                if (it->second.size() > 0)
+                    geometry_buffer.insert(geometry_buffer.end(), it->second.begin(), it->second.end());
             }
             auto cell_size = geometry_buffer.size() - start_offset;
 
@@ -676,8 +674,12 @@ GpuVectorLayerTile Preprocessor::create_gpu_tile(const VectorLayerMeta& meta)
             if (cell_size > 255)
                 cell_size = 255; // just cap it to 255 as we currently cant go any higher
 
-            const auto offset_size = nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(cell_size));
-            acceleration_grid.push_back(offset_size);
+            if (cell_size == 0)
+                acceleration_grid.push_back(0); // no data -> only add an emtpy cell
+            else {
+                const auto offset_size = nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(cell_size));
+                acceleration_grid.push_back(offset_size);
+            }
 
             // TODO possible performance
             // change geometry buffer to RGBA32UI to save 2 geometries at the same time

@@ -96,22 +96,22 @@ QImage example_grid_data_lines()
     return image;
 }
 
-nucleus::Raster<uint8_t> visualize_grid(const nucleus::vector_layer::VectorLayerGrid& processed_grid, int grid_width)
-{
-    std::vector<uint8_t> output_grid;
+// nucleus::Raster<uint8_t> visualize_grid(const nucleus::vector_layer::VectorLayerGrid& processed_grid, int grid_width)
+// {
+//     std::vector<uint8_t> output_grid;
 
-    for (size_t i = 0; i < processed_grid.size(); ++i) {
+//     for (size_t i = 0; i < processed_grid.size(); ++i) {
 
-        // grid is a singular uint32_t value that encodes the start index of the triangle list and the amount of triangles
-        if (processed_grid[i].size() == 0) {
-            output_grid.push_back(0);
-        } else {
-            output_grid.push_back(255u);
-        }
-    }
+//         // grid is a singular uint32_t value that encodes the start index of the triangle list and the amount of triangles
+//         if (processed_grid[i].size() == 0) {
+//             output_grid.push_back(0);
+//         } else {
+//             output_grid.push_back(255u);
+//         }
+//     }
 
-    return nucleus::Raster<uint8_t>(grid_width, std::move(output_grid));
-}
+//     return nucleus::Raster<uint8_t>(grid_width, std::move(output_grid));
+// }
 
 void visualize_acceleration_grid(std::shared_ptr<const nucleus::Raster<uint32_t>> raster)
 {
@@ -460,8 +460,8 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         Preprocessor preprocessor(std::move(style));
 
         auto tile_data = preprocessor.parse_tile(id, bytes);
-        auto temp_data = preprocessor.preprocess_geometry(tile_data);
-        auto tile = preprocessor.create_gpu_tile(temp_data);
+        preprocessor.preprocess_geometry(tile_data);
+        auto tile = preprocessor.create_gpu_tile();
 
         const auto& pixel = tile.acceleration_grid->pixel({ 40, 40 });
         const auto data = nucleus::utils::bit_coding::u32_to_u24_u8(pixel);
@@ -481,6 +481,8 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
     SECTION("clipping vector tile to cell")
     { // real example
+        constexpr size_t expected_process_amount = 147725;
+
         Style style(":/vectorlayerstyles/openstreetmap.json");
         // Style style(":/vectorlayerstyles/qwant.json");
         // Style style(":/vectorlayerstyles/osm-bright.json");
@@ -500,10 +502,10 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         // auto meta = nucleus::vector_layer::Preprocessor::preprocess_geometry(tile_data, style_buffer);
         // CHECK(meta.geometry_amount == 68413);
         auto tile_data = preprocessor.parse_tile(id, bytes);
-        auto temp_data = preprocessor.preprocess_geometry(tile_data);
-        auto tile = preprocessor.create_gpu_tile(temp_data);
+        preprocessor.preprocess_geometry(tile_data);
+        auto tile = preprocessor.create_gpu_tile();
 
-        CHECK(temp_data.geometry_amount == 147725);
+        CHECK(preprocessor.processed_amount() == expected_process_amount);
         // CHECK(temp_data.geometry_amount == 321063);// 128 grid
 
         BENCHMARK("parse tile")
@@ -514,15 +516,16 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
         BENCHMARK("preprocess geometry")
         {
-            auto output = preprocessor.preprocess_geometry(tile_data);
-            return output;
+            preprocessor.preprocess_geometry(tile_data);
+            CHECK(preprocessor.processed_amount() == expected_process_amount);
+            return;
         };
 
-        BENCHMARK("create gpu tile")
-        {
-            auto output = preprocessor.create_gpu_tile(temp_data);
-            return output;
-        };
+        // BENCHMARK("create gpu tile")
+        // {
+        //     auto output = preprocessor.create_gpu_tile(temp_data);
+        //     return output;
+        // };
 
         BENCHMARK("complete preprocess")
         {

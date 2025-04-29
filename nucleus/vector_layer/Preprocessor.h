@@ -78,13 +78,6 @@ struct VectorLayerData {
     bool is_polygon;
 };
 
-struct ClipperRect {
-    Clipper2Lib::RectClip64 clipper;
-    Clipper2Lib::RectClipLines64 clipper_lines;
-    Clipper2Lib::Rect64 rect;
-    bool is_done;
-};
-
 // Clipper2Lib::Paths64
 class PointCollectionVec2 : public Clipper2Lib::Paths64 {
 public:
@@ -130,11 +123,13 @@ struct GeometryData {
 
 using VectorLayers = std::map<uint32_t, std::vector<GeometryData>>;
 using VectorLayerCell = std::map<uint32_t, std::vector<glm::u32vec2>>;
-using VectorLayerGrid = std::array<VectorLayerCell, constants::grid_size * constants::grid_size>;
 
-struct VectorLayerMeta {
-    VectorLayerGrid temp_grid;
-    size_t geometry_amount;
+struct PreprocessCell {
+    Clipper2Lib::RectClip64 clipper;
+    Clipper2Lib::RectClipLines64 clipper_lines;
+    Clipper2Lib::Rect64 rect;
+    VectorLayerCell cell_data;
+    bool is_done;
 };
 
 class Preprocessor {
@@ -144,8 +139,8 @@ public:
     GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data);
 
     VectorLayers parse_tile(tile::Id id, const QByteArray& vector_tile_data);
-    VectorLayerMeta preprocess_geometry(const VectorLayers& layers);
-    GpuVectorLayerTile create_gpu_tile(const VectorLayerMeta& meta);
+    void preprocess_geometry(const VectorLayers& layers);
+    GpuVectorLayerTile create_gpu_tile();
 
     static glm::u32vec2 pack_triangle_data(VectorLayerData data);
     static glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_layer);
@@ -162,18 +157,21 @@ public:
         std::vector<std::pair<uint32_t, uint32_t>> styles, const std::vector<glm::u32vec4> style_buffer);
 
     const Style& style();
+    size_t processed_amount();
 
 private:
     std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes);
 
     size_t triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, VectorLayerCell* temp_cell, const std::pair<uint32_t, uint32_t>& style_layer);
 
-    void generate_clipper_grid();
+    void generate_preprocess_grid();
 
     const Style m_style;
     const std::vector<glm::u32vec4> m_style_buffer;
 
-    nucleus::Raster<ClipperRect> m_clipper_grid;
+    nucleus::Raster<PreprocessCell> m_preprocess_grid;
+
+    size_t m_processed_amount;
 };
 
 } // namespace nucleus::vector_layer
