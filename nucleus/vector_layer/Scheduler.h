@@ -22,6 +22,7 @@
 #include <nucleus/vector_tile/types.h>
 
 #include "Style.h"
+#include "nucleus/vector_layer/Preprocessor.h"
 
 namespace nucleus::vector_layer {
 
@@ -45,6 +46,8 @@ private:
     Style m_style;
     bool m_needs_to_update_style;
     nucleus::tile::GpuVectorLayerTile m_default_tile;
+
+    Preprocessor m_preprocessor;
 };
 
 } // namespace nucleus::vector_layer

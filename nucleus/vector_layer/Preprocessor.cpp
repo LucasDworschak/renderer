@@ -59,7 +59,7 @@ namespace util {
 
 namespace nucleus::vector_layer {
 
-GpuVectorLayerTile create_default_gpu_tile()
+GpuVectorLayerTile Preprocessor::create_default_gpu_tile()
 {
     GpuVectorLayerTile default_tile;
     default_tile.buffer_info = 0;
@@ -70,7 +70,7 @@ GpuVectorLayerTile create_default_gpu_tile()
     return default_tile;
 }
 
-GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
+GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
 {
     if (vector_tile_data.isEmpty())
         return {};
@@ -82,25 +82,23 @@ GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data, c
     //     glm::vec2(50.5 / 64.0 * constants::grid_size, 50.5 / 64.0 * constants::grid_size) } };
     // const std::vector<unsigned int> style_indices = { 1 };
 
-    auto tile_data = details::parse_tile(id, vector_tile_data, style);
+    auto tile_data = parse_tile(id, vector_tile_data, style);
 
     const auto style_buffer = style.styles()->buffer();
-    auto temp_data = details::preprocess_geometry(tile_data, style_buffer);
+    auto temp_data = preprocess_geometry(tile_data, style_buffer);
 
     // return if not a single thing was written
     if (temp_data.geometry_amount == 0)
         return {};
 
-    auto tile = details::create_gpu_tile(temp_data);
+    auto tile = create_gpu_tile(temp_data);
     tile.id = id;
 
     return tile;
 }
 
-} // namespace nucleus::vector_layer
-namespace nucleus::vector_layer::details {
-
-std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(std::vector<std::pair<uint32_t, uint32_t>> style_and_layer_indices, const std::vector<glm::u32vec4> style_buffer)
+std::vector<std::pair<uint32_t, uint32_t>> Preprocessor::simplify_styles(
+    std::vector<std::pair<uint32_t, uint32_t>> style_and_layer_indices, const std::vector<glm::u32vec4> style_buffer)
 {
     // we get multiple styles that may have full opacity and the same width
     // creating render calls for both does not make sense -> we only want to draw the top layer
@@ -133,7 +131,7 @@ std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(std::vector<std::pair
     return out_styles;
 }
 
-VectorLayers parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
+VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile_data, const Style& style)
 {
     const auto d = vector_tile_data.toStdString();
     const mapbox::vector_tile::buffer tile(d);
@@ -202,7 +200,7 @@ VectorLayers parse_tile(tile::Id id, const QByteArray& vector_tile_data, const S
     return data;
 }
 
-glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index)
+glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index)
 {
 
     glm::u32vec2 packed_data;
@@ -235,7 +233,7 @@ glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index
     return packed_data;
 }
 
-glm::u32vec2 pack_triangle_data(VectorLayerData data)
+glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
 {
     glm::u32vec2 packed_data;
 
@@ -273,7 +271,7 @@ glm::u32vec2 pack_triangle_data(VectorLayerData data)
     return packed_data;
 }
 
-VectorLayerData unpack_line_data(glm::uvec2 packed_data)
+VectorLayerData Preprocessor::unpack_line_data(glm::uvec2 packed_data)
 {
     VectorLayerData unpacked_data;
     unpacked_data.c = glm::ivec2(0, 0);
@@ -296,7 +294,7 @@ VectorLayerData unpack_line_data(glm::uvec2 packed_data)
     return unpacked_data;
 }
 
-VectorLayerData unpack_triangle_data(glm::uvec2 packed_data)
+VectorLayerData Preprocessor::unpack_triangle_data(glm::uvec2 packed_data)
 {
     VectorLayerData unpacked_data;
 
@@ -321,7 +319,7 @@ VectorLayerData unpack_triangle_data(glm::uvec2 packed_data)
     return unpacked_data;
 }
 
-VectorLayerData unpack_data(glm::uvec2 packed_data)
+VectorLayerData Preprocessor::unpack_data(glm::uvec2 packed_data)
 {
 
     if ((packed_data.y & 1u) == 1u) {
@@ -331,7 +329,7 @@ VectorLayerData unpack_data(glm::uvec2 packed_data)
     }
 }
 
-std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes)
+std::pair<uint32_t, uint32_t> Preprocessor::get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes)
 {
     // first index test different since we use the previous size in the for loop
     if (index < polygon_sizes[0]) {
@@ -350,7 +348,8 @@ std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<
 }
 
 // returns how many triangles have been generated;
-size_t triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, VectorLayerCell* temp_cell, const std::pair<uint32_t, uint32_t>& style_layer)
+size_t Preprocessor::triangulize_earcut(
+    const Clipper2Lib::Paths64& polygon_points, VectorLayerCell* temp_cell, const std::pair<uint32_t, uint32_t>& style_layer)
 {
     const auto& indices = mapbox::earcut<uint32_t>(polygon_points);
 
@@ -374,7 +373,7 @@ size_t triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, VectorLaye
         const auto& p1 = polygon_points[ind1.first][ind1.second];
         const auto& p2 = polygon_points[ind2.first][ind2.second];
 
-        const auto& data = nucleus::vector_layer::details::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.first, true });
+        const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.first, true });
 
         (*temp_cell)[style_layer.second].emplace_back(data);
     }
@@ -383,7 +382,7 @@ size_t triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, VectorLaye
     return indices.size() / 3;
 }
 
-nucleus::Raster<ClipperRect> generate_clipper2_grid()
+nucleus::Raster<ClipperRect> Preprocessor::generate_clipper2_grid()
 {
     // make sure that bits we have declared for the cell width are exactly the same amount as the bits we need
     assert(constants::tile_extent / constants::grid_size <= cell_width);
@@ -412,7 +411,7 @@ nucleus::Raster<ClipperRect> generate_clipper2_grid()
     return nucleus::Raster<ClipperRect>(constants::grid_size, std::move(grid));
 }
 
-bool fully_covers(const Clipper2Lib::Paths64& solution, const Clipper2Lib::Rect64& rect)
+bool Preprocessor::fully_covers(const Clipper2Lib::Paths64& solution, const Clipper2Lib::Rect64& rect)
 {
     if (solution.size() != 1 || solution[0].size() != 4)
         return false; // the solution either has holes or does not fully cover the rect since we do not have exactly 4 points
@@ -439,7 +438,7 @@ bool fully_covers(const Clipper2Lib::Paths64& solution, const Clipper2Lib::Rect6
 
 // checks if a line fully covers the cell with the given line width
 // if it does the result is the index of the line index where this is the case, else -1u is returned
-size_t line_fully_covers(const Clipper2Lib::Paths64& solution, float line_width, const Clipper2Lib::Rect64& rect)
+size_t Preprocessor::line_fully_covers(const Clipper2Lib::Paths64& solution, float line_width, const Clipper2Lib::Rect64& rect)
 {
 
     const auto rect_center = glm::vec2(rect.left + (rect.right - rect.left) / 2, rect.top + (rect.bottom - rect.top) / 2); // TODO could be calculated once
@@ -478,7 +477,7 @@ size_t line_fully_covers(const Clipper2Lib::Paths64& solution, float line_width,
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vector<glm::u32vec4> style_buffer)
+VectorLayerMeta Preprocessor::preprocess_geometry(const VectorLayers& layers, const std::vector<glm::u32vec4> style_buffer)
 {
 
     // TODOs
@@ -505,8 +504,8 @@ VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vecto
 
                 size_t cells_visited = 0;
 
-                clipper_grid.visit(
-                    data[i].aabb, [&cells_visited, &temp_grid, &vertices, &bounds, &style_layer, &geometry_amount](glm::uvec2 cell_pos, ClipperRect& cell) {
+                clipper_grid.visit(data[i].aabb,
+                    [this, &cells_visited, &temp_grid, &vertices, &bounds, &style_layer, &geometry_amount](glm::uvec2 cell_pos, ClipperRect& cell) {
                         if (cell.is_done) {
                             // qDebug() << "cell_done";
                             return;
@@ -596,8 +595,8 @@ VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vecto
 
                     for (const auto& line : solution) {
 
-                        const auto packed_data
-                            = nucleus::vector_layer::details::pack_line_data({ line[0].x, line[0].y }, { line[1].x, line[1].y }, data[i].style_layer.first);
+                        const auto packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(
+                            { line[0].x, line[0].y }, { line[1].x, line[1].y }, data[i].style_layer.first);
                         temp_cell[data[i].style_layer.second].push_back(packed_data);
                     }
                     geometry_amount += solution.size();
@@ -621,7 +620,7 @@ VectorLayerMeta preprocess_geometry(const VectorLayers& layers, const std::vecto
  *      nevertheless for more complex entries this might be overkill and take more time to compute than it is worth -> only necessary if we need more buffer space
  * simultaneously we also generate the final grid for the tile that stores the offset and size for lookups into the index_bridge
  */
-GpuVectorLayerTile create_gpu_tile(const VectorLayerMeta& meta)
+GpuVectorLayerTile Preprocessor::create_gpu_tile(const VectorLayerMeta& meta)
 {
     GpuVectorLayerTile tile;
 

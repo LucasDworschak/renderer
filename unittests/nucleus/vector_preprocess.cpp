@@ -96,7 +96,7 @@ QImage example_grid_data_lines()
     return image;
 }
 
-nucleus::Raster<uint8_t> visualize_grid(const nucleus::vector_layer::details::VectorLayerGrid& processed_grid, int grid_width)
+nucleus::Raster<uint8_t> visualize_grid(const nucleus::vector_layer::VectorLayerGrid& processed_grid, int grid_width)
 {
     std::vector<uint8_t> output_grid;
 
@@ -411,10 +411,10 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         Clipper2Lib::Paths64 solution3 = RectClip(rect, shapes3);
         Clipper2Lib::Paths64 solution4 = RectClip(rect, shapes4);
 
-        CHECK(nucleus::vector_layer::details::fully_covers(solution1, rect));
-        CHECK(nucleus::vector_layer::details::fully_covers(solution2, rect));
-        CHECK(!nucleus::vector_layer::details::fully_covers(solution3, rect));
-        CHECK(nucleus::vector_layer::details::fully_covers(solution4, rect));
+        CHECK(nucleus::vector_layer::Preprocessor::fully_covers(solution1, rect));
+        CHECK(nucleus::vector_layer::Preprocessor::fully_covers(solution2, rect));
+        CHECK(!nucleus::vector_layer::Preprocessor::fully_covers(solution3, rect));
+        CHECK(nucleus::vector_layer::Preprocessor::fully_covers(solution4, rect));
     }
 
     SECTION("line fully covers cell")
@@ -430,16 +430,16 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         // Clipper2Lib::Paths64 solution2 = clipper.Execute(shapes2);
 
         // line_width is too small -> we do not even try
-        CHECK(nucleus::vector_layer::details::line_fully_covers(shapes1, 5.0, rect) == -1u);
+        CHECK(nucleus::vector_layer::Preprocessor::line_fully_covers(shapes1, 5.0, rect) == -1u);
         // barely fully covers
-        CHECK(nucleus::vector_layer::details::line_fully_covers(shapes1, 7.5, rect) == 0);
+        CHECK(nucleus::vector_layer::Preprocessor::line_fully_covers(shapes1, 7.5, rect) == 0);
         // barely not fully covered since translated by 1 unit
-        CHECK(nucleus::vector_layer::details::line_fully_covers(shapes2, 7.5, rect) == -1u);
+        CHECK(nucleus::vector_layer::Preprocessor::line_fully_covers(shapes2, 7.5, rect) == -1u);
 
-        CHECK(nucleus::vector_layer::details::line_fully_covers(shapes3, 7.1 + 5.0, rect) == 0); // barely full cover
-        CHECK(nucleus::vector_layer::details::line_fully_covers(shapes3, 7.0 + 5.0, rect) == -1u); // barely outside full cover
+        CHECK(nucleus::vector_layer::Preprocessor::line_fully_covers(shapes3, 7.1 + 5.0, rect) == 0); // barely full cover
+        CHECK(nucleus::vector_layer::Preprocessor::line_fully_covers(shapes3, 7.0 + 5.0, rect) == -1u); // barely outside full cover
 
-        // CHECK(nucleus::vector_layer::details::line_fully_covers(solution1, 5.0, rect));
+        // CHECK(nucleus::vector_layer::Preprocessor::line_fully_covers(solution1, 5.0, rect));
     }
 
     SECTION("preprocess simple tile")
@@ -457,16 +457,18 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
         const auto style_buffer = style.styles()->buffer();
 
-        auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
-        auto temp_data = details::preprocess_geometry(tile_data, style_buffer);
-        auto tile = details::create_gpu_tile(temp_data);
+        Preprocessor preprocessor;
+
+        auto tile_data = preprocessor.parse_tile(id, bytes, style);
+        auto temp_data = preprocessor.preprocess_geometry(tile_data, style_buffer);
+        auto tile = preprocessor.create_gpu_tile(temp_data);
 
         const auto& pixel = tile.acceleration_grid->pixel({ 40, 40 });
         const auto data = nucleus::utils::bit_coding::u32_to_u24_u8(pixel);
 
         // investigate geometry in detail
-        // const auto geom1 = nucleus::vector_layer::details::unpack_data(tile.geometry_buffer->buffer()[data.x]);
-        // const auto geom2 = nucleus::vector_layer::details::unpack_data(tile.geometry_buffer->buffer()[data.x + 1]);
+        // const auto geom1 = Preprocessor::unpack_data(tile.geometry_buffer->buffer()[data.x]);
+        // const auto geom2 = nucleus::vector_layer::Preprocessor::unpack_data(tile.geometry_buffer->buffer()[data.x + 1]);
         // qDebug() << geom1.a.x << geom1.a.y << geom1.b.x << geom1.b.y << geom1.c.x << geom1.c.y << geom1.style_index;
         // qDebug() << geom2.a.x << geom2.a.y << geom2.b.x << geom2.b.y << geom2.c.x << geom2.c.y << geom2.style_index;
 
@@ -489,41 +491,43 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         file.open(QFile::ReadOnly);
         const auto bytes = file.readAll();
 
-        // auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
+        // auto tile_data = nucleus::vector_layer::Preprocessor::parse_tile(id, bytes, style);
         const auto style_buffer = style.styles()->buffer();
 
-        // auto clipper_grid = nucleus::vector_layer::details::generate_clipper2_grid(nucleus::vector_layer::constants::grid_size);
+        Preprocessor preprocessor;
 
-        // auto meta = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
+        // auto clipper_grid = nucleus::vector_layer::Preprocessor::generate_clipper2_grid(nucleus::vector_layer::constants::grid_size);
+
+        // auto meta = nucleus::vector_layer::Preprocessor::preprocess_geometry(tile_data, style_buffer);
         // CHECK(meta.geometry_amount == 68413);
-        auto tile_data = nucleus::vector_layer::details::parse_tile(id, bytes, style);
-        auto temp_data = details::preprocess_geometry(tile_data, style_buffer);
-        auto tile = details::create_gpu_tile(temp_data);
+        auto tile_data = preprocessor.parse_tile(id, bytes, style);
+        auto temp_data = preprocessor.preprocess_geometry(tile_data, style_buffer);
+        auto tile = preprocessor.create_gpu_tile(temp_data);
 
         CHECK(temp_data.geometry_amount == 147725);
         // CHECK(temp_data.geometry_amount == 321063);// 128 grid
 
         BENCHMARK("parse tile")
         {
-            auto output = details::parse_tile(id, bytes, style);
+            auto output = preprocessor.parse_tile(id, bytes, style);
             return output;
         };
 
         BENCHMARK("preprocess geometry")
         {
-            auto output = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
+            auto output = preprocessor.preprocess_geometry(tile_data, style_buffer);
             return output;
         };
 
         BENCHMARK("create gpu tile")
         {
-            auto output = nucleus::vector_layer::details::create_gpu_tile(temp_data);
+            auto output = preprocessor.create_gpu_tile(temp_data);
             return output;
         };
 
         BENCHMARK("complete preprocess")
         {
-            auto output = nucleus::vector_layer::preprocess(id, bytes, style);
+            auto output = preprocessor.preprocess(id, bytes, style);
             return output;
         };
     }
@@ -567,7 +571,7 @@ TEST_CASE("nucleus/vector_preprocess")
     //     const std::vector<std::vector<glm::vec2>> triangle_left_hypo = { { glm::vec2(10, 30), glm::vec2(30, 5), glm::vec2(50, 50) } };
     //     const std::vector<std::vector<glm::vec2>> triangle_right_hypo = { { glm::vec2(5, 5), glm::vec2(25, 10), glm::vec2(5, 15) } };
 
-    //     std::vector<nucleus::vector_layer::details::GeometryData> tile_data { { triangle_left_hypo, extent, { { 0, 0 } }, true }, { triangle_right_hypo,
+    //     std::vector<GeometryData> tile_data { { triangle_left_hypo, extent, { { 0, 0 } }, true }, { triangle_right_hypo,
     //     extent, { { 0, 1 } }, true } };
 
     //     auto processed = nucleus::vector_layer::details::preprocess_geometry(tile_data, style_buffer);
@@ -703,7 +707,7 @@ TEST_CASE("nucleus/vector_preprocess")
             // only draw second style
             std::vector<glm::u32vec4> style_buffer { { 200, 0, 0, 0 }, { 255, 0, 0, 0 } };
             std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1 << 1, 1 << 1 } };
-            const auto simplified = nucleus::vector_layer::details::simplify_styles(style_indices, style_buffer);
+            const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(style_indices, style_buffer);
 
             CHECK(simplified.size() == 1);
             CHECK(simplified[0].first == 1 << 1);
@@ -712,7 +716,7 @@ TEST_CASE("nucleus/vector_preprocess")
             // draw both styles
             std::vector<glm::u32vec4> style_buffer { { 200, 0, 0, 0 }, { 200, 0, 0, 0 } };
             std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1 << 1, 1 << 1 } };
-            const auto simplified = nucleus::vector_layer::details::simplify_styles(style_indices, style_buffer);
+            const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(style_indices, style_buffer);
 
             CHECK(simplified.size() == 2);
             CHECK(simplified[0].first == 1 << 1); // but layer 1 first
@@ -722,7 +726,7 @@ TEST_CASE("nucleus/vector_preprocess")
             // width changed -> draw 3 than 1
             std::vector<glm::u32vec4> style_buffer { { 200, 0, 10, 0 }, { 255, 0, 0, 0 }, { 255, 0, 0, 0 } };
             std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1 << 1, 1 << 1 }, { 2 << 1, 2 << 1 } };
-            const auto simplified = nucleus::vector_layer::details::simplify_styles(style_indices, style_buffer);
+            const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(style_indices, style_buffer);
 
             CHECK(simplified.size() == 2);
             CHECK(simplified[0].first == 2 << 1);
@@ -876,8 +880,8 @@ TEST_CASE("nucleus/vector_preprocess")
 
         uint16_t style = 343u;
 
-        auto packed = nucleus::vector_layer::details::pack_triangle_data({ a, b, c, style, true });
-        auto unpacked = nucleus::vector_layer::details::unpack_triangle_data(packed);
+        auto packed = nucleus::vector_layer::Preprocessor::pack_triangle_data({ a, b, c, style, true });
+        auto unpacked = nucleus::vector_layer::Preprocessor::unpack_triangle_data(packed);
 
         CHECK(a == glm::i64vec2(unpacked.a));
         CHECK(b == glm::i64vec2(unpacked.b));
@@ -894,8 +898,8 @@ TEST_CASE("nucleus/vector_preprocess")
 
         uint16_t style = 646u;
 
-        auto packed = nucleus::vector_layer::details::pack_line_data(a, b, style);
-        auto unpacked = nucleus::vector_layer::details::unpack_line_data(packed);
+        auto packed = nucleus::vector_layer::Preprocessor::pack_line_data(a, b, style);
+        auto unpacked = nucleus::vector_layer::Preprocessor::unpack_line_data(packed);
 
         CHECK(a == glm::ivec2(unpacked.a));
         CHECK(b == glm::ivec2(unpacked.b));
@@ -923,36 +927,37 @@ TEST_CASE("nucleus/vector_preprocess")
     }
 }
 
-TEST_CASE("nucleus/vector_preprocess benchmarks")
-{
-    // load tile data
-    // the normal tile is a tile in a small city, with more than half of the tile consisting of a mountain.
-    // the zoom level of 13 and 14 are the tiles with the most amount of data present, but since most of this tile is in the countryside, it only contains 68kb
-    // of data
-    // TODO this vector tile uses basemap -> it is not comparable for the benchmark
-    auto id_normal = nucleus::tile::Id { .zoom_level = 13, .coords = { 4412, 2893 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-    auto file_normal = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_13_4412_2893.pbf"));
-    file_normal.open(QFile::ReadOnly);
-    const auto bytes_normal = file_normal.readAll();
+// TEST_CASE("nucleus/vector_preprocess benchmarks")
+// {
+//     // load tile data
+//     // the normal tile is a tile in a small city, with more than half of the tile consisting of a mountain.
+//     // the zoom level of 13 and 14 are the tiles with the most amount of data present, but since most of this tile is in the countryside, it only contains
+//     68kb
+//     // of data
+//     // TODO this vector tile uses basemap -> it is not comparable for the benchmark
+//     auto id_normal = nucleus::tile::Id { .zoom_level = 13, .coords = { 4412, 2893 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+//     auto file_normal = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_13_4412_2893.pbf"));
+//     file_normal.open(QFile::ReadOnly);
+//     const auto bytes_normal = file_normal.readAll();
 
-    // the "worst" tile is one of the largest tile with 868kb (right over vienna -> lots of buildings and other details)
-    // so the output of the benchmark can be regarded as a worst case approximation
-    auto id_worst = nucleus::tile::Id { .zoom_level = 14, .coords = { 8936, 5681 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-    auto file_worst = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_benchmark_14_8936_5681.pbf"));
-    file_worst.open(QFile::ReadOnly);
-    const auto bytes_worst = file_worst.readAll();
+//     // the "worst" tile is one of the largest tile with 868kb (right over vienna -> lots of buildings and other details)
+//     // so the output of the benchmark can be regarded as a worst case approximation
+//     auto id_worst = nucleus::tile::Id { .zoom_level = 14, .coords = { 8936, 5681 }, .scheme = nucleus::tile::Scheme::SlippyMap };
+//     auto file_worst = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_benchmark_14_8936_5681.pbf"));
+//     file_worst.open(QFile::ReadOnly);
+//     const auto bytes_worst = file_worst.readAll();
 
-    // load style
-    Style style(":/vectorlayerstyles/openstreetmap.json");
-    style.load();
+//     // load style
+//     Style style(":/vectorlayerstyles/openstreetmap.json");
+//     style.load();
 
-    BENCHMARK("preprocess normal tile") { nucleus::vector_layer::preprocess(id_normal, bytes_normal, style); };
-    BENCHMARK("preprocess worse case tile") { nucleus::vector_layer::preprocess(id_worst, bytes_worst, style); };
+//     BENCHMARK("preprocess normal tile") { nucleus::vector_layer::preprocess(id_normal, bytes_normal, style); };
+//     BENCHMARK("preprocess worse case tile") { nucleus::vector_layer::preprocess(id_worst, bytes_worst, style); };
 
-    // BENCHMARK("triangulize polygons")
-    // {
-    //     const std::vector<glm::vec2> polygon_points = { glm::vec2(10.5, 10.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5), glm::vec2(10.5, 30.5) };
-    //     const auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points);
-    //     nucleus::utils::rasterizer::triangulize(polygon_points, edges);
-    // };
-}
+//     // BENCHMARK("triangulize polygons")
+//     // {
+//     //     const std::vector<glm::vec2> polygon_points = { glm::vec2(10.5, 10.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5), glm::vec2(10.5, 30.5) };
+//     //     const auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points);
+//     //     nucleus::utils::rasterizer::triangulize(polygon_points, edges);
+//     // };
+// }

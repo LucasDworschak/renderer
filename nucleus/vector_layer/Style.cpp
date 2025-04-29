@@ -75,7 +75,7 @@ void Style::load()
 
     // pair is <layer_id, filter>
     // layerid: source_layer+_+type (e.g. transportation_line)
-    auto layerid_filter_to_layer_indices = std::map<std::pair<std::string, std::shared_ptr<StyleExpressionBase>>, std::vector<uint32_t>, Hasher>();
+    auto layerid_filter_to_layer_indices = std::map<std::pair<std::string, std::shared_ptr<StyleExpressionBase>>, std::vector<uint32_t>, StyleHasher>();
     // each entry in this vector is a different layer_index
     auto zoom_to_style = std::vector<std::map<uint8_t, LayerStyle>>();
 

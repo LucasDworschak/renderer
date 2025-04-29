@@ -79,7 +79,7 @@ std::map<std::string, uint32_t> parse_tile(
             // qDebug() << key;
 
             auto style_indices = s.indices(layer_name, type, zoom, feature);
-            style_indices = nucleus::vector_layer::details::simplify_styles(style_indices, style_buffer);
+            style_indices = nucleus::vector_layer::Preprocessor::simplify_styles(style_indices, style_buffer);
 
             if (check_valid_style)
                 CHECK(style_indices.size() > 0); // make sure that every style is available in the stylesheet

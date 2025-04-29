@@ -37,8 +37,7 @@ struct LayerStyle {
     bool operator==(const LayerStyle& other) const = default;
 };
 
-
-struct Hasher {
+struct StyleHasher {
     size_t operator()(const LayerStyle& style) const
     {
         size_t seed = 0;

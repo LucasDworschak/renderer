@@ -200,7 +200,7 @@ void packing_cpp_same_as_glsl(const Id& id)
     }
 }
 
-void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::details::VectorLayerData& data)
+void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLayerData& data)
 {
     {
         Framebuffer b(Framebuffer::DepthFormat::None, { Framebuffer::ColourFormat::RGBA8 }, { 1, 1 });
@@ -208,9 +208,9 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::details::
 
         glm::uvec2 packed_data;
         if (data.is_polygon)
-            packed_data = nucleus::vector_layer::details::pack_triangle_data(data);
+            packed_data = nucleus::vector_layer::Preprocessor::pack_triangle_data(data);
         else
-            packed_data = nucleus::vector_layer::details::pack_line_data(data.a, data.b, data.style_index);
+            packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(data.a, data.b, data.style_index);
 
         ShaderProgram shader = create_debug_shader(QString(R"(
             #include "vector_layer.glsl"
@@ -251,9 +251,9 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::details::
 
         glm::uvec2 packed_data;
         if (data.is_polygon)
-            packed_data = nucleus::vector_layer::details::pack_triangle_data(data);
+            packed_data = nucleus::vector_layer::Preprocessor::pack_triangle_data(data);
         else
-            packed_data = nucleus::vector_layer::details::pack_line_data(data.a, data.b, data.style_index);
+            packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(data.a, data.b, data.style_index);
 
         ShaderProgram shader = create_debug_shader(QString(R"(
             out lowp vec4 out_color;
@@ -349,7 +349,7 @@ TEST_CASE("glsl tile functions")
 
     SECTION("vectorlayer packing c++ same as glsl")
     {
-        const auto data = std::vector<nucleus::vector_layer::details::VectorLayerData> {
+        const auto data = std::vector<nucleus::vector_layer::VectorLayerData> {
             // style_layer << 1 | 1u -> simulates setting a blend style or not
             { glm::ivec2(8, 3), glm::ivec2(40, 36), glm::ivec2(28, 44), (289u << 1) | 1u, true },
             { glm::ivec2(34, 60), glm::ivec2(50, 52), glm::ivec2(1, 24), (565u << 1) | 1u, true },
