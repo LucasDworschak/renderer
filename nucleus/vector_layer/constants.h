@@ -49,4 +49,7 @@ constexpr uint8_t line_width_multiplier = 5;
 constexpr glm::uvec2 style_zoom_range = glm::uvec2(8u, 18u);
 constexpr uint8_t style_zoom_blend_steps = 4u; // how many zoom steps below min_zoom should be created to allow blending
 
+constexpr float small_line_px = 2.0; // how many px on a 256x256 resolution
+constexpr unsigned small_line_zoom_threshold = 16; // until what zoom level do we use the small line simplification
+
 } // namespace nucleus::vector_layer::constants

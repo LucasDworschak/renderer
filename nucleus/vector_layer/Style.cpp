@@ -101,6 +101,7 @@ void Style::load()
 
         auto paint_object = obj.toObject().value("paint").toObject();
         auto filter_data = obj.toObject().value("filter").toArray();
+        const bool is_line = obj.toObject().value("type").toString() == "line";
         const auto layer_name = obj.toObject().value("source-layer").toString().toStdString() + "_" + obj.toObject().value("type").toString().toStdString();
 
         std::vector<std::pair<uint8_t, uint32_t>> fill_colors;
@@ -210,6 +211,9 @@ void Style::load()
         uint8_t dashes_index = 0;
         uint8_t opacities_index = 0;
 
+        bool previous_small_line = false;
+        LayerStyle previous_style;
+
         for (unsigned zoom = zoom_range.x; zoom < zoom_range.y + 1; zoom++) {
             // determine if we have to change current / prev values
             while (fill_colors_current_value.first < zoom) {
@@ -258,6 +262,16 @@ void Style::load()
                 dashes_previous_value.second.second * (1.0 - interpolation_factor_dash) + dashes_current_value.second.second * interpolation_factor_dash };
             uint8_t opacity = opacities_previous_value.second * (1.0 - interpolation_factor_opacity) + opacities_current_value.second * interpolation_factor_opacity;
 
+            // we are not interested in very small lines below a certain zoom level
+            constexpr float small_line_scale = constants::tile_extent / 256.0;
+            bool small_line
+                = (is_line && zoom < constants::small_line_zoom_threshold && width < constants::small_line_px * small_line_scale * constants::style_precision);
+            if (small_line) {
+                // we want to slowly blend the new line in
+                opacity = 0u;
+                width = 0u;
+            }
+
             // merge opacity with colors
             if (opacity != 255u) {
                 // if opacity is set it overrides any opacity from the color
@@ -277,7 +291,20 @@ void Style::load()
             // dashes consist of gap / dash -> we combine them into one single value that is split again on the shader
             const uint16_t merged_dash = (dash.first << 8) | dash.second;
 
-            current_style_map[zoom] = { fill_color, outline_color, width, merged_dash };
+            if (small_line) {
+                // this is a small line and we are not sure if we want to save this style for blending
+                // we only want to store the style if the next style is visible
+                previous_style = { fill_color, outline_color, width, merged_dash };
+                previous_small_line = true;
+            } else {
+                if (previous_small_line) {
+                    // this is no small line anymore -> we want to store the previous style for blending
+                    current_style_map[zoom - 1] = previous_style;
+                    previous_small_line = false;
+                }
+                // store the current style
+                current_style_map[zoom] = { fill_color, outline_color, width, merged_dash };
+            }
 
             //  DEBUG -> style_index to layername
             // auto id = obj.toObject().value("id").toString();

@@ -32,6 +32,10 @@
 #include <glm/gtx/closest_point.hpp>
 #include <mapbox/vector_tile.hpp>
 
+// TODO alternative to class approach is going back to function approach and passing through a struct/class that holds all temporary heap data
+// this object is passed through all functions and cleared afterwards (when it has time)
+// furthermore multiple of those data holder structs can be constructed and put into a pool so that multithreading could be utilized
+
 // allow vec2 points for earcut input
 namespace mapbox {
 namespace util {
@@ -124,6 +128,9 @@ std::vector<std::pair<uint32_t, uint32_t>> Preprocessor::simplify_styles(
         const auto style_data = style_buffer[indices.first >> 1];
         const float current_width = float(style_data.z) / float(constants::style_precision);
         const int current_opacity = style_data.x & 255;
+
+        if (current_opacity == 0)
+            continue; // we dont care about 0 opacity geometry
 
         if (width < current_width) {
             // reset opacity
