@@ -112,9 +112,9 @@ RenderingContext::RenderingContext(QObject* parent)
         m->map_label = nucleus::map_label::setup::scheduler(std::move(map_label_service), m->aabb_decorator, m->data_querier, m->scheduler_thread.get());
         m->scheduler_director->check_in("map_label", m->map_label.scheduler);
 
-        auto vector_layer_service = std::make_unique<TileLoadService>("http://localhost:3000/tiles/", TilePattern::ZXY_yPointingSouth, "");
+        // auto vector_layer_service = std::make_unique<TileLoadService>("http://localhost:3000/tiles/", TilePattern::ZXY_yPointingSouth, "");
         // auto vector_layer_service = std::make_unique<TileLoadService>("http://localhost:3000/tiles_v3/", TilePattern::ZXY_yPointingSouth, "");
-        // auto vector_layer_service = std::make_unique<TileLoadService>("https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/", TilePattern::ZXY_yPointingSouth, "");
+        auto vector_layer_service = std::make_unique<TileLoadService>("https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/", TilePattern::ZXY_yPointingSouth, "");
         m->vector_layer = nucleus::vector_layer::setup::scheduler(std::move(vector_layer_service), m->aabb_decorator, m->scheduler_thread.get());
         m->scheduler_director->check_in("vector", m->vector_layer.scheduler);
         // clang-format on
