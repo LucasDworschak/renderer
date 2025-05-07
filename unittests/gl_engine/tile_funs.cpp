@@ -371,15 +371,16 @@ TEST_CASE("glsl tile functions")
             { glm::ivec2(40, 44), glm::ivec2(32, 29), glm::ivec2(38, 46), (151u << 1) | 0u, true },
             { glm::ivec2(16, 0), glm::ivec2(44, 55), glm::ivec2(48, 46), (819u << 1) | 1u, true },
 
-            { glm::ivec2(5, 33), glm::ivec2(14, 32), glm::ivec2(0, 0), (478u << 1) | 0u, false },
-            { glm::ivec2(43, 56), glm::ivec2(12, 49), glm::ivec2(0, 0), (389u << 1) | 1u, false },
-            { glm::ivec2(63, 38), glm::ivec2(26, 60), glm::ivec2(0, 0), (192u << 1) | 0u, false },
-            { glm::ivec2(27, 27), glm::ivec2(39, 33), glm::ivec2(0, 0), (179u << 1) | 1u, false },
-            { glm::ivec2(0, 18), glm::ivec2(55, 14), glm::ivec2(0, 0), (34u << 1) | 1u, false },
-            { glm::ivec2(17, 63), glm::ivec2(40, 33), glm::ivec2(0, 0), (15u << 1) | 0u, false },
-            { glm::ivec2(5, 19), glm::ivec2(64, 34), glm::ivec2(0, 0), (303u << 1) | 1u, false },
-            { glm::ivec2(40, 44), glm::ivec2(32, 29), glm::ivec2(0, 0), (151u << 1) | 0u, false },
-            { glm::ivec2(16, 0), glm::ivec2(44, 55), glm::ivec2(0, 0), (819u << 1) | 1u, false },
+            // testing lines (note b and c coordinates need to be the same)
+            { glm::ivec2(5, 33), glm::ivec2(14, 32), glm::ivec2(14, 32), (478u << 1) | 0u, false },
+            { glm::ivec2(43, 56), glm::ivec2(12, 49), glm::ivec2(12, 49), (389u << 1) | 1u, false },
+            { glm::ivec2(63, 38), glm::ivec2(26, 60), glm::ivec2(26, 60), (192u << 1) | 0u, false },
+            { glm::ivec2(27, 27), glm::ivec2(39, 33), glm::ivec2(39, 33), (179u << 1) | 1u, false },
+            { glm::ivec2(0, 18), glm::ivec2(55, 14), glm::ivec2(55, 14), (34u << 1) | 1u, false },
+            { glm::ivec2(17, 63), glm::ivec2(40, 33), glm::ivec2(40, 33), (15u << 1) | 0u, false },
+            { glm::ivec2(5, 19), glm::ivec2(64, 34), glm::ivec2(64, 34), (303u << 1) | 1u, false },
+            { glm::ivec2(40, 44), glm::ivec2(32, 29), glm::ivec2(32, 29), (151u << 1) | 0u, false },
+            { glm::ivec2(16, 0), glm::ivec2(44, 55), glm::ivec2(44, 55), (819u << 1) | 1u, false },
 
         };
 

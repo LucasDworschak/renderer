@@ -35,7 +35,7 @@ constexpr auto data_size = std::array<uint32_t, 4> { 64u, 128u, 256u, 512u }; //
 // NOTE: -1u is used to say that we should use the upper limit determined by renderingcontext, if renderingcontext gives us a lower value than set, it is
 // automatically lowered IMPORTANT: only set -1u for the first values since those values will be combined to only one array_helper
 constexpr auto array_layer_tile_amount = std::array<uint32_t, 4> { -1u, -1u, 1524u, 256u };
-constexpr auto tile_extent = 4096;
+constexpr auto tile_extent = 1024;
 
 // if you change one of the following setting you also need to change the other (that they match is asserted in style.cpp)
 // one bit is used to signal if it should blend with next style or not
@@ -45,11 +45,11 @@ constexpr auto style_buffer_size = 64;
 // number is used to multiply float numbers in style to get int values for storage ( e.g. style_precision:100 means 1.253 -> 125 -> 1.250)
 constexpr uint16_t style_precision = 100;
 
-constexpr uint8_t line_width_multiplier = 5;
+constexpr float line_width_multiplier = 1.25;
 constexpr glm::uvec2 style_zoom_range = glm::uvec2(8u, 18u);
 constexpr uint8_t style_zoom_blend_steps = 4u; // how many zoom steps below min_zoom should be created to allow blending
 
-constexpr float small_line_px = 2.0; // how many px on a 256x256 resolution
-constexpr unsigned small_line_zoom_threshold = 16; // until what zoom level do we use the small line simplification
+constexpr float small_line_px = 0.5; // how many px on a 256x256 resolution
+constexpr unsigned small_line_zoom_threshold = 4; // until what zoom level do we use the small line simplification
 
 } // namespace nucleus::vector_layer::constants

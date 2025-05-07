@@ -40,30 +40,21 @@ using namespace nucleus::tile;
 // style probably needs far less than we actually allocate
 //
 constexpr int all_bits = 32; // per output channel
-constexpr int coordinate_bits_triangle = 8;
-constexpr int coordinate_bits_line = 10;
+constexpr int coordinate_bits = 8;
 
-constexpr int available_style_bits_triangle = all_bits - (2 * coordinate_bits_triangle);
-constexpr int available_style_bits_line = all_bits - (2 * coordinate_bits_triangle); // TODO this should be bits_line
+constexpr int available_style_bits = all_bits - (2 * coordinate_bits);
 
-constexpr int coordinate_shift1_triangle = all_bits - coordinate_bits_triangle;
-constexpr int coordinate_shift2_triangle = all_bits - (2 * coordinate_bits_triangle);
-constexpr int coordinate_shift3_triangle = all_bits - (3 * coordinate_bits_triangle);
-constexpr int coordinate_shift4_triangle = all_bits - (4 * coordinate_bits_triangle);
+constexpr int coordinate_shift1 = all_bits - coordinate_bits;
+constexpr int coordinate_shift2 = all_bits - (2 * coordinate_bits);
+constexpr int coordinate_shift3 = all_bits - (3 * coordinate_bits);
+constexpr int coordinate_shift4 = all_bits - (4 * coordinate_bits);
 
-constexpr int coordinate_shift1_line = all_bits - coordinate_bits_line;
-constexpr int coordinate_shift2_line = all_bits - (2 * coordinate_bits_line);
-constexpr int coordinate_shift3_line = all_bits - (3 * coordinate_bits_line);
+constexpr uint32_t coordinate_bitmask = (1u << coordinate_bits) - 1u;
 
-constexpr uint32_t coordinate_bitmask_triangle = (1u << coordinate_bits_triangle) - 1u;
-constexpr uint32_t coordinate_bitmask_line = (1u << coordinate_bits_line) - 1u;
+constexpr int32_t cell_width = int32_t(constants::tile_extent / constants::grid_size);
 
-constexpr int32_t cell_width = constants::tile_extent / constants::grid_size;
-
-constexpr int32_t max_cell_width_triangle = (1 << (coordinate_bits_triangle));
-constexpr int32_t geometry_offset_triangle = (max_cell_width_triangle - cell_width) / 2;
-constexpr int32_t max_cell_width_line = (1 << (coordinate_bits_line));
-constexpr int32_t geometry_offset_line = (max_cell_width_line - cell_width) / 2;
+constexpr int32_t max_cell_width = (1 << (coordinate_bits));
+constexpr int32_t geometry_offset = (max_cell_width - cell_width) / 2;
 //
 // end constants for data packing/unpacking
 /////////////////////////////////////////////
@@ -144,8 +135,6 @@ public:
 
     static glm::u32vec2 pack_triangle_data(VectorLayerData data);
     static glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_layer);
-    static VectorLayerData unpack_line_data(glm::uvec2 packed_data);
-    static VectorLayerData unpack_triangle_data(glm::uvec2 packed_data);
     static VectorLayerData unpack_data(glm::uvec2 packed_data);
 
     static bool fully_covers(const Clipper2Lib::Paths64& solution, const Clipper2Lib::Rect64& rect);

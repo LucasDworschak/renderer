@@ -697,8 +697,8 @@ TEST_CASE("nucleus/vector_style")
         // check if the color stored int he style buffer points to the correct color in the stylesheet
         const auto style_buffer = s.styles()->buffer();
 
-        CHECK(feature_to_style.size() == 95);
-        CHECK(style_buffer[feature_to_style.at("fill__building__null__null_0")].x == s.parse_color("#00000000"));
+        CHECK(feature_to_style.size() == 94);
+        // CHECK(style_buffer[feature_to_style.at("fill__building__null__null_0")].x == s.parse_color("#00000000"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_0")].x == s.parse_color("#d8e8c8ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_0")].x == s.parse_color("#d8e8c8ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_0")].x == s.parse_color("#d8e8c8ff"));

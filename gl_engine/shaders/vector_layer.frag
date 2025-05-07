@@ -112,7 +112,7 @@ highp float sdLine( in highp vec2 p, in highp vec2 a, in highp vec2 b )
     highp float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
     return length( pa - ba*h );
 }
-
+// TODO is it possible to draw a line as a triangle? -> to reduce the if statement (divergence)
 highp float sdTriangle( in highp vec2 p, in highp vec2 p0, in highp vec2 p1, in highp vec2 p2 )
 {
     highp vec2 e0 = p1 - p0;
@@ -396,7 +396,8 @@ void main() {
             lowp ivec2 grid_cell = ivec2(int(grid_lookup.x), int(grid_lookup.y)); // DEBUG
             lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
 
-            highp vec2 cell_offset = vec2(grid_cell) * grid_size;
+
+            highp vec2 cell_offset = vec2(grid_cell) * cell_size;
             // highp vec2 cell_offset = grid_cell * vec2(128.0,128.0);
             // highp vec2 cell_offset = grid_cell * vec2(64.0,64.0);
 

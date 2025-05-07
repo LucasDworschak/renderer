@@ -215,69 +215,38 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
     return data;
 }
 
-glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index)
-{
-
-    glm::u32vec2 packed_data;
-
-    a += geometry_offset_line;
-    b += geometry_offset_line;
-
-    // if (data.a.x < 0 || data.a.x > 255 || data.a.y < 0 || data.a.y > 255 || data.b.x < 0 || data.b.x > 255 || data.b.y < 0 || data.b.y > 255 || data.c.x < 0
-    //     || data.c.x > 255 || data.c.y < 0 || data.c.y > 255)
-    //     qDebug() << geometry_offset << data.a.x << data.a.y << data.b.x << data.b.y << data.c.x << data.c.y;
-
-    // make sure that we do not remove bits from the coordinates
-    assert((uint32_t(a.x) & coordinate_bitmask_line) == uint32_t(a.x));
-    assert((uint32_t(a.y) & coordinate_bitmask_line) == uint32_t(a.y));
-    assert((uint32_t(b.x) & coordinate_bitmask_line) == uint32_t(b.x));
-    assert((uint32_t(b.y) & coordinate_bitmask_line) == uint32_t(b.y));
-    // assert(style_layer < ((1u << style_bits) - 1u));
-    assert(constants::style_bits + 1 <= available_style_bits_line); // make sure that the stylebits we need are available here
-
-    packed_data.x = uint32_t(a.x) << coordinate_shift1_line;
-    packed_data.x = packed_data.x | ((uint32_t(a.y) & coordinate_bitmask_line) << coordinate_shift2_line);
-
-    packed_data.x = packed_data.x | ((uint32_t(b.x) & coordinate_bitmask_line) << coordinate_shift3_line);
-    packed_data.y = uint32_t(b.y) << coordinate_shift1_line;
-
-    packed_data.y = packed_data.y | (style_index << 1); // | ((is_polygon) ? 1u : 0u));
-    // alternative only for neceesary for shader testing
-    // packed_data.y = packed_data.y | ((data.style_index << 2) | (((data.should_blend) ? 1u : 0u) << 1) | ((data.is_polygon) ? 1u : 0u));
-
-    return packed_data;
-}
+glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index) { return pack_triangle_data({ a, b, b, style_index, false }); }
 
 glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
 {
     glm::u32vec2 packed_data;
 
-    data.a += geometry_offset_triangle;
-    data.b += geometry_offset_triangle;
-    data.c += geometry_offset_triangle;
+    data.a += geometry_offset;
+    data.b += geometry_offset;
+    data.c += geometry_offset;
 
     // if (data.a.x < 0 || data.a.x > 255 || data.a.y < 0 || data.a.y > 255 || data.b.x < 0 || data.b.x > 255 || data.b.y < 0 || data.b.y > 255 || data.c.x < 0
     //     || data.c.x > 255 || data.c.y < 0 || data.c.y > 255)
     //     qDebug() << geometry_offset << data.a.x << data.a.y << data.b.x << data.b.y << data.c.x << data.c.y;
 
     // make sure that we do not remove bits from the coordinates
-    assert((uint32_t(data.a.x) & coordinate_bitmask_triangle) == uint32_t(data.a.x));
-    assert((uint32_t(data.a.y) & coordinate_bitmask_triangle) == uint32_t(data.a.y));
-    assert((uint32_t(data.b.x) & coordinate_bitmask_triangle) == uint32_t(data.b.x));
-    assert((uint32_t(data.b.y) & coordinate_bitmask_triangle) == uint32_t(data.b.y));
-    assert((uint32_t(data.c.x) & coordinate_bitmask_triangle) == uint32_t(data.c.x));
-    assert((uint32_t(data.c.y) & coordinate_bitmask_triangle) == uint32_t(data.c.y));
+    assert((uint32_t(data.a.x) & coordinate_bitmask) == uint32_t(data.a.x));
+    assert((uint32_t(data.a.y) & coordinate_bitmask) == uint32_t(data.a.y));
+    assert((uint32_t(data.b.x) & coordinate_bitmask) == uint32_t(data.b.x));
+    assert((uint32_t(data.b.y) & coordinate_bitmask) == uint32_t(data.b.y));
+    assert((uint32_t(data.c.x) & coordinate_bitmask) == uint32_t(data.c.x));
+    assert((uint32_t(data.c.y) & coordinate_bitmask) == uint32_t(data.c.y));
     // assert(style_layer < ((1u << style_bits) - 1u));
-    assert(constants::style_bits + 1 <= available_style_bits_triangle); // make sure that the stylebits we need are available here
+    assert(constants::style_bits + 1 <= available_style_bits); // make sure that the stylebits we need are available here
 
-    packed_data.x = uint32_t(data.a.x) << coordinate_shift1_triangle;
-    packed_data.x = packed_data.x | ((uint32_t(data.a.y) & coordinate_bitmask_triangle) << coordinate_shift2_triangle);
+    packed_data.x = uint32_t(data.a.x) << coordinate_shift1;
+    packed_data.x = packed_data.x | ((uint32_t(data.a.y) & coordinate_bitmask) << coordinate_shift2);
 
-    packed_data.x = packed_data.x | ((uint32_t(data.b.x) & coordinate_bitmask_triangle) << coordinate_shift3_triangle);
-    packed_data.x = packed_data.x | ((uint32_t(data.b.y) & coordinate_bitmask_triangle) << coordinate_shift4_triangle);
+    packed_data.x = packed_data.x | ((uint32_t(data.b.x) & coordinate_bitmask) << coordinate_shift3);
+    packed_data.x = packed_data.x | ((uint32_t(data.b.y) & coordinate_bitmask) << coordinate_shift4);
 
-    packed_data.y = uint32_t(data.c.x) << coordinate_shift1_triangle;
-    packed_data.y = packed_data.y | ((uint32_t(data.c.y) & coordinate_bitmask_triangle) << coordinate_shift2_triangle);
+    packed_data.y = uint32_t(data.c.x) << coordinate_shift1;
+    packed_data.y = packed_data.y | ((uint32_t(data.c.y) & coordinate_bitmask) << coordinate_shift2);
 
     packed_data.y = packed_data.y | ((data.style_index << 1) | ((data.is_polygon) ? 1u : 0u));
     // alternative only for neceesary for shader testing
@@ -286,62 +255,29 @@ glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
     return packed_data;
 }
 
-VectorLayerData Preprocessor::unpack_line_data(glm::uvec2 packed_data)
-{
-    VectorLayerData unpacked_data;
-    unpacked_data.c = glm::ivec2(0, 0);
-
-    unpacked_data.a.x = int((packed_data.x & (coordinate_bitmask_line << coordinate_shift1_line)) >> coordinate_shift1_line);
-    unpacked_data.a.y = int((packed_data.x & (coordinate_bitmask_line << coordinate_shift2_line)) >> coordinate_shift2_line);
-    unpacked_data.b.x = int((packed_data.x & (coordinate_bitmask_line << coordinate_shift3_line)) >> coordinate_shift3_line);
-    unpacked_data.b.y = int((packed_data.y & (coordinate_bitmask_line << coordinate_shift1_line)) >> coordinate_shift1_line);
-
-    const uint32_t style_and_blend = (packed_data.y & ((1u << available_style_bits_triangle) - 1u)) >> 1;
-    // NOTE: the should_blend bit is only necessary for the shader -> on cpu side we do not need to separate them
-    unpacked_data.style_index = style_and_blend; // >> 1;
-    // unpacked_data.should_blend = (style_and_blend & 1u) == 1u;
-
-    unpacked_data.is_polygon = (packed_data.y & 1u) == 1u;
-
-    unpacked_data.a -= geometry_offset_line;
-    unpacked_data.b -= geometry_offset_line;
-
-    return unpacked_data;
-}
-
-VectorLayerData Preprocessor::unpack_triangle_data(glm::uvec2 packed_data)
-{
-    VectorLayerData unpacked_data;
-
-    unpacked_data.a.x = int((packed_data.x & (coordinate_bitmask_triangle << coordinate_shift1_triangle)) >> coordinate_shift1_triangle);
-    unpacked_data.a.y = int((packed_data.x & (coordinate_bitmask_triangle << coordinate_shift2_triangle)) >> coordinate_shift2_triangle);
-    unpacked_data.b.x = int((packed_data.x & (coordinate_bitmask_triangle << coordinate_shift3_triangle)) >> coordinate_shift3_triangle);
-    unpacked_data.b.y = int((packed_data.x & (coordinate_bitmask_triangle << coordinate_shift4_triangle)) >> coordinate_shift4_triangle);
-    unpacked_data.c.x = int((packed_data.y & (coordinate_bitmask_triangle << coordinate_shift1_triangle)) >> coordinate_shift1_triangle);
-    unpacked_data.c.y = int((packed_data.y & (coordinate_bitmask_triangle << coordinate_shift2_triangle)) >> coordinate_shift2_triangle);
-
-    const uint32_t style_and_blend = (packed_data.y & ((1u << available_style_bits_triangle) - 1u)) >> 1;
-    // NOTE: the should_blend bit is only necessary for the shader -> on cpu side we do not need to separate them
-    unpacked_data.style_index = style_and_blend; // >> 1;
-    // unpacked_data.should_blend = (style_and_blend & 1u) == 1u;
-
-    unpacked_data.is_polygon = (packed_data.y & 1u) == 1u;
-
-    unpacked_data.a -= geometry_offset_triangle;
-    unpacked_data.b -= geometry_offset_triangle;
-    unpacked_data.c -= geometry_offset_triangle;
-
-    return unpacked_data;
-}
-
 VectorLayerData Preprocessor::unpack_data(glm::uvec2 packed_data)
 {
+    VectorLayerData unpacked_data;
 
-    if ((packed_data.y & 1u) == 1u) {
-        return unpack_triangle_data(packed_data);
-    } else {
-        return unpack_line_data(packed_data);
-    }
+    unpacked_data.a.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
+    unpacked_data.a.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
+    unpacked_data.b.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift3)) >> coordinate_shift3);
+    unpacked_data.b.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift4)) >> coordinate_shift4);
+    unpacked_data.c.x = int((packed_data.y & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
+    unpacked_data.c.y = int((packed_data.y & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
+
+    const uint32_t style_and_blend = (packed_data.y & ((1u << available_style_bits) - 1u)) >> 1;
+    // NOTE: the should_blend bit is only necessary for the shader -> on cpu side we do not need to separate them
+    unpacked_data.style_index = style_and_blend; // >> 1;
+    // unpacked_data.should_blend = (style_and_blend & 1u) == 1u;
+
+    unpacked_data.is_polygon = (packed_data.y & 1u) == 1u;
+
+    unpacked_data.a -= geometry_offset;
+    unpacked_data.b -= geometry_offset;
+    unpacked_data.c -= geometry_offset;
+
+    return unpacked_data;
 }
 
 std::pair<uint32_t, uint32_t> Preprocessor::get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes)
@@ -402,8 +338,7 @@ void Preprocessor::generate_preprocess_grid()
     // make sure that bits we have declared for the cell width are exactly the same amount as the bits we need
     assert(constants::tile_extent / constants::grid_size <= cell_width);
 
-    assert(cell_width < max_cell_width_line - 50); // make sure that we have plenty of space for big lines
-    assert(cell_width <= max_cell_width_triangle); // make sure that we have plenty of space for triangles
+    assert(cell_width < max_cell_width - 50); // make sure that we have plenty of space for big lines
 
     constexpr auto clipper_margin = 1; // since clipper sometimes returns shapes slightly outside rect -> we need a small margin
 
@@ -412,11 +347,11 @@ void Preprocessor::generate_preprocess_grid()
         for (int x = 0; x < constants::grid_size; x++) {
             // const auto rect = Clipper2Lib::Rect64(x * cell_width, y * cell_width, (x + 1) * cell_width - 1, (y + 1) * cell_width - 1);
             const auto rect = Clipper2Lib::Rect64(x * cell_width, y * cell_width, (x + 1) * cell_width, (y + 1) * cell_width);
-            // for clip lines we are using +0 since we are adding the max_cell_width_line
-            const auto rect_lines = Clipper2Lib::Rect64(x * cell_width - geometry_offset_line + clipper_margin,
-                y * cell_width - geometry_offset_line + clipper_margin,
-                (x + 0) * cell_width - geometry_offset_line + max_cell_width_line - clipper_margin,
-                (y + 0) * cell_width - geometry_offset_line + max_cell_width_line - clipper_margin);
+            // for clip lines we are using +0 since we are adding the max_cell_width
+            const auto rect_lines = Clipper2Lib::Rect64(x * cell_width - geometry_offset + clipper_margin,
+                y * cell_width - geometry_offset + clipper_margin,
+                (x + 0) * cell_width - geometry_offset + max_cell_width - clipper_margin,
+                (y + 0) * cell_width - geometry_offset + max_cell_width - clipper_margin);
 
             grid.emplace_back(PreprocessCell { Clipper2Lib::RectClip64(rect), Clipper2Lib::RectClipLines64(rect_lines), rect, VectorLayerCell(), false });
 
