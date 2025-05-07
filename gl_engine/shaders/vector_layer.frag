@@ -458,53 +458,36 @@ void main() {
 
                 highp float d = 0.0;
 
+                highp vec2 v0 = (vec2(geometry_data.a) + cell_offset) / vec2(tile_extent);
+                highp vec2 v1 = (vec2(geometry_data.b) + cell_offset) / vec2(tile_extent);
+                highp vec2 v2 = (vec2(geometry_data.c) + cell_offset) / vec2(tile_extent);
+
+                // highp vec2 v0 = vec2(0,0) / vec2(64);
+                // highp vec2 v1 = vec2(64,64) / vec2(64);
+                // highp vec2 v2 = vec2(0,64) / vec2(64);
+
+                bool check_next_geometry = check_and_draw_layer(geometry_data, layer_style, pixel_color, zoom_offset);
+                if(check_next_geometry)
+                    continue;
+
+                lowp float thickness_current = layer_style.current_zoom_style.outline_width;
+                lowp float thickness_next = layer_style.next_zoom_style.outline_width;
+                lowp float thickness = mix(thickness_current, thickness_next, fract(float_zoom));
+
                 if(geometry_data.is_polygon)
                 {
-                    highp vec2 v0 = (vec2(geometry_data.a) + cell_offset) / vec2(tile_extent);
-                    highp vec2 v1 = (vec2(geometry_data.b) + cell_offset) / vec2(tile_extent);
-                    highp vec2 v2 = (vec2(geometry_data.c) + cell_offset) / vec2(tile_extent);
-
-                    // highp vec2 v0 = vec2(0,0) / vec2(64);
-                    // highp vec2 v1 = vec2(64,64) / vec2(64);
-                    // highp vec2 v2 = vec2(0,64) / vec2(64);
-
-                    highp float thickness = 0.0;
                     d = sdTriangle(uv, v0, v1, v2) - thickness;
-
-                    geometry_influence = 1.0 - step(0.0, d);
-
-                    // polygon does not influence pixel at all -> we do not draw it
-                    if(geometry_influence <= 0.0)
-                        continue;
-
-                    // calling it here prevents getting the layerstyle if we do not need it yet
-                    bool check_next_geometry = check_and_draw_layer(geometry_data, layer_style, pixel_color, zoom_offset);
-                    if(check_next_geometry)
-                        continue;
                 }
                 else
                 {
-                    highp vec2 v0 = (vec2(geometry_data.a) + cell_offset) / vec2(tile_extent);
-                    highp vec2 v1 = (vec2(geometry_data.b) + cell_offset) / vec2(tile_extent);
-
-                    // needs to be applied here to get the thickness of the line
-                    bool check_next_geometry = check_and_draw_layer(geometry_data, layer_style, pixel_color, zoom_offset);
-                    if(check_next_geometry)
-                        continue;
-
-
-                    lowp float thickness_current = layer_style.current_zoom_style.outline_width;
-                    lowp float thickness_next = layer_style.next_zoom_style.outline_width;
-                    lowp float thickness = mix(thickness_current, thickness_next, fract(float_zoom));
                     d = sdLine(uv, v0, v1) - thickness;
-
-
-                    geometry_influence = 1.0 - step(0.0, d);
-
-                    // polygon does not influence pixel at all -> we do not draw it
-                    if(geometry_influence <= 0.0)
-                        continue;
                 }
+
+                geometry_influence = 1.0 - step(0.0, d);
+
+                // polygon does not influence pixel at all -> we do not draw it
+                if(geometry_influence <= 0.0)
+                    continue;
 
 
 
