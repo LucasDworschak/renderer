@@ -56,8 +56,6 @@ const highp int geometry_offset = (max_cell_width - cell_width) / 2;
 // end constants for data packing/unpacking
 /////////////////////////////////////////////
 
-// TODO performance: shorthand if vs cast bool to int
-
 highp uvec2 pack_vectorlayer_data(VectorLayerData data)
 {
     highp uvec2 packed_data;

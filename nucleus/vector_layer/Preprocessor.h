@@ -143,7 +143,7 @@ public:
     static GpuVectorLayerTile create_default_gpu_tile();
 
     static std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(
-        std::vector<std::pair<uint32_t, uint32_t>> styles, const std::vector<glm::u32vec4> style_buffer);
+        std::vector<std::pair<uint32_t, uint32_t>>* styles, const std::vector<glm::u32vec4>& style_buffer);
 
     const Style& style();
     size_t processed_amount();

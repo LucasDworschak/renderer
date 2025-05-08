@@ -111,20 +111,23 @@ GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vecto
 }
 
 std::vector<std::pair<uint32_t, uint32_t>> Preprocessor::simplify_styles(
-    std::vector<std::pair<uint32_t, uint32_t>> style_and_layer_indices, const std::vector<glm::u32vec4> style_buffer)
+    std::vector<std::pair<uint32_t, uint32_t>>* style_and_layer_indices, const std::vector<glm::u32vec4>& style_buffer)
 {
     // we get multiple styles that may have full opacity and the same width
     // creating render calls for both does not make sense -> we only want to draw the top layer
     // this function simplifys all the styles so that only the styles which actually have a change to be rendered will remain
 
+    // TODO this sort should happen at creation of the vector not here
     // order the styles so that we look at layer in descending order
-    std::sort(style_and_layer_indices.begin(), style_and_layer_indices.end(), [](std::pair<uint32_t, uint32_t> a, std::pair<uint32_t, uint32_t> b) { return a.second > b.second; });
+    std::sort(style_and_layer_indices->begin(), style_and_layer_indices->end(), [](std::pair<uint32_t, uint32_t> a, std::pair<uint32_t, uint32_t> b) {
+        return a.second > b.second;
+    });
 
     std::vector<std::pair<uint32_t, uint32_t>> out_styles;
     int accummulative_opacity = 0;
     float width = 0.0;
 
-    for (const auto& indices : style_and_layer_indices) {
+    for (const auto& indices : *style_and_layer_indices) {
         const auto style_data = style_buffer[indices.first >> 1];
         const float current_width = float(style_data.z) / float(constants::style_precision);
         const int current_opacity = style_data.x & 255;
@@ -181,7 +184,7 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
 
             const auto type = (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) ? "line" : "fill";
             auto style_and_layer_indices = m_style.indices(layer_name, type, id.zoom_level, feature);
-            style_and_layer_indices = simplify_styles(style_and_layer_indices, m_style_buffer);
+            style_and_layer_indices = simplify_styles(&style_and_layer_indices, m_style_buffer);
 
             if (style_and_layer_indices.size() == 0) // no styles found -> we do not visualize it
                 continue;

@@ -105,32 +105,34 @@ highp float circle(highp vec2 uv, highp vec2 pos, highp float r) // DEBUG
     return distance(uv, pos) - r;
 }
 
-highp float sdLine( in highp vec2 p, in highp vec2 a, in highp vec2 b )
+highp float sd_Line_Triangle( in highp vec2 p, in highp vec2 p0, in highp vec2 p1, in highp vec2 p2, bool triangle )
 {
-    highp vec2 pa = p-a;
-    highp vec2 ba = b-a;
-    highp float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
-    return length( pa - ba*h );
-}
-// TODO is it possible to draw a line as a triangle? -> to reduce the if statement (divergence)
-highp float sdTriangle( in highp vec2 p, in highp vec2 p0, in highp vec2 p1, in highp vec2 p2 )
-{
-    highp vec2 e0 = p1 - p0;
-    highp vec2 e1 = p2 - p1;
-    highp vec2 e2 = p0 - p2;
-    highp vec2 v0 = p  - p0;
-    highp vec2 v1 = p  - p1;
-    highp vec2 v2 = p  - p2;
+
+    highp vec2 e0 = p1-p0;
+    highp vec2 v0 = p-p0;
     highp vec2 pq0 = v0 - e0*clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );
-    highp vec2 pq1 = v1 - e1*clamp( dot(v1,e1)/dot(e1,e1), 0.0, 1.0 );
-    highp vec2 pq2 = v2 - e2*clamp( dot(v2,e2)/dot(e2,e2), 0.0, 1.0 );
-    highp float s = sign( e0.x*e2.y - e0.y*e2.x );
-    highp vec2 d0 = vec2(dot(pq0,pq0), s*(v0.x*e0.y-v0.y*e0.x));
-    highp vec2 d1 = vec2(dot(pq1,pq1), s*(v1.x*e1.y-v1.y*e1.x));
-    highp vec2 d2 = vec2(dot(pq2,pq2), s*(v2.x*e2.y-v2.y*e2.x));
-    highp vec2 d = min(min(d0,d1),d2);
-    return -sqrt(d.x)*sign(d.y);
+
+    if(triangle)
+    {
+        highp vec2 e1 = p2 - p1;
+        highp vec2 e2 = p0 - p2;
+        highp vec2 v1 = p  - p1;
+        highp vec2 v2 = p  - p2;
+        highp vec2 pq1 = v1 - e1*clamp( dot(v1,e1)/dot(e1,e1), 0.0, 1.0 );
+        highp vec2 pq2 = v2 - e2*clamp( dot(v2,e2)/dot(e2,e2), 0.0, 1.0 );
+        highp float s = sign( e0.x*e2.y - e0.y*e2.x );
+        highp vec2 d0 = vec2(dot(pq0,pq0), s*(v0.x*e0.y-v0.y*e0.x));
+        highp vec2 d1 = vec2(dot(pq1,pq1), s*(v1.x*e1.y-v1.y*e1.x));
+        highp vec2 d2 = vec2(dot(pq2,pq2), s*(v2.x*e2.y-v2.y*e2.x));
+        highp vec2 d = min(min(d0,d1),d2);
+        return -sqrt(d.x)*sign(d.y);
+    }
+    else{
+        return length( pq0 );
+    }
+
 }
+
 
 highp uvec2 to_offset_size(highp uint combined) {
     // note: offset (x coord) is 24 bit -> we have to use highp
@@ -163,40 +165,21 @@ lowp ivec2 to_dict_pixel(mediump uint hash) {
 
 VectorLayerData vertex_sample(lowp uint sampler_index, highp uint index, highp uint texture_layer)
 {
-    if(sampler_index == 0u)
-    {
-        return unpack_data(texelFetch(geometry_buffer_sampler_0, ivec3(to_dict_pixel_64(index), texture_layer), 0).rg);
-    }
-    else if(sampler_index == 1u)
-    {
-        return unpack_data(texelFetch(geometry_buffer_sampler_1, ivec3(to_dict_pixel_128(index), texture_layer), 0).rg);
-    }
-    else if(sampler_index == 2u)
-    {
-        return unpack_data(texelFetch(geometry_buffer_sampler_2, ivec3(to_dict_pixel_256(index), texture_layer), 0).rg);
-    }
-    else
-    {
-        return unpack_data(texelFetch(geometry_buffer_sampler_3, ivec3(to_dict_pixel_512(index), texture_layer), 0).rg);
-    }
 
+    mediump ivec3 dict_px = ivec3(int(index & ((64u<<sampler_index)-1u)), int(index >> (6u+sampler_index)), texture_layer);
 
-    // if(sampler_index == 0u)
-    // {
-    //     return unpack_data(texelFetch(geometry_buffer_sampler_0, ivec3(to_dict_pixel_128(index), texture_layer), 0).rg);
-    // }
-    // else if(sampler_index == 1u)
-    // {
-    //     return unpack_data(texelFetch(geometry_buffer_sampler_1, ivec3(to_dict_pixel_256(index), texture_layer), 0).rg);
-    // }
-    // else if(sampler_index == 2u)
-    // {
-    //     return unpack_data(texelFetch(geometry_buffer_sampler_2, ivec3(to_dict_pixel_512(index), texture_layer), 0).rg);
-    // }
-    // else
-    // {
-    //     return unpack_data(texelFetch(geometry_buffer_sampler_3, ivec3(to_dict_pixel_1024(index), texture_layer), 0).rg);
-    // }
+    // return unpack_data(texelFetch(geometry_buffer_sampler[sampler_index], dict_px, 0).rg);
+
+    switch (sampler_index) {
+        case 0u:
+            return unpack_data(texelFetch(geometry_buffer_sampler_0, dict_px, 0).rg);
+        case 1u:
+            return unpack_data(texelFetch(geometry_buffer_sampler_1, dict_px, 0).rg);
+        case 2u:
+            return unpack_data(texelFetch(geometry_buffer_sampler_2, dict_px, 0).rg);
+        default:
+            return unpack_data(texelFetch(geometry_buffer_sampler_3, dict_px, 0).rg);
+    }
 }
 
 mediump float float_zoom_interpolation()
@@ -474,14 +457,9 @@ void main() {
                 lowp float thickness_next = layer_style.next_zoom_style.outline_width;
                 lowp float thickness = mix(thickness_current, thickness_next, fract(float_zoom));
 
-                if(geometry_data.is_polygon)
-                {
-                    d = sdTriangle(uv, v0, v1, v2) - thickness;
-                }
-                else
-                {
-                    d = sdLine(uv, v0, v1) - thickness;
-                }
+
+                d = sd_Line_Triangle(uv, v0, v1, v2, geometry_data.is_polygon) - thickness;
+
 
                 geometry_influence = 1.0 - step(0.0, d);
 

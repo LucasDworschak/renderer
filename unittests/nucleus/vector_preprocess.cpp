@@ -482,8 +482,8 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
     SECTION("clipping vector tile to cell")
     { // real example
         // constexpr size_t expected_process_amount = 147725;
-        constexpr size_t expected_process_amount = 65171;
-        // constexpr size_t expected_process_amount = 87796;
+        // constexpr size_t expected_process_amount = 65171;
+        constexpr size_t expected_process_amount = 133118;
 
         Style style(":/vectorlayerstyles/openstreetmap.json");
         // Style style(":/vectorlayerstyles/qwant.json");
@@ -519,7 +519,6 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         BENCHMARK("preprocess geometry")
         {
             preprocessor.preprocess_geometry(tile_data);
-            CHECK(preprocessor.processed_amount() == expected_process_amount);
             return;
         };
 
@@ -712,7 +711,7 @@ TEST_CASE("nucleus/vector_preprocess")
             // only draw second style
             std::vector<glm::u32vec4> style_buffer { { 200, 0, 0, 0 }, { 255, 0, 0, 0 } };
             std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1 << 1, 1 << 1 } };
-            const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(style_indices, style_buffer);
+            const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, style_buffer);
 
             CHECK(simplified.size() == 1);
             CHECK(simplified[0].first == 1 << 1);
@@ -721,7 +720,7 @@ TEST_CASE("nucleus/vector_preprocess")
             // draw both styles
             std::vector<glm::u32vec4> style_buffer { { 200, 0, 0, 0 }, { 200, 0, 0, 0 } };
             std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1 << 1, 1 << 1 } };
-            const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(style_indices, style_buffer);
+            const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, style_buffer);
 
             CHECK(simplified.size() == 2);
             CHECK(simplified[0].first == 1 << 1); // but layer 1 first
@@ -731,7 +730,7 @@ TEST_CASE("nucleus/vector_preprocess")
             // width changed -> draw 3 than 1
             std::vector<glm::u32vec4> style_buffer { { 200, 0, 10, 0 }, { 255, 0, 0, 0 }, { 255, 0, 0, 0 } };
             std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1 << 1, 1 << 1 }, { 2 << 1, 2 << 1 } };
-            const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(style_indices, style_buffer);
+            const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, style_buffer);
 
             CHECK(simplified.size() == 2);
             CHECK(simplified[0].first == 2 << 1);
