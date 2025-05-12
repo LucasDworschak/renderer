@@ -52,6 +52,9 @@ public:
     QJsonValue extract_literal(QJsonValue expression);
 };
 
+enum class Comparator { Equals = 1, NotEquals = 2, less = 3, lessThanEqual = 4, greater = 5, greaterThanEqual = 6 };
+enum class DataType { String, Number, Bool, Undefined };
+
 class StyleExpression : public StyleExpressionBase {
 public:
     StyleExpression(QJsonArray data);
@@ -71,8 +74,20 @@ public:
 
 private:
     std::string m_key;
-    std::string m_comparator;
-    std::vector<std::string> m_values;
+    Comparator m_comparator;
+    // std::vector<std::string> m_values;
+    std::vector<mapbox::feature::value> m_values;
+    // mapbox::feature::property_map m_values;
+
+    bool m_negate;
+    bool m_comparator_in;
+    bool m_comparator_has;
+
+    DataType m_type;
+
+    // static std::unordered_map<std::string, unsigned> m_string_to_value;
+
+    bool compare_values(const mapbox::feature::value& expression_value, const mapbox::feature::value& current_value, const Comparator& comparator);
 
     mapbox::feature::value extract_value(const mapbox::vector_tile::GeomType& type, const mapbox::feature::properties_type& properties);
 };

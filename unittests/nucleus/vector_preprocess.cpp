@@ -483,6 +483,7 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
     { // real example
         // constexpr size_t expected_process_amount = 147725;
         // constexpr size_t expected_process_amount = 65171;
+
         constexpr size_t expected_process_amount = 133118;
 
         Style style(":/vectorlayerstyles/openstreetmap.json");
@@ -495,20 +496,14 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         file.open(QFile::ReadOnly);
         const auto bytes = file.readAll();
 
-        // auto tile_data = nucleus::vector_layer::Preprocessor::parse_tile(id, bytes, style);
-
         Preprocessor preprocessor(std::move(style));
 
-        // auto clipper_grid = nucleus::vector_layer::Preprocessor::generate_clipper2_grid(nucleus::vector_layer::constants::grid_size);
-
         // auto meta = nucleus::vector_layer::Preprocessor::preprocess_geometry(tile_data, style_buffer);
-        // CHECK(meta.geometry_amount == 68413);
         auto tile_data = preprocessor.parse_tile(id, bytes);
         preprocessor.preprocess_geometry(tile_data);
         auto tile = preprocessor.create_gpu_tile();
 
         CHECK(preprocessor.processed_amount() == expected_process_amount);
-        // CHECK(temp_data.geometry_amount == 321063);// 128 grid
 
         BENCHMARK("parse tile")
         {
