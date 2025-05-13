@@ -76,12 +76,13 @@ void Style::load()
 
     // pair is <layer_id, filter>
     // layerid: source_layer+_+type (e.g. transportation_line)
-    auto layerid_filter_to_layer_indices = std::map<std::pair<std::string, std::shared_ptr<StyleExpressionBase>>, std::vector<uint32_t>, StyleHasher>();
+    auto layerid_filter_to_layer_indices
+        = std::map<std::pair<std::pair<std::string, int>, std::shared_ptr<StyleExpressionBase>>, std::vector<uint32_t>, StyleHasher>();
     // each entry in this vector is a different layer_index
     auto zoom_to_style = std::vector<std::map<uint8_t, LayerStyle>>();
 
     auto current_style_map = std::map<uint8_t, LayerStyle>();
-    auto previous_layer_filter = std::pair<std::string, std::shared_ptr<StyleExpressionBase>>();
+    auto previous_layer_filter = std::pair<std::pair<std::string, int>, std::shared_ptr<StyleExpressionBase>>();
     for (const QJsonValue& obj : layers) {
 
         if (obj.toObject().value("type").toString() != "line" && obj.toObject().value("type").toString() != "fill") {
@@ -103,7 +104,7 @@ void Style::load()
         auto paint_object = obj.toObject().value("paint").toObject();
         auto filter_data = obj.toObject().value("filter").toArray();
         const bool is_line = obj.toObject().value("type").toString() == "line";
-        const auto layer_name = obj.toObject().value("source-layer").toString().toStdString() + "_" + obj.toObject().value("type").toString().toStdString();
+        const auto layer_name = std::make_pair(obj.toObject().value("source-layer").toString().toStdString(), is_line ? 0 : 1);
 
         std::vector<std::pair<uint8_t, uint32_t>> fill_colors;
         std::vector<std::pair<uint8_t, uint32_t>> outline_colors;
@@ -122,7 +123,7 @@ void Style::load()
 
         const auto current_layer_filter = std::make_pair(layer_name, filter);
 
-        if (previous_layer_filter.first.empty()) {
+        if (previous_layer_filter.first.first.empty()) {
             // first time -> only set the previous_layer_filter
             previous_layer_filter = current_layer_filter;
         } else {
@@ -397,10 +398,9 @@ void Style::load()
     qDebug() << "vectorlayer style loaded";
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> Style::indices(
-    std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const
+std::vector<std::pair<uint32_t, uint32_t>> Style::indices(std::string layer_name, int type, unsigned zoom, const mapbox::vector_tile::feature& feature) const
 {
-    const auto layer = layer_name + "_" + type;
+    const auto layer = std::make_pair(layer_name, type);
 
     if (!m_layer_to_style.contains(layer)) {
         // qDebug() << "no style for: " << layer_name;

@@ -67,7 +67,7 @@ size_t StyleExpression::hash()
 {
     size_t seed = 0;
 
-    radix::hasher::hash_combine<std::string>(seed, m_key);
+    radix::hasher::hash_combine<int>(seed, m_key);
     radix::hasher::hash_combine<int>(seed, static_cast<int>(m_comparator));
 
     for (const auto& v : m_values) {
@@ -100,46 +100,47 @@ void StyleExpression::initialize()
     string_value_map["LineString"] = 2;
     string_value_map["Polygon"] = 3;
     string_value_map["UNKNOWN"] = null_value;
+    string_value_map["$type"] = 4;
 
     string_value_map[""] = null_value;
 
-    counter = 4;
+    counter = 5;
 }
 
-std::unordered_map<std::string, int> StyleExpression::get_values(const mapbox::vector_tile::feature& feature)
+std::unordered_map<int, int> StyleExpression::get_values(const mapbox::vector_tile::feature& feature)
 {
     const auto type = feature.getType();
     const auto properties = feature.getProperties();
 
-    auto values = std::unordered_map<std::string, int>();
+    auto values = std::unordered_map<int, int>();
 
+    const auto type_key = string_value_map.at("$type");
     if (type == mapbox::vector_tile::GeomType::POINT)
-        values["$type"] = 1;
+        values[type_key] = 1;
     else if (type == mapbox::vector_tile::GeomType::LINESTRING)
-        values["$type"] = 2;
+        values[type_key] = 2;
     else if (type == mapbox::vector_tile::GeomType::POLYGON)
-        values["$type"] = 3;
+        values[type_key] = 3;
     else
-        values["$type"] = null_value;
-
-    // TODO parse other properties
+        values[type_key] = null_value;
 
     for (const auto& prop : properties) {
-        const auto key = prop.first;
+        int key = null_value;
+        if (string_value_map.contains(prop.first))
+            key = string_value_map[prop.first];
+        else
+            continue; // the key is not in the value map -> it will not be used to determine style
+
         int value = null_value;
 
         if (std::holds_alternative<std::string>(prop.second)) {
             const auto string_value = std::get<std::string>(prop.second);
             if (string_value_map.contains(string_value)) {
                 value = string_value_map[string_value];
-            } else {
-                // if (key == "class") {
-                //     qDebug() << "class does not exist:" << string_value;
-                // }
             }
-
             // else -> values is not in mqster string map -> just save null value
             // we probably can NOT just ignore this value since a "has" expression still must be valid
+
         } else if (std::holds_alternative<double>(prop.second)) {
             value = int(std::get<double>(prop.second) * float_precision);
         } else if (std::holds_alternative<uint64_t>(prop.second)) {
@@ -168,12 +169,30 @@ StyleExpression::StyleExpression(QJsonArray data)
     // key
     if (data[1].isArray()) {
         if (data[1].toArray().size() == 1) {
-            m_key = data[1].toArray()[0].toString().toStdString();
+
+            const auto string_value = data[1].toArray()[0].toString().toStdString();
+            if (string_value_map.contains(string_value)) {
+                const int int_value = string_value_map[string_value];
+                m_key = int_value;
+            } else {
+                const int int_value = counter++;
+                string_value_map[string_value] = int_value;
+                m_key = int_value;
+            }
+
         } else {
             qDebug() << "StyleExpression: single expression with array that is not correctly sized: " << data[1];
         }
     } else {
-        m_key = data[1].toString().toStdString();
+        const auto string_value = data[1].toString().toStdString();
+        if (string_value_map.contains(string_value)) {
+            const int int_value = string_value_map[string_value];
+            m_key = int_value;
+        } else {
+            const int int_value = counter++;
+            string_value_map[string_value] = int_value;
+            m_key = int_value;
+        }
     }
 
     // values
@@ -282,7 +301,7 @@ StyleExpression::StyleExpression(QJsonArray data)
     }
 }
 
-bool StyleExpression::matches(const std::unordered_map<std::string, int>& value_map)
+bool StyleExpression::matches(const std::unordered_map<int, int>& value_map)
 {
     int value = null_value;
     if (value_map.contains(m_key))
@@ -349,7 +368,7 @@ StyleExpressionCollection::StyleExpressionCollection(QJsonArray data)
     }
 }
 
-bool StyleExpressionCollection::matches(const std::unordered_map<std::string, int>& value_map)
+bool StyleExpressionCollection::matches(const std::unordered_map<int, int>& value_map)
 {
     if (m_negate) {
         assert(m_subFilters.size() == 1);

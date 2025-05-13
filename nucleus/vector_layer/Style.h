@@ -50,22 +50,28 @@ struct StyleHasher {
         return seed;
     }
 
-    size_t operator()(const std::pair<std::string, std::shared_ptr<StyleExpressionBase>>& pair) const
+    size_t operator()(const std::pair<std::pair<std::string, int>, std::shared_ptr<StyleExpressionBase>>& pair) const
     {
         size_t seed = 0;
 
-        radix::hasher::hash_combine<std::string>(seed, pair.first);
+        radix::hasher::hash_combine<std::string>(seed, pair.first.first);
+        radix::hasher::hash_combine<int>(seed, pair.first.second);
         if (pair.second != nullptr) // if there is no filter -> this would be null
             radix::hasher::hash_combine<uint32_t>(seed, pair.second->hash());
 
         return seed;
     }
 
-    bool operator()(const std::pair<std::string, std::shared_ptr<StyleExpressionBase>>& lhs, const std::pair<std::string, std::shared_ptr<StyleExpressionBase>>& rhs) const
+    bool operator()(const std::pair<std::pair<std::string, int>, std::shared_ptr<StyleExpressionBase>>& lhs,
+        const std::pair<std::pair<std::string, int>, std::shared_ptr<StyleExpressionBase>>& rhs) const
     {
         // in order to have consistent insertion order, we are using first the string compare than the hashes of the styleexpressions
-        auto str_comp = lhs.first.compare(rhs.first);
+        auto str_comp = lhs.first.first.compare(rhs.first.first);
         if (str_comp == 0) {
+            if (lhs.first.second != rhs.first.second) {
+                return lhs.first.second < rhs.first.second;
+            }
+
             auto h1 = (lhs.second == nullptr) ? 0 : lhs.second->hash();
             auto h2 = (rhs.second == nullptr) ? 0 : rhs.second->hash();
 
@@ -73,6 +79,16 @@ struct StyleHasher {
         }
 
         return str_comp < 0;
+    }
+
+    size_t operator()(const std::pair<std::string, int>& pair) const
+    {
+        size_t seed = 0;
+
+        radix::hasher::hash_combine<std::string>(seed, pair.first);
+        radix::hasher::hash_combine<int>(seed, pair.second);
+
+        return seed;
     }
 };
 
@@ -93,7 +109,7 @@ public:
 
     static uint32_t premultiply_alpha(uint32_t color);
 
-    std::vector<std::pair<uint32_t, uint32_t>> indices(std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
+    std::vector<std::pair<uint32_t, uint32_t>> indices(std::string layer_name, int type, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
 
     std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles() const;
 
@@ -113,7 +129,7 @@ private:
     float rgb2linear(uint8_t channel);
     uint8_t linear2rgb(float linear);
 
-    std::unordered_map<std::string, StyleFilter> m_layer_to_style;
+    std::unordered_map<std::pair<std::string, int>, StyleFilter, StyleHasher> m_layer_to_style;
 
     QString m_filename;
 };

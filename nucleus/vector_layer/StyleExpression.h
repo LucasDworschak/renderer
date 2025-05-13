@@ -47,7 +47,7 @@ public:
     /**
      * checks if the supplied feature matches the expression that was initialized
      */
-    virtual bool matches(const std::unordered_map<std::string, int>& value_map) = 0;
+    virtual bool matches(const std::unordered_map<int, int>& value_map) = 0;
 
     static std::unique_ptr<StyleExpressionBase> create_filter_expression(QJsonArray data);
     QJsonValue extract_literal(QJsonValue expression);
@@ -64,14 +64,14 @@ public:
     /**
      * checks if the supplied feature matches the expression that was initialized
      */
-    bool matches(const std::unordered_map<std::string, int>& value_map) override;
+    bool matches(const std::unordered_map<int, int>& value_map) override;
 
     /**
      * @brief get_values
      * @param feature
      * @return map that converts key to an appropriate integer value. this integer value is universal and can be used to check if two values are the same
      */
-    static std::unordered_map<std::string, int> get_values(const mapbox::vector_tile::feature& feature);
+    static std::unordered_map<int, int> get_values(const mapbox::vector_tile::feature& feature);
 
     static void initialize();
 
@@ -82,7 +82,7 @@ public:
     static bool valid(QString value);
 
 private:
-    std::string m_key;
+    int m_key;
     Comparator m_comparator;
     std::vector<int> m_values;
 
@@ -106,7 +106,7 @@ public:
     /**
      * checks if the supplied feature matches the expression of all/any of the expression it holds
      */
-    bool matches(const std::unordered_map<std::string, int>& value_map) override;
+    bool matches(const std::unordered_map<int, int>& value_map) override;
 
     /**
      * checks if the supplied argument is in a list of valid arguments
