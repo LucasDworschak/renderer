@@ -523,7 +523,7 @@ TEST_CASE("nucleus/vector_style")
         // check if the color stored int he style buffer points to the correct color in the stylesheet
         const auto style_buffer = s.styles()->buffer();
 
-        CHECK(feature_to_style.size() == 124);
+        CHECK(feature_to_style.size() == 125);
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_0")].x == s.parse_color("#e0f2d3ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_0")].x == s.parse_color("#e0f2d3ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_0")].x == s.parse_color("#e0f2d3ff"));
@@ -543,6 +543,7 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__1_0")].x == s.parse_color("#bbe0fcff"));
         CHECK(style_buffer[feature_to_style.at("fill__water__river__null__0_0")].x == s.parse_color("#bbe0fcff"));
         CHECK(style_buffer[feature_to_style.at("fill__water__swimming_pool__null__0_0")].x == s.parse_color("#bbe0fcff"));
+        CHECK(style_buffer[feature_to_style.at("line__boundary__null__null__6__0__0_0")].x == s.parse_color("#9e9cabff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null_1")].x == s.parse_color("#edededff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1_0")].x == s.parse_color("#ffffffff"));
@@ -872,6 +873,11 @@ TEST_CASE("nucleus/vector_style benchmarks")
     BENCHMARK("Style parsing basemap")
     {
         Style s(":/vectorlayerstyles/basemap.json");
+        s.load();
+    };
+    BENCHMARK("Style parsing openmaptile")
+    {
+        Style s(":/vectorlayerstyles/openstreetmap.json");
         s.load();
     };
 }

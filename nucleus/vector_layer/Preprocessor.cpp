@@ -182,7 +182,9 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
         for (std::size_t i = 0; i < feature_count; ++i) {
             const auto feature = mapbox::vector_tile::feature(layer.getFeature(i), layer);
 
+            // TODO instead of type string pass int
             const auto type = (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) ? "line" : "fill";
+            // qDebug() << layer_name;
             auto style_and_layer_indices = m_style.indices(layer_name, type, id.zoom_level, feature);
             style_and_layer_indices = simplify_styles(&style_and_layer_indices, m_style_buffer);
 

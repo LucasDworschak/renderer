@@ -41,6 +41,7 @@ Style::Style(const QString& filename)
     // make sure that style_bits and style_buffer_size are correctly matched -> changing one means you also need to change the other
     // -1 because one bit is used to signal if it should blend with next style or not
     assert(((constants::style_buffer_size * constants::style_buffer_size) >> (constants::style_bits - 1)) == 1);
+    StyleExpression::initialize();
 }
 
 Style::Style(Style&& other)
@@ -397,7 +398,7 @@ void Style::load()
 }
 
 std::vector<std::pair<uint32_t, uint32_t>> Style::indices(
-    std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const // + properties // type=Polygon/Point/... // class? subclass
+    std::string layer_name, std::string type, unsigned zoom, const mapbox::vector_tile::feature& feature) const
 {
     const auto layer = layer_name + "_" + type;
 
