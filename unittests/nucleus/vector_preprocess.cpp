@@ -57,12 +57,12 @@ namespace util {
     };
 
     template <>
-    struct nth<0, Clipper2Lib::Point64> {
-        inline static auto get(const Clipper2Lib::Point64& t) { return t.x; };
+    struct nth<0, nucleus::vector_layer::ClipperPoint> {
+        inline static auto get(const nucleus::vector_layer::ClipperPoint& t) { return t.x; };
     };
     template <>
-    struct nth<1, Clipper2Lib::Point64> {
-        inline static auto get(const Clipper2Lib::Point64& t) { return t.y; };
+    struct nth<1, nucleus::vector_layer::ClipperPoint> {
+        inline static auto get(const nucleus::vector_layer::ClipperPoint& t) { return t.y; };
     };
 
 } // namespace util
@@ -204,70 +204,70 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 {
     SECTION("Clip to rect if all outside")
     {
-        Clipper2Lib::Paths64 shapes = { Clipper2Lib::MakePath({ -10, -10, -10, 10, 10, 10, 10, -10 }) };
+        ClipperPaths shapes = { Clipper2Lib::MakePath<ClipperResolution>({ -10, -10, -10, 10, 10, 10, 10, -10 }) };
 
-        Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(-5, -5, 5, 5);
-        Clipper2Lib::Paths64 solution = RectClip(rect, shapes);
+        ClipperRect rect = ClipperRect(-5, -5, 5, 5);
+        ClipperPaths solution = RectClipFunc<ClipperResolution>(rect, shapes);
 
         CHECK(solution.size() == 1);
         CHECK(solution[0].size() == 4);
-        CHECK(solution[0][0] == Clipper2Lib::Point64 { -5, -5 });
-        CHECK(solution[0][1] == Clipper2Lib::Point64 { -5, 5 });
-        CHECK(solution[0][2] == Clipper2Lib::Point64 { 5, 5 });
-        CHECK(solution[0][3] == Clipper2Lib::Point64 { 5, -5 });
+        CHECK(solution[0][0] == ClipperPoint { -5, -5 });
+        CHECK(solution[0][1] == ClipperPoint { -5, 5 });
+        CHECK(solution[0][2] == ClipperPoint { 5, 5 });
+        CHECK(solution[0][3] == ClipperPoint { 5, -5 });
     }
 
     SECTION("Clip to rect no overlap")
     {
-        Clipper2Lib::Paths64 shapes = { Clipper2Lib::MakePath({ -20, -20, -20, -10, -10, -10, -10, -20 }) };
+        ClipperPaths shapes = { Clipper2Lib::MakePath<ClipperResolution>({ -20, -20, -20, -10, -10, -10, -10, -20 }) };
 
-        Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(-5, -5, 5, 5);
-        Clipper2Lib::Paths64 solution = RectClip(rect, shapes);
+        ClipperRect rect = ClipperRect(-5, -5, 5, 5);
+        ClipperPaths solution = RectClipFunc<ClipperResolution>(rect, shapes);
 
         CHECK(solution.size() == 0);
     }
 
     SECTION("Clip diamond with rect")
     { // checks clipping against each edge
-        Clipper2Lib::Paths64 shapes = { Clipper2Lib::MakePath({ 0, -7, -7, 0, 0, 7, 7, 0 }) };
+        ClipperPaths shapes = { Clipper2Lib::MakePath<ClipperResolution>({ 0, -7, -7, 0, 0, 7, 7, 0 }) };
 
-        Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(-5, -5, 5, 5);
-        Clipper2Lib::Paths64 solution = RectClip(rect, shapes);
+        ClipperRect rect = ClipperRect(-5, -5, 5, 5);
+        ClipperPaths solution = RectClipFunc<ClipperResolution>(rect, shapes);
 
         CHECK(solution.size() == 1);
         CHECK(solution[0].size() == 8);
-        CHECK(solution[0][0] == Clipper2Lib::Point64 { 5, 2 });
-        CHECK(solution[0][1] == Clipper2Lib::Point64 { 5, -2 });
-        CHECK(solution[0][2] == Clipper2Lib::Point64 { 2, -5 });
-        CHECK(solution[0][3] == Clipper2Lib::Point64 { -2, -5 });
-        CHECK(solution[0][4] == Clipper2Lib::Point64 { -5, -2 });
-        CHECK(solution[0][5] == Clipper2Lib::Point64 { -5, 2 });
-        CHECK(solution[0][6] == Clipper2Lib::Point64 { -2, 5 });
-        CHECK(solution[0][7] == Clipper2Lib::Point64 { 2, 5 });
+        CHECK(solution[0][0] == ClipperPoint { 5, 2 });
+        CHECK(solution[0][1] == ClipperPoint { 5, -2 });
+        CHECK(solution[0][2] == ClipperPoint { 2, -5 });
+        CHECK(solution[0][3] == ClipperPoint { -2, -5 });
+        CHECK(solution[0][4] == ClipperPoint { -5, -2 });
+        CHECK(solution[0][5] == ClipperPoint { -5, 2 });
+        CHECK(solution[0][6] == ClipperPoint { -2, 5 });
+        CHECK(solution[0][7] == ClipperPoint { 2, 5 });
     }
 
     SECTION("Clip poly with hole")
     {
         // polygon and hole are outside
         // -> will be cliped to same shape
-        Clipper2Lib::Paths64 shapes
-            = { Clipper2Lib::MakePath({ -15, -15, 15, -15, 15, 15, -15, 15 }), Clipper2Lib::MakePath({ -10, -10, -10, 10, 10, 10, 10, -10 }) };
+        ClipperPaths shapes = { Clipper2Lib::MakePath<ClipperResolution>({ -15, -15, 15, -15, 15, 15, -15, 15 }),
+            Clipper2Lib::MakePath<ClipperResolution>({ -10, -10, -10, 10, 10, 10, 10, -10 }) };
 
-        Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(-5, -5, 5, 5);
-        Clipper2Lib::Paths64 solution = RectClip(rect, shapes);
+        ClipperRect rect = ClipperRect(-5, -5, 5, 5);
+        ClipperPaths solution = RectClipFunc<ClipperResolution>(rect, shapes);
 
         // winding order is kept (points might be a bit rearanged though)
         CHECK(solution.size() == 2);
         CHECK(solution[0].size() == 4);
-        CHECK(solution[0][0] == Clipper2Lib::Point64 { -5, 5 });
-        CHECK(solution[0][1] == Clipper2Lib::Point64 { -5, -5 });
-        CHECK(solution[0][2] == Clipper2Lib::Point64 { 5, -5 });
-        CHECK(solution[0][3] == Clipper2Lib::Point64 { 5, 5 });
+        CHECK(solution[0][0] == ClipperPoint { -5, 5 });
+        CHECK(solution[0][1] == ClipperPoint { -5, -5 });
+        CHECK(solution[0][2] == ClipperPoint { 5, -5 });
+        CHECK(solution[0][3] == ClipperPoint { 5, 5 });
         CHECK(solution[1].size() == 4);
-        CHECK(solution[1][0] == Clipper2Lib::Point64 { -5, -5 });
-        CHECK(solution[1][1] == Clipper2Lib::Point64 { -5, 5 });
-        CHECK(solution[1][2] == Clipper2Lib::Point64 { 5, 5 });
-        CHECK(solution[1][3] == Clipper2Lib::Point64 { 5, -5 });
+        CHECK(solution[1][0] == ClipperPoint { -5, -5 });
+        CHECK(solution[1][1] == ClipperPoint { -5, 5 });
+        CHECK(solution[1][2] == ClipperPoint { 5, 5 });
+        CHECK(solution[1][3] == ClipperPoint { 5, -5 });
 
         // both polygons are visualizing the same. after rasterization we expect that no polygon is rasterized
         // -> since we are fully in a hole
@@ -291,10 +291,10 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
     // SECTION("clip test")
     // {
     //     // clipper2 result that is outside rect
-    //     Clipper2Lib::Paths64 shapes = { Clipper2Lib::MakePath({ 128, -64, 91, 150, 77, 150, 114, -64 }) };
+    //     ClipperPaths shapes = { Clipper2Lib::MakePath<ClipperResolution>({ 128, -64, 91, 150, 77, 150, 114, -64 }) };
 
-    //     Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(64, 64, 127, 127);
-    //     Clipper2Lib::Paths64 solution = RectClip(rect, shapes);
+    //     ClipperRect rect = ClipperRect(64, 64, 127, 127);
+    //     ClipperPaths solution = RectClip(rect, shapes);
 
     //     qDebug() << "points:";
     //     for (size_t i = 0; i < solution.size(); ++i) {
@@ -314,27 +314,28 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
     {
         // polygon and hole are outside
         // -> will be cliped to same shape
-        Clipper2Lib::Paths64 shapes = { Clipper2Lib::MakePath({ -15, -15, 15, -15, 15, 15, -15, 15 }), Clipper2Lib::MakePath({ 0, -7, -7, 0, 0, 7, 7, 0 }) };
+        ClipperPaths shapes = { Clipper2Lib::MakePath<ClipperResolution>({ -15, -15, 15, -15, 15, 15, -15, 15 }),
+            Clipper2Lib::MakePath<ClipperResolution>({ 0, -7, -7, 0, 0, 7, 7, 0 }) };
 
-        Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(-5, -5, 5, 5);
-        Clipper2Lib::Paths64 solution = RectClip(rect, shapes);
+        ClipperRect rect = ClipperRect(-5, -5, 5, 5);
+        ClipperPaths solution = RectClipFunc<ClipperResolution>(rect, shapes);
 
         // winding order is kept (points might be a bit rearanged though)
         CHECK(solution.size() == 2);
         CHECK(solution[0].size() == 4);
-        CHECK(solution[0][0] == Clipper2Lib::Point64 { -5, 5 });
-        CHECK(solution[0][1] == Clipper2Lib::Point64 { -5, -5 });
-        CHECK(solution[0][2] == Clipper2Lib::Point64 { 5, -5 });
-        CHECK(solution[0][3] == Clipper2Lib::Point64 { 5, 5 });
+        CHECK(solution[0][0] == ClipperPoint { -5, 5 });
+        CHECK(solution[0][1] == ClipperPoint { -5, -5 });
+        CHECK(solution[0][2] == ClipperPoint { 5, -5 });
+        CHECK(solution[0][3] == ClipperPoint { 5, 5 });
         CHECK(solution[1].size() == 8);
-        CHECK(solution[1][0] == Clipper2Lib::Point64 { 5, 2 });
-        CHECK(solution[1][1] == Clipper2Lib::Point64 { 5, -2 });
-        CHECK(solution[1][2] == Clipper2Lib::Point64 { 2, -5 });
-        CHECK(solution[1][3] == Clipper2Lib::Point64 { -2, -5 });
-        CHECK(solution[1][4] == Clipper2Lib::Point64 { -5, -2 });
-        CHECK(solution[1][5] == Clipper2Lib::Point64 { -5, 2 });
-        CHECK(solution[1][6] == Clipper2Lib::Point64 { -2, 5 });
-        CHECK(solution[1][7] == Clipper2Lib::Point64 { 2, 5 });
+        CHECK(solution[1][0] == ClipperPoint { 5, 2 });
+        CHECK(solution[1][1] == ClipperPoint { 5, -2 });
+        CHECK(solution[1][2] == ClipperPoint { 2, -5 });
+        CHECK(solution[1][3] == ClipperPoint { -2, -5 });
+        CHECK(solution[1][4] == ClipperPoint { -5, -2 });
+        CHECK(solution[1][5] == ClipperPoint { -5, 2 });
+        CHECK(solution[1][6] == ClipperPoint { -2, 5 });
+        CHECK(solution[1][7] == ClipperPoint { 2, 5 });
 
         // we expect that the rasterizer sees 4 triangles at the corners of the clip -> the diamond remains a hole
 
@@ -375,11 +376,11 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         // first line clipped on both ends
         // second line completely outside
         // third line outside to middle
-        Clipper2Lib::Paths64 in = { Clipper2Lib::MakePath({ -15, -15, 15, 15, 30, 30, 0, 0 }) };
-        Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(-5, -5, 5, 5);
+        ClipperPaths in = { Clipper2Lib::MakePath<ClipperResolution>({ -15, -15, 15, 15, 30, 30, 0, 0 }) };
+        ClipperRect rect = ClipperRect(-5, -5, 5, 5);
 
-        auto clipper = Clipper2Lib::RectClipLines64({ rect });
-        Clipper2Lib::Paths64 solution = clipper.Execute(in);
+        auto clipper = RectClipLines({ rect });
+        ClipperPaths solution = clipper.Execute(in);
 
         CHECK(solution.size() == 2);
         CHECK(solution[0].size() == 2);
@@ -400,16 +401,18 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
     SECTION("fully covers cell")
     {
-        Clipper2Lib::Paths64 shapes1 = { Clipper2Lib::MakePath({ -10, -10, -10, 10, 10, 10, 10, -10 }) };
-        Clipper2Lib::Paths64 shapes2 = { Clipper2Lib::MakePath({ -10, -10, -10, 10, 10, 10, 10, -10 }) };
-        Clipper2Lib::Paths64 shapes3 = { Clipper2Lib::MakePath({ 0, -7, -7, 0, 0, 7, 7, 0 }) }; // all are outside but in a diamond shape -> not fully
-        Clipper2Lib::Paths64 shapes4 = { Clipper2Lib::MakePath({ -10, -10, -10, 10, 5, 15, 10, 10, 10, -10 }) };
 
-        Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(-5, -5, 5, 5);
-        Clipper2Lib::Paths64 solution1 = RectClip(rect, shapes1);
-        Clipper2Lib::Paths64 solution2 = RectClip(rect, shapes2);
-        Clipper2Lib::Paths64 solution3 = RectClip(rect, shapes3);
-        Clipper2Lib::Paths64 solution4 = RectClip(rect, shapes4);
+        ClipperPaths shapes1 = { Clipper2Lib::MakePath<ClipperResolution>({ -10, -10, -10, 10, 10, 10, 10, -10 }) };
+        ClipperPaths shapes2 = { Clipper2Lib::MakePath<ClipperResolution>({ -10, -10, -10, 10, 10, 10, 10, -10 }) };
+        ClipperPaths shapes3
+            = { Clipper2Lib::MakePath<ClipperResolution>({ 0, -7, -7, 0, 0, 7, 7, 0 }) }; // all are outside but in a diamond shape -> not fully
+        ClipperPaths shapes4 = { Clipper2Lib::MakePath<ClipperResolution>({ -10, -10, -10, 10, 5, 15, 10, 10, 10, -10 }) };
+
+        ClipperRect rect = ClipperRect(-5, -5, 5, 5);
+        ClipperPaths solution1 = RectClipFunc<ClipperResolution>(rect, shapes1);
+        ClipperPaths solution2 = RectClipFunc<ClipperResolution>(rect, shapes2);
+        ClipperPaths solution3 = RectClipFunc<ClipperResolution>(rect, shapes3);
+        ClipperPaths solution4 = RectClipFunc<ClipperResolution>(rect, shapes4);
 
         CHECK(nucleus::vector_layer::Preprocessor::fully_covers(solution1, rect));
         CHECK(nucleus::vector_layer::Preprocessor::fully_covers(solution2, rect));
@@ -419,15 +422,15 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
     SECTION("line fully covers cell")
     {
-        Clipper2Lib::Paths64 shapes1 = { Clipper2Lib::MakePath({ 0, -5, 0, 5 }) };
-        Clipper2Lib::Paths64 shapes2 = { Clipper2Lib::MakePath({ 1, -5, 1, 5 }) }; // barely not fully covered with 7.5 width
-        Clipper2Lib::Paths64 shapes3 = { Clipper2Lib::MakePath({ 0, -15, 0, -5 }) }; // one end point is barely at the edge of the rect
+        ClipperPaths shapes1 = { Clipper2Lib::MakePath<ClipperResolution>({ 0, -5, 0, 5 }) };
+        ClipperPaths shapes2 = { Clipper2Lib::MakePath<ClipperResolution>({ 1, -5, 1, 5 }) }; // barely not fully covered with 7.5 width
+        ClipperPaths shapes3 = { Clipper2Lib::MakePath<ClipperResolution>({ 0, -15, 0, -5 }) }; // one end point is barely at the edge of the rect
 
-        Clipper2Lib::Rect64 rect = Clipper2Lib::Rect64(-5, -5, 5, 5);
+        ClipperRect rect = ClipperRect(-5, -5, 5, 5);
 
         // auto clipper = Clipper2Lib::RectClipLines64({ rect });
-        // Clipper2Lib::Paths64 solution1 = clipper.Execute(shapes1);
-        // Clipper2Lib::Paths64 solution2 = clipper.Execute(shapes2);
+        // ClipperPaths solution1 = clipper.Execute(shapes1);
+        // ClipperPaths solution2 = clipper.Execute(shapes2);
 
         // line_width is too small -> we do not even try
         CHECK(nucleus::vector_layer::Preprocessor::line_fully_covers(shapes1, 5.0, rect) == -1u);

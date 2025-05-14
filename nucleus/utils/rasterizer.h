@@ -568,8 +568,8 @@ void rasterize_lines(const PixelWriterFunction& pixel_writer, const std::vector<
     }
 }
 
-template <PixelWriterFunctionConcept PixelWriterFunction>
-void rasterize_lines(const PixelWriterFunction& pixel_writer, const Clipper2Lib::Paths64& line_points, float distance = 0.0, float scale = 1.0)
+template <PixelWriterFunctionConcept PixelWriterFunction, typename T>
+void rasterize_lines(const PixelWriterFunction& pixel_writer, const Clipper2Lib::Paths<T>& line_points, float distance = 0.0, float scale = 1.0)
 {
     for (size_t i = 0; i < line_points.size(); ++i) {
         for (size_t j = 0; j < line_points[i].size() - 1; ++j) {

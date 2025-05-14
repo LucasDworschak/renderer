@@ -69,15 +69,22 @@ struct VectorLayerData {
     bool is_polygon;
 };
 
-// Clipper2Lib::Paths64
-class PointCollectionVec2 : public Clipper2Lib::Paths64 {
+using ClipperResolution = int16_t;
+using ClipperPoint = Clipper2Lib::Point<ClipperResolution>;
+using ClipperPath = Clipper2Lib::Path<ClipperResolution>;
+using ClipperPaths = Clipper2Lib::Paths<ClipperResolution>;
+using ClipperRect = Clipper2Lib::Rect<ClipperResolution>;
+using RectClip = Clipper2Lib::RectClip<ClipperResolution>;
+using RectClipLines = Clipper2Lib::RectClipLines<ClipperResolution>;
+
+class PointCollectionVec2 : public ClipperPaths {
 public:
-    using coordinate_type = int64_t;
+    using coordinate_type = ClipperResolution;
     static inline bool check_limits = false;
     static inline bool round = false;
     template <class... Args>
     PointCollectionVec2(Args&&... args)
-        : Clipper2Lib::Paths64(std::forward<Args>(args)...)
+        : ClipperPaths(std::forward<Args>(args)...)
     {
     }
 };
@@ -104,8 +111,8 @@ struct Hasher {
 };
 
 struct GeometryData {
-    Clipper2Lib::Paths64 vertices;
-    std::vector<Clipper2Lib::Rect64> bounds;
+    ClipperPaths vertices;
+    std::vector<ClipperRect> bounds;
 
     radix::geometry::Aabb2i aabb;
     std::pair<uint32_t, uint32_t> style_layer;
@@ -116,9 +123,9 @@ using VectorLayers = std::map<uint32_t, std::vector<GeometryData>>;
 using VectorLayerCell = std::map<uint32_t, std::vector<glm::u32vec2>>;
 
 struct PreprocessCell {
-    Clipper2Lib::RectClip64 clipper;
-    Clipper2Lib::RectClipLines64 clipper_lines;
-    Clipper2Lib::Rect64 rect;
+    RectClip clipper;
+    RectClipLines clipper_lines;
+    ClipperRect rect;
     VectorLayerCell cell_data;
     bool is_done;
 };
@@ -137,8 +144,8 @@ public:
     static glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_layer);
     static VectorLayerData unpack_data(glm::uvec2 packed_data);
 
-    static bool fully_covers(const Clipper2Lib::Paths64& solution, const Clipper2Lib::Rect64& rect);
-    static size_t line_fully_covers(const Clipper2Lib::Paths64& solution, float line_width, const Clipper2Lib::Rect64& rect);
+    static bool fully_covers(const ClipperPaths& solution, const ClipperRect& rect);
+    static size_t line_fully_covers(const ClipperPaths& solution, float line_width, const ClipperRect& rect);
 
     static GpuVectorLayerTile create_default_gpu_tile();
 
@@ -151,7 +158,7 @@ public:
 private:
     std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes);
 
-    size_t triangulize_earcut(const Clipper2Lib::Paths64& polygon_points, VectorLayerCell* temp_cell, const std::pair<uint32_t, uint32_t>& style_layer);
+    size_t triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const std::pair<uint32_t, uint32_t>& style_layer);
 
     void generate_preprocess_grid();
 

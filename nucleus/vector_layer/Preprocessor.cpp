@@ -50,12 +50,12 @@ namespace util {
     };
 
     template <>
-    struct nth<0, Clipper2Lib::Point64> {
-        inline static auto get(const Clipper2Lib::Point64& t) { return t.x; };
+    struct nth<0, nucleus::vector_layer::ClipperPoint> {
+        inline static auto get(const nucleus::vector_layer::ClipperPoint& t) { return t.x; };
     };
     template <>
-    struct nth<1, Clipper2Lib::Point64> {
-        inline static auto get(const Clipper2Lib::Point64& t) { return t.y; };
+    struct nth<1, nucleus::vector_layer::ClipperPoint> {
+        inline static auto get(const nucleus::vector_layer::ClipperPoint& t) { return t.y; };
     };
 
 } // namespace util
@@ -195,7 +195,7 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
 
             radix::geometry::Aabb2i aabb({ constants::grid_size * 2, constants::grid_size * 2 }, { -constants::grid_size * 2, -constants::grid_size * 2 });
             // calculate bounds
-            std::vector<Clipper2Lib::Rect64> bounds;
+            std::vector<ClipperRect> bounds;
             if (is_polygon) {
                 // only needed for polygons
                 bounds.reserve(geom.size());
@@ -211,7 +211,7 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
             }
 
             for (const auto& style_layer : style_and_layer_indices) {
-                data[style_layer.second].emplace_back(Clipper2Lib::Paths64(geom.begin(), geom.end()), bounds, aabb, style_layer, is_polygon);
+                data[style_layer.second].emplace_back(ClipperPaths(geom.begin(), geom.end()), bounds, aabb, style_layer, is_polygon);
             }
         }
     }
@@ -303,8 +303,7 @@ std::pair<uint32_t, uint32_t> Preprocessor::get_split_index(uint32_t index, cons
 }
 
 // returns how many triangles have been generated;
-size_t Preprocessor::triangulize_earcut(
-    const Clipper2Lib::Paths64& polygon_points, VectorLayerCell* temp_cell, const std::pair<uint32_t, uint32_t>& style_layer)
+size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const std::pair<uint32_t, uint32_t>& style_layer)
 {
     const auto& indices = mapbox::earcut<uint32_t>(polygon_points);
 
@@ -349,15 +348,15 @@ void Preprocessor::generate_preprocess_grid()
     std::vector<PreprocessCell> grid;
     for (int y = 0; y < constants::grid_size; y++) {
         for (int x = 0; x < constants::grid_size; x++) {
-            // const auto rect = Clipper2Lib::Rect64(x * cell_width, y * cell_width, (x + 1) * cell_width - 1, (y + 1) * cell_width - 1);
-            const auto rect = Clipper2Lib::Rect64(x * cell_width, y * cell_width, (x + 1) * cell_width, (y + 1) * cell_width);
+            // const auto rect = ClipperRect(x * cell_width, y * cell_width, (x + 1) * cell_width - 1, (y + 1) * cell_width - 1);
+            const auto rect = ClipperRect(x * cell_width, y * cell_width, (x + 1) * cell_width, (y + 1) * cell_width);
             // for clip lines we are using +0 since we are adding the max_cell_width
-            const auto rect_lines = Clipper2Lib::Rect64(x * cell_width - geometry_offset + clipper_margin,
+            const auto rect_lines = ClipperRect(x * cell_width - geometry_offset + clipper_margin,
                 y * cell_width - geometry_offset + clipper_margin,
                 (x + 0) * cell_width - geometry_offset + max_cell_width - clipper_margin,
                 (y + 0) * cell_width - geometry_offset + max_cell_width - clipper_margin);
 
-            grid.emplace_back(PreprocessCell { Clipper2Lib::RectClip64(rect), Clipper2Lib::RectClipLines64(rect_lines), rect, VectorLayerCell(), false });
+            grid.emplace_back(PreprocessCell { RectClip(rect), RectClipLines(rect_lines), rect, VectorLayerCell(), false });
 
             // qDebug() << rect.left << rect.top << rect.right << rect.bottom;
         }
@@ -366,7 +365,7 @@ void Preprocessor::generate_preprocess_grid()
     m_preprocess_grid = nucleus::Raster<PreprocessCell>(constants::grid_size, std::move(grid));
 }
 
-bool Preprocessor::fully_covers(const Clipper2Lib::Paths64& solution, const Clipper2Lib::Rect64& rect)
+bool Preprocessor::fully_covers(const ClipperPaths& solution, const ClipperRect& rect)
 {
     if (solution.size() != 1 || solution[0].size() != 4)
         return false; // the solution either has holes or does not fully cover the rect since we do not have exactly 4 points
@@ -393,7 +392,7 @@ bool Preprocessor::fully_covers(const Clipper2Lib::Paths64& solution, const Clip
 
 // checks if a line fully covers the cell with the given line width
 // if it does the result is the index of the line index where this is the case, else -1u is returned
-size_t Preprocessor::line_fully_covers(const Clipper2Lib::Paths64& solution, float line_width, const Clipper2Lib::Rect64& rect)
+size_t Preprocessor::line_fully_covers(const ClipperPaths& solution, float line_width, const ClipperRect& rect)
 {
 
     const auto rect_center = glm::vec2(rect.left + (rect.right - rect.left) / 2, rect.top + (rect.bottom - rect.top) / 2); // TODO could be calculated once
@@ -475,7 +474,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 
                     // qDebug() << "cell: " << cell_pos.x << cell_pos.y;
 
-                    Clipper2Lib::Paths64 solution = cell.clipper.Execute(vertices, bounds);
+                    ClipperPaths solution = cell.clipper.Execute(vertices, bounds);
 
                     if (solution.empty())
                         return;
@@ -522,15 +521,15 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                         continue;
                     }
 
-                    auto shapes = Clipper2Lib::Paths64 {};
+                    auto shapes = ClipperPaths {};
                     for (const auto& index : indices) {
 
                         // assert(data[i].vertices[0].size() > size_t(index + 1));
-                        shapes.emplace_back(Clipper2Lib::Path64 { { long(data[i].vertices[index.x][index.y].x), long(data[i].vertices[index.x][index.y].y) },
+                        shapes.emplace_back(ClipperPath { { long(data[i].vertices[index.x][index.y].x), long(data[i].vertices[index.x][index.y].y) },
                             { long(data[i].vertices[index.x][index.y + 1].x), long(data[i].vertices[index.x][index.y + 1].y) } });
                     }
 
-                    Clipper2Lib::Paths64 solution = cell.clipper_lines.Execute(shapes);
+                    ClipperPaths solution = cell.clipper_lines.Execute(shapes);
 
                     if (solution.empty())
                         continue;
@@ -538,7 +537,8 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                     // TODO this would set cells to is_done if a line fully covers it. but:
                     //  1) this does not fully work for some zoom levels -> investigate why we have some white cells in certain circumstances
                     //      -> currently I think it has something to do with the * 2.0 multiplier when selecting cells, and/or the blending between 2 zooms
-                    //  2) this does not really work for the most troublesome zoom levels (like 13/14) since the lines are too small to be much of concern there
+                    //  2) this does not really work for the most troublesome zoom levels (like 13/14) since the lines are too small to be much of concern
+                    // there
                     //      -> maybe more useful when we reduce the grid cell size and or for optimizing close cells
 
                     // size_t full_cover_line_index = line_fully_covers(solution, line_width, cell.rect);
