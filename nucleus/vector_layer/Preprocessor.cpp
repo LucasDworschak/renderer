@@ -353,8 +353,8 @@ void Preprocessor::generate_preprocess_grid()
             // for clip lines we are using +0 since we are adding the max_cell_width
             const auto rect_lines = ClipperRect(x * cell_width - geometry_offset + clipper_margin,
                 y * cell_width - geometry_offset + clipper_margin,
-                (x + 0) * cell_width - geometry_offset + max_cell_width - clipper_margin,
-                (y + 0) * cell_width - geometry_offset + max_cell_width - clipper_margin);
+                x * cell_width - geometry_offset + max_cell_width - clipper_margin,
+                y * cell_width - geometry_offset + max_cell_width - clipper_margin);
 
             grid.emplace_back(PreprocessCell { RectClip(rect), RectClipLines(rect_lines), rect, VectorLayerCell(), false });
 
@@ -479,13 +479,22 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                     if (solution.empty())
                         return;
 
-                    if (fully_covers(solution, cell.rect))
+                    if (fully_covers(solution, cell.rect)) {
                         cell.is_done = true;
 
-                    // anchor clipped paths to cell origin
-                    solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
+                        // we only need one triangle that covers the whole cell
+                        const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data(
+                            { { 0, 0 }, { 0, cell_width * 2 }, { cell_width * 2, 0 }, style_layer.first, true });
 
-                    m_processed_amount += triangulize_earcut(solution, &cell.cell_data, style_layer);
+                        cell.cell_data[style_layer.second].push_back(data);
+                        m_processed_amount++;
+
+                    } else {
+                        // anchor clipped paths to cell origin
+                        solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
+
+                        m_processed_amount += triangulize_earcut(solution, &cell.cell_data, style_layer);
+                    }
                 });
 
                 // if (cells_visited == 0) {
