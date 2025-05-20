@@ -109,7 +109,11 @@ public:
 
     static uint32_t premultiply_alpha(uint32_t color);
 
-    std::vector<std::pair<uint32_t, uint32_t>> indices(std::string layer_name, int type, unsigned zoom, const mapbox::vector_tile::feature& feature) const;
+    std::vector<std::pair<uint32_t, uint32_t>> indices(std::string layer_name,
+        int type,
+        unsigned zoom,
+        const mapbox::vector_tile::feature& feature,
+        std::array<int, constants::max_style_expression_keys>* temp_values) const;
 
     std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles() const;
 

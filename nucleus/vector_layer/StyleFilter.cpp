@@ -30,30 +30,24 @@ void StyleFilter::add_filter(FilterInfo filter_info, uint8_t zoom)
     m_filter[zoom].push_back(filter_info);
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> StyleFilter::indices(unsigned zoom, const mapbox::vector_tile::feature& feature) const
+std::vector<std::pair<uint32_t, uint32_t>> StyleFilter::indices(
+    unsigned zoom, const mapbox::vector_tile::feature& feature, std::array<int, constants::max_style_expression_keys>* temp_values) const
 {
     if (!m_filter.contains(zoom)) {
         // qDebug() << "filter at zoom not found ";
         return {}; // not found
     }
 
-    const auto value_map = StyleExpression::get_values(feature);
+    StyleExpression::get_values(feature, temp_values);
 
     auto styles = std::vector<std::pair<uint32_t, uint32_t>>();
-
-    // qDebug() << "value map:";
-    // for (const auto& v : value_map) {
-    //     qDebug() << v.first << v.second;
-    // }
-    // qDebug() << "value end";
-    // qDebug() << "";
 
     for (const auto& filter_info : m_filter.at(zoom)) {
         if (filter_info.filter == nullptr) // no filter is here -> we assume that every feature with layername and zoom is valid
         {
             styles.push_back(std::make_pair(filter_info.style_index, filter_info.layer_index));
 
-        } else if (filter_info.filter->matches(value_map)) {
+        } else if (filter_info.filter->matches(*temp_values)) {
             styles.push_back(std::make_pair(filter_info.style_index, filter_info.layer_index));
         }
     }

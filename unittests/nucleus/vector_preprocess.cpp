@@ -489,9 +489,9 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
         constexpr size_t expected_process_amount = 131051;
 
-        Style style(":/vectorlayerstyles/openstreetmap.json");
-        // Style style(":/vectorlayerstyles/qwant.json");
-        // Style style(":/vectorlayerstyles/osm-bright.json");
+        Style style(":/vectorlayerstyles/openstreetmap.json"); // 13
+        // Style style(":/vectorlayerstyles/qwant.json"); // 9
+        // Style style(":/vectorlayerstyles/osm-bright.json"); // 10
         style.load();
 
         auto id = nucleus::tile::Id { .zoom_level = 14, .coords = { 8936, 5681 }, .scheme = nucleus::tile::Scheme::SlippyMap };

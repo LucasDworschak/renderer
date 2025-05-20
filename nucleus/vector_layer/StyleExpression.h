@@ -22,6 +22,10 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <unordered_set>
+
+#include <nucleus/vector_layer/constants.h>
+
 namespace mapbox { // forward declare mapbox classes
 namespace vector_tile {
     enum GeomType : std::uint8_t;
@@ -47,7 +51,7 @@ public:
     /**
      * checks if the supplied feature matches the expression that was initialized
      */
-    virtual bool matches(const std::unordered_map<int, int>& value_map) = 0;
+    virtual bool matches(const std::array<int, constants::max_style_expression_keys>& values) = 0;
 
     static std::unique_ptr<StyleExpressionBase> create_filter_expression(QJsonArray data);
     QJsonValue extract_literal(QJsonValue expression);
@@ -64,14 +68,13 @@ public:
     /**
      * checks if the supplied feature matches the expression that was initialized
      */
-    bool matches(const std::unordered_map<int, int>& value_map) override;
+    bool matches(const std::array<int, constants::max_style_expression_keys>& values) override;
 
     /**
-     * @brief get_values
-     * @param feature
-     * @return map that converts key to an appropriate integer value. this integer value is universal and can be used to check if two values are the same
+     * parses the values of the incomming feature and maps them to an array. the index of the array corresponds to the m_key variable, while the value is used
+     * to compare to the m_values
      */
-    static std::unordered_map<int, int> get_values(const mapbox::vector_tile::feature& feature);
+    static void get_values(const mapbox::vector_tile::feature& feature, std::array<int, constants::max_style_expression_keys>* values);
 
     static void initialize();
 
@@ -91,7 +94,9 @@ private:
     bool m_comparator_has;
 
     // master map that converts strings into integer values (this way we can compare strings more efficiently)
+    inline static std::unordered_map<std::string, int> all_keys;
     inline static std::unordered_map<std::string, int> string_value_map;
+    inline static int last_key_index; // saves the index of the last element inserted into the all_keys map
     inline static int counter; // counter that is used for the string value map
     static constexpr int null_value = INT_MAX;
     static constexpr int float_precision = 1000; // multiplier for float values to make them integers
@@ -106,7 +111,7 @@ public:
     /**
      * checks if the supplied feature matches the expression of all/any of the expression it holds
      */
-    bool matches(const std::unordered_map<int, int>& value_map) override;
+    bool matches(const std::array<int, constants::max_style_expression_keys>& values) override;
 
     /**
      * checks if the supplied argument is in a list of valid arguments

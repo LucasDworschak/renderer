@@ -52,4 +52,11 @@ constexpr uint8_t style_zoom_blend_steps = 4u; // how many zoom steps below min_
 constexpr float small_line_px = 0.5; // how many px on a 256x256 resolution
 constexpr unsigned small_line_zoom_threshold = 4; // until what zoom level do we use the small line simplification
 
+// there is only a limited amount of style expressions that are tested by the StyleExpression code
+// -> we can store all the values in a map and have an even faster comparison between values
+// openstreetmap 14
+// qwant 10
+// osm-bright 11
+constexpr auto max_style_expression_keys = 14;
+
 } // namespace nucleus::vector_layer::constants

@@ -163,6 +163,7 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
 
     VectorLayers data;
 
+    std::array<int, constants::max_style_expression_keys> temp_values;
 
     for (const auto& layer_name : tile.layerNames()) {
         // qDebug() << layer_name << id.zoom_level;
@@ -184,7 +185,7 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
 
             const auto type = (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) ? 0 : 1;
             // qDebug() << layer_name;
-            auto style_and_layer_indices = m_style.indices(layer_name, type, id.zoom_level, feature);
+            auto style_and_layer_indices = m_style.indices(layer_name, type, id.zoom_level, feature, &temp_values);
             style_and_layer_indices = simplify_styles(&style_and_layer_indices, m_style_buffer);
 
             if (style_and_layer_indices.size() == 0) // no styles found -> we do not visualize it

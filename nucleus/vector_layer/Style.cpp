@@ -398,7 +398,11 @@ void Style::load()
     qDebug() << "vectorlayer style loaded";
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> Style::indices(std::string layer_name, int type, unsigned zoom, const mapbox::vector_tile::feature& feature) const
+std::vector<std::pair<uint32_t, uint32_t>> Style::indices(std::string layer_name,
+    int type,
+    unsigned zoom,
+    const mapbox::vector_tile::feature& feature,
+    std::array<int, constants::max_style_expression_keys>* temp_values) const
 {
     const auto layer = std::make_pair(layer_name, type);
 
@@ -407,7 +411,7 @@ std::vector<std::pair<uint32_t, uint32_t>> Style::indices(std::string layer_name
         return {};
     }
 
-    return m_layer_to_style.at(layer).indices(zoom, feature);
+    return m_layer_to_style.at(layer).indices(zoom, feature, temp_values);
 }
 
 std::shared_ptr<const nucleus::Raster<glm::u32vec4>> Style::styles() const { return m_styles; }

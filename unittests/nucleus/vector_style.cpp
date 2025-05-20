@@ -58,6 +58,8 @@ std::map<std::string, uint32_t> parse_tile(
 
     const auto style_buffer = s.styles()->buffer();
 
+    std::array<int, nucleus::vector_layer::constants::max_style_expression_keys> temp_values;
+
     for (const auto& layer_name : tile.layerNames()) {
         // qDebug() << layer_name;
 
@@ -79,7 +81,7 @@ std::map<std::string, uint32_t> parse_tile(
 
             // qDebug() << key;
 
-            auto style_indices = s.indices(layer_name, type, zoom, feature);
+            auto style_indices = s.indices(layer_name, type, zoom, feature, &temp_values);
             style_indices = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, style_buffer);
 
             if (check_valid_style)

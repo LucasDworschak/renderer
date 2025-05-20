@@ -44,7 +44,8 @@ public:
 
     void add_filter(FilterInfo filter_info, uint8_t zoom);
 
-    std::vector<std::pair<uint32_t, uint32_t>> indices(unsigned zoom, const mapbox::vector_tile::feature& feature) const;
+    std::vector<std::pair<uint32_t, uint32_t>> indices(
+        unsigned zoom, const mapbox::vector_tile::feature& feature, std::array<int, constants::max_style_expression_keys>* temp_values) const;
 
 private:
     // zoom level -> vector<FilterInfo>

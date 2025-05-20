@@ -94,6 +94,7 @@ void StyleExpression::initialize()
 {
     // qDebug() << "initialize style";
     string_value_map = std::unordered_map<std::string, int>();
+    all_keys.clear();
 
     // initialize types
     string_value_map["Point"] = 1;
@@ -104,58 +105,64 @@ void StyleExpression::initialize()
 
     string_value_map[""] = null_value;
 
+    last_key_index = 0;
+    all_keys["$type"] = last_key_index;
+
     counter = 5;
 }
 
-std::unordered_map<int, int> StyleExpression::get_values(const mapbox::vector_tile::feature& feature)
+void StyleExpression::get_values(const mapbox::vector_tile::feature& feature, std::array<int, constants::max_style_expression_keys>* values)
 {
     const auto type = feature.getType();
     const auto properties = feature.getProperties();
 
-    auto values = std::unordered_map<int, int>();
+    for (const auto& [key, index] : all_keys) {
+        if (index == 0) {
+            // index = 0 is a bit special as we are comparing to the type (which is not in properties)
+            if (type == mapbox::vector_tile::GeomType::POINT)
+                (*values)[0] = 1;
+            else if (type == mapbox::vector_tile::GeomType::LINESTRING)
+                (*values)[0] = 2;
+            else if (type == mapbox::vector_tile::GeomType::POLYGON)
+                (*values)[0] = 3;
+            else
+                (*values)[0] = null_value;
 
-    const auto type_key = string_value_map.at("$type");
-    if (type == mapbox::vector_tile::GeomType::POINT)
-        values[type_key] = 1;
-    else if (type == mapbox::vector_tile::GeomType::LINESTRING)
-        values[type_key] = 2;
-    else if (type == mapbox::vector_tile::GeomType::POLYGON)
-        values[type_key] = 3;
-    else
-        values[type_key] = null_value;
-
-    for (const auto& prop : properties) {
-        int key = null_value;
-        if (string_value_map.contains(prop.first))
-            key = string_value_map[prop.first];
-        else
-            continue; // the key is not in the value map -> it will not be used to determine style
-
-        int value = null_value;
-
-        if (std::holds_alternative<std::string>(prop.second)) {
-            const auto string_value = std::get<std::string>(prop.second);
-            if (string_value_map.contains(string_value)) {
-                value = string_value_map[string_value];
-            }
-            // else -> values is not in mqster string map -> just save null value
-            // we probably can NOT just ignore this value since a "has" expression still must be valid
-
-        } else if (std::holds_alternative<double>(prop.second)) {
-            value = int(std::get<double>(prop.second) * float_precision);
-        } else if (std::holds_alternative<uint64_t>(prop.second)) {
-            value = int(std::get<uint64_t>(prop.second) * float_precision);
-        } else if (std::holds_alternative<int64_t>(prop.second)) {
-            value = int(std::get<int64_t>(prop.second) * float_precision);
-        } else if (std::holds_alternative<bool>(prop.second)) {
-            // some bools are defined as numbers in stylesheet -> multiply value by precision to be consistent
-            value = int(std::get<bool>(prop.second)) * float_precision;
+            continue;
         }
 
-        values[key] = value;
-    }
+        if (properties.contains(key)) {
 
-    return values;
+            const auto& prop_value = properties.at(key);
+
+            int value = null_value;
+
+            if (std::holds_alternative<std::string>(prop_value)) {
+                const auto string_value = std::get<std::string>(prop_value);
+                if (string_value_map.contains(string_value)) {
+                    value = string_value_map[string_value];
+                }
+                // else -> values is not in mqster string map -> just save null value
+                // we probably can NOT just ignore this value since a "has" expression still must be valid
+
+            } else if (std::holds_alternative<double>(prop_value)) {
+                value = int(std::get<double>(prop_value) * float_precision);
+            } else if (std::holds_alternative<uint64_t>(prop_value)) {
+                value = int(std::get<uint64_t>(prop_value) * float_precision);
+            } else if (std::holds_alternative<int64_t>(prop_value)) {
+                value = int(std::get<int64_t>(prop_value) * float_precision);
+            } else if (std::holds_alternative<bool>(prop_value)) {
+                // some bools are defined as numbers in stylesheet -> multiply value by precision to be consistent
+                value = int(std::get<bool>(prop_value)) * float_precision;
+            }
+
+            (*values)[index] = value;
+
+        } else {
+            // indicate that key does not exist
+            (*values)[index] = null_value;
+        }
+    }
 }
 
 StyleExpression::StyleExpression(QJsonArray data)
@@ -167,32 +174,33 @@ StyleExpression::StyleExpression(QJsonArray data)
     m_comparator_has = false;
 
     // key
-    if (data[1].isArray()) {
-        if (data[1].toArray().size() == 1) {
+    {
+        std::string string_value;
 
-            const auto string_value = data[1].toArray()[0].toString().toStdString();
-            if (string_value_map.contains(string_value)) {
-                const int int_value = string_value_map[string_value];
-                m_key = int_value;
+        if (data[1].isArray()) {
+            if (data[1].toArray().size() == 1) {
+                string_value = data[1].toArray()[0].toString().toStdString();
             } else {
-                const int int_value = counter++;
-                string_value_map[string_value] = int_value;
-                m_key = int_value;
+                qDebug() << "StyleExpression: single expression with array that is not correctly sized: " << data[1];
+                assert(false);
             }
+        } else {
+            string_value = data[1].toString().toStdString();
+        }
 
+        int key_value = 0;
+        if (all_keys.contains(string_value)) {
+            key_value = all_keys[string_value];
         } else {
-            qDebug() << "StyleExpression: single expression with array that is not correctly sized: " << data[1];
+            last_key_index++;
+            all_keys[string_value] = last_key_index;
+            key_value = last_key_index;
         }
-    } else {
-        const auto string_value = data[1].toString().toStdString();
-        if (string_value_map.contains(string_value)) {
-            const int int_value = string_value_map[string_value];
-            m_key = int_value;
-        } else {
-            const int int_value = counter++;
-            string_value_map[string_value] = int_value;
-            m_key = int_value;
-        }
+
+        m_key = key_value;
+
+        // if this assert is thrown you have to increase constant value (and/or look what changed in the style.json)
+        assert(last_key_index <= constants::max_style_expression_keys);
     }
 
     // values
@@ -301,11 +309,9 @@ StyleExpression::StyleExpression(QJsonArray data)
     }
 }
 
-bool StyleExpression::matches(const std::unordered_map<int, int>& value_map)
+bool StyleExpression::matches(const std::array<int, constants::max_style_expression_keys>& values)
 {
-    int value = null_value;
-    if (value_map.contains(m_key))
-        value = value_map.at(m_key);
+    const int value = values.at(m_key);
 
     if (m_comparator_in) {
         // a list -> string is sufficient
@@ -368,17 +374,17 @@ StyleExpressionCollection::StyleExpressionCollection(QJsonArray data)
     }
 }
 
-bool StyleExpressionCollection::matches(const std::unordered_map<int, int>& value_map)
+bool StyleExpressionCollection::matches(const std::array<int, constants::max_style_expression_keys>& values)
 {
     if (m_negate) {
         assert(m_subFilters.size() == 1);
         // negate should only handle one subfilter -> get the match and negate it
-        return !m_subFilters[0]->matches(value_map);
+        return !m_subFilters[0]->matches(values);
     }
 
     for (size_t i = 0; i < m_subFilters.size(); ++i) {
         assert(m_subFilters[i] != nullptr);
-        bool result = m_subFilters[i]->matches(value_map);
+        bool result = m_subFilters[i]->matches(values);
         if (m_all && !result) {
             return false; // the current match was false but all had to be true
         } else if (!m_all && result) {
