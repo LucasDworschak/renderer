@@ -472,14 +472,12 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 
                     cells_visited++;
 
-                    // qDebug() << "cell: " << cell_pos.x << cell_pos.y;
+                    cell.clipper.ExecuteRepeated(vertices, bounds, &m_clipper_result);
 
-                    ClipperPaths solution = cell.clipper.Execute(vertices, bounds);
-
-                    if (solution.empty())
+                    if (m_clipper_result.empty())
                         return;
 
-                    if (fully_covers(solution, cell.rect)) {
+                    if (fully_covers(m_clipper_result, cell.rect)) {
                         cell.is_done = true;
 
                         // we only need one triangle that covers the whole cell
@@ -491,9 +489,9 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 
                     } else {
                         // anchor clipped paths to cell origin
-                        solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
+                        Clipper2Lib::TranslatePathsInPlace(&m_clipper_result, -cell.rect.left, -cell.rect.top);
 
-                        m_processed_amount += triangulize_earcut(solution, &cell.cell_data, style_layer);
+                        m_processed_amount += triangulize_earcut(m_clipper_result, &cell.cell_data, style_layer);
                     }
                 });
 
@@ -538,9 +536,11 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                             { long(data[i].vertices[index.x][index.y + 1].x), long(data[i].vertices[index.x][index.y + 1].y) } });
                     }
 
-                    ClipperPaths solution = cell.clipper_lines.Execute(shapes);
+                    // ClipperPaths solution;
 
-                    if (solution.empty())
+                    cell.clipper_lines.ExecuteRepeated(shapes, &m_clipper_result);
+
+                    if (m_clipper_result.empty())
                         continue;
 
                     // TODO this would set cells to is_done if a line fully covers it. but:
@@ -550,22 +550,22 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                     // there
                     //      -> maybe more useful when we reduce the grid cell size and or for optimizing close cells
 
-                    // size_t full_cover_line_index = line_fully_covers(solution, line_width, cell.rect);
+                    // size_t full_cover_line_index = line_fully_covers(m_clipper_result, line_width, cell.rect);
                     // if (full_cover_line_index != -1u) {
                     //     cell.is_done = true;
                     // }
 
                     // TODO move translate before clipping and only clip with one single cell
                     // anchor clipped paths to cell origin
-                    solution = Clipper2Lib::TranslatePaths(solution, -cell.rect.left, -cell.rect.top);
+                    Clipper2Lib::TranslatePathsInPlace(&m_clipper_result, -cell.rect.left, -cell.rect.top);
 
-                    for (const auto& line : solution) {
+                    for (const auto& line : m_clipper_result) {
 
                         const auto packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(
                             { line[0].x, line[0].y }, { line[1].x, line[1].y }, data[i].style_layer.first);
                         cell.cell_data[data[i].style_layer.second].push_back(packed_data);
                     }
-                    m_processed_amount += solution.size();
+                    m_processed_amount += m_clipper_result.size();
                 }
             }
         }

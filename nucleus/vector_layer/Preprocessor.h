@@ -168,6 +168,8 @@ private:
     nucleus::Raster<PreprocessCell> m_preprocess_grid;
 
     size_t m_processed_amount;
+
+    ClipperPaths m_clipper_result; // temporary data. we hold it here to avoid allocations.
 };
 
 } // namespace nucleus::vector_layer

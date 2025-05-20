@@ -501,7 +501,6 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
         Preprocessor preprocessor(std::move(style));
 
-        // auto meta = nucleus::vector_layer::Preprocessor::preprocess_geometry(tile_data, style_buffer);
         auto tile_data = preprocessor.parse_tile(id, bytes);
         preprocessor.preprocess_geometry(tile_data);
         auto tile = preprocessor.create_gpu_tile();
@@ -531,6 +530,10 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
             auto output = preprocessor.preprocess(id, bytes);
             return output;
         };
+
+        // for (int i = 0; i < 500; i++) {
+        //     auto output = preprocessor.preprocess(id, bytes);
+        // }
     }
 }
 
