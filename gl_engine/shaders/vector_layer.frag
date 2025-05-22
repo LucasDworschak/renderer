@@ -462,17 +462,11 @@ void main() {
 
                 d = sd_Line_Triangle(uv, v0, v1, v2, geometry_data.is_polygon) - thickness;
 
+                //(depth*0.0015);
                 float scaling_factor_aa = 0.5;
-                float aa_radius = clamp(max(uv_d.x,uv_d.y)*scaling_factor_aa, 0.0, 1.0);
-
-
-                mediump float aa_half = aa_radius;//(depth*0.0015);
-                aa_half = 0.001;
-                // geometry_influence =  1.0 - smoothstep(0.0, 1.0 + 0.0 * (0.0 / depth * 0.00003), d*tile_extent );
-                // geometry_influence =  1.0 - smoothstep(0.0, aa_half, d*tile_extent);
-
-                // mediump float aa =  1.0 - smoothstep(-aa_half, aa_half, d*tile_extent);
-                mediump float aa =  1.0 - smoothstep(0.0, aa_half, d);
+                float aa_radius = clamp(max(uv_d.x,uv_d.y), 0.0, 1.0)*scaling_factor_aa;
+                mediump float aa_half = aa_radius;
+                mediump float aa =  1.0 - smoothstep(-aa_half, aa_half, d);
                 // geometry_influence =  1.0 - smoothstep(0.0, 1.0, d*tile_extent+0.25);
 
 
