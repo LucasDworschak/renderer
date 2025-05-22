@@ -341,6 +341,8 @@ void main() {
     highp uvec3 tile_id = var_tile_id;
     highp vec2 uv = var_uv;
 
+    highp vec2 uv_d = fwidth(uv);
+
     lowp ivec2 dict_px;
     highp uvec2 offset_size = uvec2(0u);
 
@@ -348,11 +350,11 @@ void main() {
     lowp vec4 pixel_color = vec4(0.0f, 0.0, 0.0f, 0.0f);
 
     // openmaptile
-    // lowp vec4 background_color = vec3(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f, 0.0f);
+    lowp vec4 background_color = vec4(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f, 0.0f);
     // qwant
-    // lowp vec4 background_color = vec3(248.0f/255.0f, 248.0f/255.0f, 248.0f/255.0f, 0.0f);
+    // lowp vec4 background_color = vec4(248.0f/255.0f, 248.0f/255.0f, 248.0f/255.0f, 0.0f);
     // osm-bright
-    lowp vec4 background_color = vec4(248.0f/255.0f, 244.0f/255.0f, 240.0f/255.0f, 0.0f);
+    // lowp vec4 background_color = vec4(248.0f/255.0f, 244.0f/255.0f, 240.0f/255.0f, 0.0f);
 
     decrease_zoom_level_until(tile_id, uv, texelFetch(instanced_texture_zoom_sampler, ivec2(instance_id, 0), 0).x);
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler, ivec2(instance_id, 0), 0).xy;
@@ -439,19 +441,19 @@ void main() {
                 debug_draw_calls = debug_draw_calls + 1;
                 VectorLayerData geometry_data = vertex_sample(sampler_buffer_index,i, texture_layer.y);
 
+
+                bool check_next_geometry = check_and_draw_layer(geometry_data, layer_style, pixel_color, zoom_offset);
+                if(check_next_geometry)
+                    continue;
+
+
                 highp float d = 0.0;
 
                 highp vec2 v0 = (vec2(geometry_data.a) + cell_offset) / vec2(tile_extent);
                 highp vec2 v1 = (vec2(geometry_data.b) + cell_offset) / vec2(tile_extent);
                 highp vec2 v2 = (vec2(geometry_data.c) + cell_offset) / vec2(tile_extent);
 
-                // highp vec2 v0 = vec2(0,0) / vec2(64);
-                // highp vec2 v1 = vec2(64,64) / vec2(64);
-                // highp vec2 v2 = vec2(0,64) / vec2(64);
 
-                bool check_next_geometry = check_and_draw_layer(geometry_data, layer_style, pixel_color, zoom_offset);
-                if(check_next_geometry)
-                    continue;
 
                 lowp float thickness_current = layer_style.current_zoom_style.outline_width;
                 lowp float thickness_next = layer_style.next_zoom_style.outline_width;
@@ -460,12 +462,25 @@ void main() {
 
                 d = sd_Line_Triangle(uv, v0, v1, v2, geometry_data.is_polygon) - thickness;
 
+                float scaling_factor_aa = 0.5;
+                float aa_radius = clamp(max(uv_d.x,uv_d.y)*scaling_factor_aa, 0.0, 1.0);
+
+
+                mediump float aa_half = aa_radius;//(depth*0.0015);
+                aa_half = 0.001;
+                // geometry_influence =  1.0 - smoothstep(0.0, 1.0 + 0.0 * (0.0 / depth * 0.00003), d*tile_extent );
+                // geometry_influence =  1.0 - smoothstep(0.0, aa_half, d*tile_extent);
+
+                // mediump float aa =  1.0 - smoothstep(-aa_half, aa_half, d*tile_extent);
+                mediump float aa =  1.0 - smoothstep(0.0, aa_half, d);
+                // geometry_influence =  1.0 - smoothstep(0.0, 1.0, d*tile_extent+0.25);
+
 
                 geometry_influence = 1.0 - step(0.0, d);
 
                 // polygon does not influence pixel at all -> we do not draw it
-                if(geometry_influence <= 0.0)
-                    continue;
+                // if(geometry_influence <= 0.0)
+                //     continue;
 
 
 
@@ -482,7 +497,8 @@ void main() {
 
 
                 // set layer_alpha from the current geometry
-                layer_style.layer_alpha = min(1.0, layer_style.layer_alpha + geometry_influence);
+                // layer_style.layer_alpha = min(1.0, layer_style.layer_alpha + geometry_influence);
+                layer_style.layer_alpha = min(1.0, layer_style.layer_alpha + aa);
 
                 // we do not need to check any other geometry -> pixel is already fully filled
                 if(pixel_color.a >= 1.0)
