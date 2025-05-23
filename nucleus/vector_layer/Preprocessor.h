@@ -120,7 +120,7 @@ struct GeometryData {
 };
 
 using VectorLayers = std::map<uint32_t, std::vector<GeometryData>>;
-using VectorLayerCell = std::map<uint32_t, std::vector<glm::u32vec2>>;
+using VectorLayerCell = std::vector<glm::u32vec2>;
 
 struct PreprocessCell {
     RectClip clipper;

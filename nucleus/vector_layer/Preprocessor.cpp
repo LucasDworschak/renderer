@@ -171,13 +171,6 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
         const mapbox::vector_tile::layer layer = tile.getLayer(layer_name);
         std::size_t feature_count = layer.featureCount();
 
-        // if (first_layer) {
-        //     first_layer = false;
-        //     extent = constants::tile_extent;
-
-        //     scale = float(constants::tile_extent) / layer.getExtent();
-        // }
-
         assert(layer.getExtent() == constants::tile_extent);
 
         for (std::size_t i = 0; i < feature_count; ++i) {
@@ -330,7 +323,7 @@ size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, Vect
 
         const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.first, true });
 
-        (*temp_cell)[style_layer.second].emplace_back(data);
+        (*temp_cell).emplace_back(data);
     }
 
     // returns how many triangles have been generated;
@@ -444,9 +437,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
     for (auto& cell : m_preprocess_grid) {
         cell.is_done = false;
 
-        for (auto& data : cell.cell_data) {
-            data.second.clear();
-        }
+        cell.cell_data.clear();
     }
 
     m_processed_amount = 0;
@@ -463,15 +454,11 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                 const auto& vertices = data[i].vertices;
                 const auto& bounds = data[i].bounds;
 
-                size_t cells_visited = 0;
-
-                m_preprocess_grid.visit(data[i].aabb, [this, &cells_visited, &vertices, &bounds, &style_layer](glm::uvec2, PreprocessCell& cell) {
+                m_preprocess_grid.visit(data[i].aabb, [this, &vertices, &bounds, &style_layer](glm::uvec2, PreprocessCell& cell) {
                     if (cell.is_done) {
                         // qDebug() << "cell_done";
                         return;
                     }
-
-                    cells_visited++;
 
                     cell.clipper.ExecuteRepeated(vertices, bounds, &m_clipper_result);
 
@@ -485,7 +472,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                         const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data(
                             { { 0, 0 }, { 0, cell_width * 2 }, { cell_width * 2, 0 }, style_layer.first, true });
 
-                        cell.cell_data[style_layer.second].push_back(data);
+                        cell.cell_data.push_back(data);
                         m_processed_amount++;
 
                     } else {
@@ -496,15 +483,10 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                     }
                 });
 
-                // if (cells_visited == 0) {
-                //     qDebug() << "no cells: " << data[i].aabb.min.x << data[i].aabb.min.y << data[i].aabb.max.x << data[i].aabb.max.y;
-                // }
-
             } else {
 
                 const auto line_width = float(m_style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision);
 
-                // std::unordered_set<glm::uvec2, Hasher> cell_list;
                 std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
 
                 const auto cell_writer = [&cell_list](glm::vec2 pos, const glm::uvec2& data_index) {
@@ -521,6 +503,9 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                 // This performance issue will be solved with Task #198 (mipmaps)
                 nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 2.0, scale);
 
+                const auto& style_layer = data[i].style_layer;
+                const auto& vertices = data[i].vertices;
+
                 for (const auto& [cell_pos, indices] : cell_list) {
                     auto& cell = m_preprocess_grid.pixel(cell_pos);
 
@@ -533,8 +518,8 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                     for (const auto& index : indices) {
 
                         // assert(data[i].vertices[0].size() > size_t(index + 1));
-                        shapes.emplace_back(ClipperPath { { long(data[i].vertices[index.x][index.y].x), long(data[i].vertices[index.x][index.y].y) },
-                            { long(data[i].vertices[index.x][index.y + 1].x), long(data[i].vertices[index.x][index.y + 1].y) } });
+                        shapes.emplace_back(ClipperPath { { long(vertices[index.x][index.y].x), long(vertices[index.x][index.y].y) },
+                            { long(vertices[index.x][index.y + 1].x), long(vertices[index.x][index.y + 1].y) } });
                     }
 
                     // ClipperPaths solution;
@@ -562,9 +547,9 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 
                     for (const auto& line : m_clipper_result) {
 
-                        const auto packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(
-                            { line[0].x, line[0].y }, { line[1].x, line[1].y }, data[i].style_layer.first);
-                        cell.cell_data[data[i].style_layer.second].push_back(packed_data);
+                        const auto packed_data
+                            = nucleus::vector_layer::Preprocessor::pack_line_data({ line[0].x, line[0].y }, { line[1].x, line[1].y }, style_layer.first);
+                        cell.cell_data.push_back(packed_data);
                     }
                     m_processed_amount += m_clipper_result.size();
                 }
@@ -615,10 +600,8 @@ GpuVectorLayerTile Preprocessor::create_gpu_tile()
 
             auto start_offset = geometry_buffer.size();
 
-            for (auto it = cell.cell_data.crbegin(); it != cell.cell_data.crend(); ++it) {
-                if (it->second.size() > 0)
-                    geometry_buffer.insert(geometry_buffer.end(), it->second.begin(), it->second.end());
-            }
+            geometry_buffer.insert(geometry_buffer.end(), cell.cell_data.cbegin(), cell.cell_data.cend());
+
             auto cell_size = geometry_buffer.size() - start_offset;
 
             // we have to add a new element
