@@ -313,6 +313,21 @@ bool check_and_draw_layer(VectorLayerData geometry_data, inout Layer_Style layer
 }
 
 
+highp float calculate_aa_half_radius(highp vec2 uv)
+{
+  //////////////////////
+  // jacobian determinant
+  //////////////////////
+  highp vec2 uv_x = dFdx(uv);
+  highp vec2 uv_y = dFdy(uv);
+
+  highp mat2 jacobian = mat2(uv_x.x,uv_x.y,uv_y.x,uv_y.y);
+
+  // return 0.0;
+  return sqrt(abs(determinant(jacobian))) / 2.0;
+}
+
+
 
 void main() {
 #if CURTAIN_DEBUG_MODE == 2
@@ -341,11 +356,9 @@ void main() {
     highp uvec3 tile_id = var_tile_id;
     highp vec2 uv = var_uv;
 
-    highp vec2 uv_d = fwidth(uv);
 
     lowp ivec2 dict_px;
     highp uvec2 offset_size = uvec2(0u);
-
 
     lowp vec4 pixel_color = vec4(0.0f, 0.0, 0.0f, 0.0f);
 
@@ -361,11 +374,9 @@ void main() {
 
 
     highp float float_zoom = float_zoom_interpolation();
-
-
-    // float_zoom = tile_id.z; // uncomment this to show each tile without blending
     highp float zoom_offset = float_zoom-float(tile_id.z);
 
+    highp float aa_half_radius = calculate_aa_half_radius(uv);
 
     if(texture_layer.x != bit_mask_ones && texture_layer.y != bit_mask_ones) // check for valid data
     {
@@ -383,11 +394,6 @@ void main() {
 
 
             highp vec2 cell_offset = vec2(grid_cell) * cell_size;
-            // highp vec2 cell_offset = grid_cell * vec2(128.0,128.0);
-            // highp vec2 cell_offset = grid_cell * vec2(64.0,64.0);
-
-            // texout_albedo = vec3(cell_offset / tile_extent, 0.0);
-
 
             // get the buffer index and extract the correct texture_layer.y
             lowp uint sampler_buffer_index = (texture_layer.y & ((bit_mask_ones << sampler_offset))) >> sampler_offset;
@@ -462,20 +468,11 @@ void main() {
 
                 d = sd_Line_Triangle(uv, v0, v1, v2, geometry_data.is_polygon) - thickness;
 
-                //(depth*0.0015);
-                float scaling_factor_aa = 0.5;
-                float aa_radius = clamp(max(uv_d.x,uv_d.y), 0.0, 1.0)*scaling_factor_aa;
-                mediump float aa_half = aa_radius;
-                mediump float aa =  1.0 - smoothstep(-aa_half, aa_half, d);
-                // geometry_influence =  1.0 - smoothstep(0.0, 1.0, d*tile_extent+0.25);
-
-
-                geometry_influence = 1.0 - step(0.0, d);
+                highp float geometry_influence =  1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
 
                 // polygon does not influence pixel at all -> we do not draw it
-                // if(geometry_influence <= 0.0)
-                //     continue;
-
+                if(geometry_influence <= 0.0)
+                    continue;
 
 
 
@@ -491,8 +488,7 @@ void main() {
 
 
                 // set layer_alpha from the current geometry
-                // layer_style.layer_alpha = min(1.0, layer_style.layer_alpha + geometry_influence);
-                layer_style.layer_alpha = min(1.0, layer_style.layer_alpha + aa);
+                layer_style.layer_alpha = min(1.0, layer_style.layer_alpha + geometry_influence);
 
                 // we do not need to check any other geometry -> pixel is already fully filled
                 if(pixel_color.a >= 1.0)

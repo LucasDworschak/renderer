@@ -342,13 +342,13 @@ void Preprocessor::generate_preprocess_grid()
     std::vector<PreprocessCell> grid;
     for (int y = 0; y < constants::grid_size; y++) {
         for (int x = 0; x < constants::grid_size; x++) {
-            // const auto rect = ClipperRect(x * cell_width, y * cell_width, (x + 1) * cell_width - 1, (y + 1) * cell_width - 1);
-            const auto rect = ClipperRect(x * cell_width, y * cell_width, (x + 1) * cell_width, (y + 1) * cell_width);
+            const auto rect
+                = ClipperRect(x * cell_width - aa_border, y * cell_width - aa_border, (x + 1) * cell_width + aa_border, (y + 1) * cell_width + aa_border);
             // for clip lines we are using +0 since we are adding the max_cell_width
-            const auto rect_lines = ClipperRect(x * cell_width - geometry_offset + clipper_margin,
-                y * cell_width - geometry_offset + clipper_margin,
-                x * cell_width - geometry_offset + max_cell_width - clipper_margin,
-                y * cell_width - geometry_offset + max_cell_width - clipper_margin);
+            const auto rect_lines = ClipperRect(x * cell_width - geometry_offset + clipper_margin + aa_border,
+                y * cell_width - geometry_offset + clipper_margin + aa_border,
+                x * cell_width - geometry_offset + max_cell_width - clipper_margin - aa_border,
+                y * cell_width - geometry_offset + max_cell_width - clipper_margin - aa_border);
 
             grid.emplace_back(PreprocessCell { RectClip(rect), RectClipLines(rect_lines), rect, VectorLayerCell(), false });
 
@@ -469,8 +469,9 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                         cell.is_done = true;
 
                         // we only need one triangle that covers the whole cell
+                        // this triangle is a bit larger to cover the whole cell even with antialiasing
                         const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data(
-                            { { 0, 0 }, { 0, cell_width * 2 }, { cell_width * 2, 0 }, style_layer.first, true });
+                            { { -cell_width, -cell_width }, { -cell_width, cell_width * 4 }, { cell_width * 4, -cell_width }, style_layer.first, true });
 
                         cell.cell_data.push_back(data);
                         m_processed_amount++;
