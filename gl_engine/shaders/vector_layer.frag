@@ -73,20 +73,21 @@ struct Layer_Style
 ///////////////////////////////////////////////
 // CPP CONFIG CONSTANTS
 
-
-const lowp uint sampler_offset = 16u - 2u; // used to calculate how many bits are used to determine the sampler index, and how many are used for the layer
-const highp uint layer_mask = ((1u << sampler_offset) - 1u);
-
-const lowp float style_precision = 100.0;
-
-const lowp int style_bits = 13;
-const lowp float max_zoom = 18.0;
-const lowp int zoom_blend_steps = 4;
+// defined in c++ code
+// const highp float tile_extent
+// const highp vec2 grid_size
+// const lowp float style_precision
+// const lowp int style_bits
+// const lowp float max_zoom
+// const lowp int zoom_blend_steps
 
 ///////////////////////////////////////////////
 
+const highp vec2 cell_size = vec2(tile_extent) / grid_size;
+const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 const highp uint bit_mask_ones = -1u;
 const highp uint style_bit_mask = (1u << style_bits) -1u;
+
 
 
 highp float calculate_falloff(highp float dist, highp float from, highp float to) {

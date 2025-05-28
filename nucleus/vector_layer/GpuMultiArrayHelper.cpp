@@ -36,7 +36,7 @@ GpuMultiArrayHelper::GpuMultiArrayHelper()
 
 glm::u16vec2 GpuMultiArrayHelper::add_tile(const tile::Id& id, uint8_t buffer_info)
 {
-    constexpr auto buffer_offset = (16 - GpuMultiArrayHelper::bits_for_buffer_info());
+    constexpr auto buffer_offset = constants::array_helper_all_bits - constants::array_helper_buffer_info_bits;
 
     std::array<uint16_t, 3> layers;
 
@@ -74,7 +74,7 @@ void GpuMultiArrayHelper::set_tile_limit(unsigned int new_limit)
     // if we have a limit greater than this assert, we cannot use the first bits to encode the buffer_info
     // -> either find a better way to encode buffer_info, or lower buffer amount.
     // Ultimately you can also refactor everything to send buffer info separately, increase layers to uint32_t or use rgb textures to encode the extra information in the b channel
-    assert(new_limit <= (1 << (16 - bits_for_buffer_info()))); // for 2 bits quad limit is 4096
+    assert(new_limit <= (1 << (constants::array_helper_all_bits - constants::array_helper_buffer_info_bits))); // for 2 bits quad limit is 4096
 
     for (uint8_t i = 0; i < buffer_amount(); i++) {
         uint8_t offset = 0;

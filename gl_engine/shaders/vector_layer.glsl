@@ -16,14 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-const highp float tile_extent = 1024.0;
-
-const highp vec2 grid_size = vec2(64.0,64.0); // not a singular int variable because there might be some precision problems with webgl if cast at later point
-// const highp vec2 grid_size = vec2(128.0,128.0); // not a singular int variable because there might be some precision problems with webgl if cast at later point
-
-const highp vec2 cell_size = vec2(tile_extent) / grid_size;
-
-
 struct VectorLayerData{
     highp ivec2 a;
     highp ivec2 b;
@@ -36,8 +28,11 @@ struct VectorLayerData{
 
 /////////////////////////////////////////////
 // constants for data packing/unpacking
-const lowp int all_bits = 32; // per output channel
-const lowp int coordinate_bits = 8;
+
+// defined in c++ code
+// const lowp int all_bits = 32; // per output channel
+// const lowp int coordinate_bits = 8;
+// const highp int aa_border = 2;
 
 const lowp int available_style_bits = all_bits - (2 * coordinate_bits);
 
@@ -48,7 +43,6 @@ const lowp int coordinate_shift4 = all_bits - (4 * coordinate_bits);
 
 const highp uint coordinate_bitmask = (1u << coordinate_bits) - 1u;
 
-const highp int aa_border = 2;
 const highp int cell_width = int(tile_extent / grid_size.x);
 
 const highp int max_cell_width = (1 << (coordinate_bits));

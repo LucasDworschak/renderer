@@ -342,13 +342,15 @@ void Preprocessor::generate_preprocess_grid()
     std::vector<PreprocessCell> grid;
     for (int y = 0; y < constants::grid_size; y++) {
         for (int x = 0; x < constants::grid_size; x++) {
-            const auto rect
-                = ClipperRect(x * cell_width - aa_border, y * cell_width - aa_border, (x + 1) * cell_width + aa_border, (y + 1) * cell_width + aa_border);
+            const auto rect = ClipperRect(x * cell_width - constants::aa_border,
+                y * cell_width - constants::aa_border,
+                (x + 1) * cell_width + constants::aa_border,
+                (y + 1) * cell_width + constants::aa_border);
             // for clip lines we are using +0 since we are adding the max_cell_width
-            const auto rect_lines = ClipperRect(x * cell_width - geometry_offset + clipper_margin + aa_border,
-                y * cell_width - geometry_offset + clipper_margin + aa_border,
-                x * cell_width - geometry_offset + max_cell_width - clipper_margin - aa_border,
-                y * cell_width - geometry_offset + max_cell_width - clipper_margin - aa_border);
+            const auto rect_lines = ClipperRect(x * cell_width - geometry_offset + clipper_margin + constants::aa_border,
+                y * cell_width - geometry_offset + clipper_margin + constants::aa_border,
+                x * cell_width - geometry_offset + max_cell_width - clipper_margin - constants::aa_border,
+                y * cell_width - geometry_offset + max_cell_width - clipper_margin - constants::aa_border);
 
             grid.emplace_back(PreprocessCell { RectClip(rect), RectClipLines(rect_lines), rect, VectorLayerCell(), false });
 

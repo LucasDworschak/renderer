@@ -32,6 +32,7 @@
 #include <nucleus/tile/utils.h>
 #include <nucleus/utils/ColourTexture.h>
 #include <nucleus/vector_layer/Preprocessor.h>
+#include <nucleus/vector_layer/constants.h>
 #include <radix/TileHeights.h>
 #include <radix/quad_tree.h>
 #include <radix/tile.h>
@@ -48,15 +49,18 @@ using nucleus::tile::utils::refineFunctor;
 using radix::TileHeights;
 
 namespace {
-ShaderProgram create_debug_shader(const QString& fragment_shader, const QString& vertex_shader = R"(
+const QString default_vertex_shader = R"(
 out highp vec2 texcoords;
 void main() {
     vec2 vertices[3]=vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
     gl_Position = vec4(vertices[gl_VertexID], 0.0, 1.0);
     texcoords = 0.5 * gl_Position.xy + vec2(0.5);
-})")
+})";
+
+ShaderProgram create_debug_shader(
+    const QString& fragment_shader, const QString& vertex_shader = default_vertex_shader, const std::vector<QString>& defines = {})
 {
-    ShaderProgram tmp(vertex_shader, fragment_shader, gl_engine::ShaderCodeSource::PLAINTEXT);
+    ShaderProgram tmp(vertex_shader, fragment_shader, gl_engine::ShaderCodeSource::PLAINTEXT, defines);
     return tmp;
 }
 
@@ -76,10 +80,10 @@ void hashing_cpp_same_as_glsl(const Id& id)
                 out_color = vec4((hash_ref == hash_glsl) ? 121.0 / 255.0 : 9.0 / 255.0, 0, 0, 1);
             }
         )")
-                                                       .arg(hash_uint16(id))
-                                                       .arg(id.coords.x)
-                                                       .arg(id.coords.y)
-                                                       .arg(id.zoom_level));
+                .arg(hash_uint16(id))
+                .arg(id.coords.x)
+                .arg(id.coords.y)
+                .arg(id.zoom_level));
         shader.bind();
         gl_engine::helpers::create_screen_quad_geometry().draw();
 
@@ -202,6 +206,21 @@ void packing_cpp_same_as_glsl(const Id& id)
 
 void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLayerData& data)
 {
+    std::vector<QString> defines;
+    defines.push_back(QString("#define style_bits %1").arg(nucleus::vector_layer::constants::style_bits));
+    defines.push_back(QString("#define style_precision %1").arg(nucleus::vector_layer::constants::style_precision));
+    defines.push_back(QString("#define max_zoom %1").arg(nucleus::vector_layer::constants::style_zoom_range.y));
+    defines.push_back(QString("#define zoom_blend_steps %1").arg(nucleus::vector_layer::constants::style_zoom_blend_steps));
+    defines.push_back(QString("#define tile_extent %1").arg(nucleus::vector_layer::constants::tile_extent));
+    defines.push_back(QString("#define grid_size vec2(%1,%1)").arg(nucleus::vector_layer::constants::grid_size));
+
+    defines.push_back(QString("#define all_bits %1").arg(nucleus::vector_layer::constants::all_bits));
+    defines.push_back(QString("#define coordinate_bits %1").arg(nucleus::vector_layer::constants::coordinate_bits));
+    defines.push_back(QString("#define aa_border %1").arg(nucleus::vector_layer::constants::aa_border));
+
+    defines.push_back(QString("#define sampler_offset %1")
+            .arg(nucleus::vector_layer::constants::array_helper_all_bits - nucleus::vector_layer::constants::array_helper_buffer_info_bits));
+
     {
         Framebuffer b(Framebuffer::DepthFormat::None, { Framebuffer::ColourFormat::RGBA8 }, { 1, 1 });
         b.bind();
@@ -227,16 +246,18 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
                 out_color = vec4(unpack_ok ? 121.0 / 255.0 : 9.0 / 255.0, pack_ok ? 122.0 / 255.0 : 9.0 / 255.0, 0, 1);
             }
         )")
-                .arg(packed_data.x)
-                .arg(packed_data.y)
-                .arg(data.a.x)
-                .arg(data.a.y)
-                .arg(data.b.x)
-                .arg(data.b.y)
-                .arg(data.c.x)
-                .arg(data.c.y)
-                .arg(data.style_index)
-                .arg(data.is_polygon));
+                                                       .arg(packed_data.x)
+                                                       .arg(packed_data.y)
+                                                       .arg(data.a.x)
+                                                       .arg(data.a.y)
+                                                       .arg(data.b.x)
+                                                       .arg(data.b.y)
+                                                       .arg(data.c.x)
+                                                       .arg(data.c.y)
+                                                       .arg(data.style_index)
+                                                       .arg(data.is_polygon),
+            default_vertex_shader,
+            defines);
         shader.bind();
         gl_engine::helpers::create_screen_quad_geometry().draw();
 
@@ -290,7 +311,8 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
                 .arg(data.c.x)
                 .arg(data.c.y)
                 .arg(data.style_index)
-                .arg(data.is_polygon));
+                .arg(data.is_polygon),
+            defines);
         shader.bind();
         gl_engine::helpers::create_screen_quad_geometry().draw();
 

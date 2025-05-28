@@ -59,4 +59,13 @@ constexpr unsigned small_line_zoom_threshold = 4; // until what zoom level do we
 // osm-bright 11
 constexpr auto max_style_expression_keys = 14;
 
+// data unpacking/packing constants
+constexpr int all_bits = 32; // per output channel
+constexpr int coordinate_bits = 8;
+constexpr int aa_border = 2;
+
+// array helper constants
+constexpr int array_helper_all_bits = 16;
+constexpr int array_helper_buffer_info_bits = 2;
+
 } // namespace nucleus::vector_layer::constants

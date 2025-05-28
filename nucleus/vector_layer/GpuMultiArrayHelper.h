@@ -60,8 +60,6 @@ public:
     Dictionary generate_dictionary() const;
     MultiLayerInfo layer(tile::Id tile_id) const;
 
-    constexpr static int bits_for_buffer_info() { return 2; };
-
 private:
     uint8_t buffer_to_helper(uint8_t buffer) const;
 

@@ -41,7 +41,21 @@ VectorLayer::VectorLayer(QObject* parent)
 
 void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
 {
-    m_shader = std::make_shared<ShaderProgram>("tile.vert", "vector_layer.frag");
+    std::vector<QString> defines;
+    defines.push_back(QString("#define style_bits %1").arg(constants::style_bits));
+    defines.push_back(QString("#define style_precision %1").arg(constants::style_precision));
+    defines.push_back(QString("#define max_zoom %1").arg(constants::style_zoom_range.y));
+    defines.push_back(QString("#define zoom_blend_steps %1").arg(constants::style_zoom_blend_steps));
+    defines.push_back(QString("#define tile_extent %1").arg(constants::tile_extent));
+    defines.push_back(QString("#define grid_size vec2(%1,%1)").arg(constants::grid_size));
+
+    defines.push_back(QString("#define all_bits %1").arg(constants::all_bits));
+    defines.push_back(QString("#define coordinate_bits %1").arg(constants::coordinate_bits));
+    defines.push_back(QString("#define aa_border %1").arg(constants::aa_border));
+
+    defines.push_back(QString("#define sampler_offset %1").arg(constants::array_helper_all_bits - constants::array_helper_buffer_info_bits));
+
+    m_shader = std::make_shared<ShaderProgram>("tile.vert", "vector_layer.frag", ShaderCodeSource::FILE, defines);
     shader_registry->add_shader(m_shader);
 
     m_acceleration_grid_texture = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);

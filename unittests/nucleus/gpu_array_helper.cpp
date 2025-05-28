@@ -92,7 +92,7 @@ TEST_CASE("nucleus/gpu_array_helper")
 
     SECTION("Multi Array Helper - tile encoding in same buffer")
     {
-        constexpr auto buffer_offset = (16 - GpuMultiArrayHelper::bits_for_buffer_info());
+        constexpr auto buffer_offset = (constants::array_helper_all_bits - constants::array_helper_buffer_info_bits);
         constexpr auto layer_mask = ((1u << buffer_offset) - 1u);
 
         GpuMultiArrayHelper helper;
@@ -135,7 +135,7 @@ TEST_CASE("nucleus/gpu_array_helper")
 
     SECTION("Multi Array Helper - tile encoding in different buffer")
     {
-        constexpr auto buffer_offset = (16 - GpuMultiArrayHelper::bits_for_buffer_info());
+        constexpr auto buffer_offset = (constants::array_helper_all_bits - constants::array_helper_buffer_info_bits);
         constexpr auto layer_mask = ((1u << buffer_offset) - 1u);
 
         GpuMultiArrayHelper helper;

@@ -39,23 +39,21 @@ using namespace nucleus::tile;
 // lines: (3*10 bits + 2 bits unused) + (1*10 bits + 6 bits unused + 16 bits style)
 // style probably needs far less than we actually allocate
 //
-constexpr int all_bits = 32; // per output channel
-constexpr int coordinate_bits = 8;
 
-constexpr int available_style_bits = all_bits - (2 * coordinate_bits);
+constexpr int available_style_bits = constants::all_bits - (2 * constants::coordinate_bits);
 
-constexpr int coordinate_shift1 = all_bits - coordinate_bits;
-constexpr int coordinate_shift2 = all_bits - (2 * coordinate_bits);
-constexpr int coordinate_shift3 = all_bits - (3 * coordinate_bits);
-constexpr int coordinate_shift4 = all_bits - (4 * coordinate_bits);
+constexpr int coordinate_shift1 = constants::all_bits - constants::coordinate_bits;
+constexpr int coordinate_shift2 = constants::all_bits - (2 * constants::coordinate_bits);
+constexpr int coordinate_shift3 = constants::all_bits - (3 * constants::coordinate_bits);
+constexpr int coordinate_shift4 = constants::all_bits - (4 * constants::coordinate_bits);
 
-constexpr uint coordinate_bitmask = (1u << coordinate_bits) - 1u;
+constexpr uint coordinate_bitmask = (1u << constants::coordinate_bits) - 1u;
 
-constexpr int aa_border = 2;
 constexpr int cell_width = int(constants::tile_extent / constants::grid_size);
 
-constexpr int max_cell_width = (1 << (coordinate_bits));
-constexpr int geometry_offset = (max_cell_width - cell_width - (2 * aa_border)) / 2;
+constexpr int max_cell_width = (1 << (constants::coordinate_bits));
+constexpr int geometry_offset = (max_cell_width - cell_width - (2 * constants::aa_border)) / 2;
+
 //
 // end constants for data packing/unpacking
 /////////////////////////////////////////////
