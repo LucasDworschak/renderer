@@ -29,7 +29,17 @@ alp_add_unittest(unittests_gl_engine
 target_sources(unittests_gl_engine
   PRIVATE
     tile_funs.cpp
+    tile_drawing.cpp
 )
 
-target_link_libraries(unittests_gl_engine PUBLIC gl_engine)
+qt_add_resources(unittests_gl_engine "gl_test_data"
+    PREFIX "/gl_test_data"
+    BASE ${CMAKE_CURRENT_SOURCE_DIR}/data/
+    FILES
+    data/vectortile_openmaptile_18_140276_92195_kals.pbf
+)
+
+target_link_libraries(unittests_gl_engine PUBLIC gl_engine Qt::Test)
+
+target_compile_definitions(unittests_gl_engine PUBLIC "ALP_GL_TEST_DATA_DIR=\":/gl_test_data/\"")
 
