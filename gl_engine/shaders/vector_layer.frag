@@ -83,11 +83,9 @@ struct Layer_Style
 
 ///////////////////////////////////////////////
 
-const highp vec2 cell_size = vec2(tile_extent) / grid_size;
+const highp vec2 cell_size = vec2(tile_extent * tile_scale) / grid_size;
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 const highp uint bit_mask_ones = -1u;
-const highp uint style_bit_mask = (1u << style_bits) -1u;
-
 
 
 highp float calculate_falloff(highp float dist, highp float from, highp float to) {
@@ -350,6 +348,7 @@ void main() {
     lowp vec3 debug_index_buffer_size = vec3(0.0f, 0.0, 0.0f); // DEBUG
     lowp vec3 debug_texture_layer = vec3(0.0f, 0.0, 0.0f); // DEBUG
     lowp int debug_draw_calls = 0; // DEBUG
+    lowp float debug_poly_over_line = 0; // DEBUG
 
 
 
@@ -439,6 +438,8 @@ void main() {
             layer_style.next_zoom_style = layer_style.current_zoom_style;
             layer_style.layer_alpha = 0.0;
 
+            int polygon_was_drawn = 0;
+
             lowp float geometry_influence = 0.0; // how much is the current line/polygon visible
             for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
                 // for(highp uint i = offset_size.x; i < offset_size.x + min(6u,offset_size.y); i++) // show only x layers
@@ -456,9 +457,10 @@ void main() {
 
                 highp float d = 0.0;
 
-                highp vec2 v0 = (vec2(geometry_data.a) + cell_offset) / vec2(tile_extent);
-                highp vec2 v1 = (vec2(geometry_data.b) + cell_offset) / vec2(tile_extent);
-                highp vec2 v2 = (vec2(geometry_data.c) + cell_offset) / vec2(tile_extent);
+
+                highp vec2 v0 = (vec2(geometry_data.a) + cell_offset) / vec2(tile_extent * tile_scale);
+                highp vec2 v1 = (vec2(geometry_data.b) + cell_offset) / vec2(tile_extent * tile_scale);
+                highp vec2 v2 = (vec2(geometry_data.c) + cell_offset) / vec2(tile_extent * tile_scale);
 
 
 
@@ -475,7 +477,10 @@ void main() {
                 if(geometry_influence <= 0.0)
                     continue;
 
-
+                if(geometry_data.is_polygon)
+                  polygon_was_drawn += 1;
+                else if(polygon_was_drawn > 0)
+                  debug_poly_over_line = float(polygon_was_drawn) / 1.0;
 
 
                 { // DEBUG -> triangle lines
@@ -519,6 +524,7 @@ void main() {
             case 205u: overlay_color = debug_index_buffer_size;break;
             case 206u: overlay_color = debug_texture_layer;break;
             case 207u: overlay_color = vec3(pixel_color.a, 0.0, 0.0);break;
+            case 211u: overlay_color = vec3(debug_poly_over_line, 0.0, 0.0);break;
             // case 208u: handled below;
             // case 209u: overlay_color = vec3(float_zoom, 0.0, 0.0);break;
             case 209u: overlay_color = mix(vec3(1,1,1), zoom_debug_color, 1.0-fract(float_zoom));break;

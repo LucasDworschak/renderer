@@ -37,6 +37,8 @@ qt_add_resources(unittests_gl_engine "gl_test_data"
     BASE ${CMAKE_CURRENT_SOURCE_DIR}/data/
     FILES
     data/vectortile_openmaptile_18_140276_92195_kals.pbf
+    data/vectortile_mountain_14_8781_5760.pbf
+    data/vectortile_skilift_18_140269_92190.pbf
 )
 
 target_link_libraries(unittests_gl_engine PUBLIC gl_engine Qt::Test)

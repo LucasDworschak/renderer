@@ -754,7 +754,10 @@ std::pair<uint8_t, uint8_t> Style::parse_dash(const QJsonValue&)
 uint16_t Style::parse_line_width(const QJsonValue& value)
 {
     if (value.isDouble()) {
-        return uint16_t(constants::line_width_multiplier * value.toDouble() * constants::style_precision);
+        float thickness = value.toDouble() * constants::line_width_multiplier;
+        if (thickness > constants::max_line_width)
+            thickness = constants::max_line_width;
+        return uint16_t(thickness * constants::style_precision);
     }
 
     qDebug() << "unhandled line width value" << value;

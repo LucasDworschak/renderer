@@ -159,7 +159,7 @@ std::shared_ptr<gl_engine::UniformBuffer<gl_engine::uboCameraConfig>> bind_camer
     return camera_config_ubo;
 }
 
-enum ConfigMode { no_overlay, cell_size, uvs };
+enum ConfigMode { no_overlay, cell_size, uvs, cells };
 
 // IMPORTANT: we need to return the shared_ptr, because otherwise it will be destroyed and nothing will be drawn!!!
 std::shared_ptr<gl_engine::UniformBuffer<gl_engine::uboSharedConfig>> bind_shared_config(gl_engine::ShaderRegistry* shader_registry, ConfigMode mode)
@@ -176,6 +176,9 @@ std::shared_ptr<gl_engine::UniformBuffer<gl_engine::uboSharedConfig>> bind_share
         break;
     case uvs:
         config->m_overlay_mode = 200u;
+        break;
+    case cells:
+        config->m_overlay_mode = 204u;
         break;
     case no_overlay:
     default:
@@ -195,17 +198,13 @@ std::shared_ptr<gl_engine::TileGeometry> load_tile_geometry(
         tile_geometry->set_aabb_decorator(aabb_decorator);
         tile_geometry->set_tile_limit(1024);
         tile_geometry->init();
-
-        // TODO Here -> move to separate method and load all the ids for camera
-
-        // create deleted and new tiles and add them to tilegeometry
-        const std::vector<radix::tile::Id> deleted_tiles;
     }
 
     auto geometry_service = std::make_unique<TileLoadService>(
         "https://alpinemaps.cg.tuwien.ac.at/tiles/at_dtm_alpinemaps/", nucleus::tile::TileLoadService::UrlPattern::ZXY, ".png");
 
     auto geometry = nucleus::tile::setup::geometry_scheduler(std::move(geometry_service), aabb_decorator);
+    QSignalSpy spy_stats(geometry.scheduler.get(), &nucleus::tile::GeometryScheduler::stats_ready);
     QSignalSpy spy(geometry.scheduler.get(), &nucleus::tile::GeometryScheduler::gpu_tiles_updated);
 
     geometry.scheduler->set_enabled(true);
@@ -219,22 +218,32 @@ std::shared_ptr<gl_engine::TileGeometry> load_tile_geometry(
 
     geometry.scheduler->send_quad_requests();
 
-    spy.wait(300000);
+    QVariantMap stats;
+    do {
+        spy_stats.wait(300000);
+        QList<QVariant> arguments = spy_stats.takeFirst();
+        stats = arguments.at(1).value<QVariantMap>();
+    } while (stats.contains("n_quads_requested") && stats["n_quads_requested"] != 0);
 
-    REQUIRE(spy.count() == 1);
-    QList<QVariant> arguments = spy.takeFirst();
-    REQUIRE(arguments.size() == 2);
-    std::vector<nucleus::tile::Id> deleted_tiles = arguments.at(0).value<std::vector<nucleus::tile::Id>>();
-    std::vector<nucleus::tile::GpuGeometryTile> actual_new_tiles = arguments.at(1).value<std::vector<nucleus::tile::GpuGeometryTile>>();
+    if (spy.empty())
+        spy.wait(300000);
 
-    std::vector<nucleus::tile::GpuGeometryTile> new_tiles;
-    for (const auto& tile : actual_new_tiles) {
-        // replace tile with 0 height tiles
-        new_tiles.push_back({ tile.id, tile.bounds, std::make_shared<const nucleus::Raster<uint16_t>>(glm::uvec2(65), uint16_t(0)) });
-        // new_tiles.push_back(tile);
+    REQUIRE(spy.count() >= 1);
+    for (int i = 0; i < spy.count(); i++) {
+        QList<QVariant> arguments = spy.takeFirst();
+        REQUIRE(arguments.size() == 2);
+        std::vector<nucleus::tile::Id> deleted_tiles = arguments.at(0).value<std::vector<nucleus::tile::Id>>();
+        std::vector<nucleus::tile::GpuGeometryTile> actual_new_tiles = arguments.at(1).value<std::vector<nucleus::tile::GpuGeometryTile>>();
+
+        std::vector<nucleus::tile::GpuGeometryTile> new_tiles;
+        for (const auto& tile : actual_new_tiles) {
+            // replace tile with 0 height tiles
+            new_tiles.push_back({ tile.id, tile.bounds, std::make_shared<const nucleus::Raster<uint16_t>>(glm::uvec2(65), uint16_t(0)) });
+            // new_tiles.push_back(tile);
+        }
+
+        tile_geometry->update_gpu_tiles(deleted_tiles, new_tiles);
     }
-
-    tile_geometry->update_gpu_tiles(deleted_tiles, new_tiles);
 
     geometry.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
     geometry.scheduler.reset();
@@ -277,6 +286,7 @@ void load_vectortiles(std::shared_ptr<gl_engine::VectorLayer> vectorlayer,
     auto vector_layer_service
         = std::make_unique<TileLoadService>("http://localhost:3000/tiles/", nucleus::tile::TileLoadService::UrlPattern::ZXY_yPointingSouth, "");
     auto processor = nucleus::vector_layer::setup::scheduler(std::move(vector_layer_service), aabb_decorator);
+    QSignalSpy spy_stats(processor.scheduler.get(), &nucleus::vector_layer::Scheduler::stats_ready);
     QSignalSpy spy(processor.scheduler.get(), &nucleus::vector_layer::Scheduler::gpu_tiles_updated);
 
     processor.scheduler->set_enabled(true);
@@ -290,21 +300,26 @@ void load_vectortiles(std::shared_ptr<gl_engine::VectorLayer> vectorlayer,
     processor.scheduler->update_camera(camera);
     processor.scheduler->send_quad_requests();
 
-    // std::vector<nucleus::tile::Id> quads;
-    // for (const auto& id : ids) {
-    //     quads.push_back(id.parent());
-    // }
+    QVariantMap stats;
+    do {
+        spy_stats.wait(300000);
+        QList<QVariant> arguments = spy_stats.takeFirst();
+        stats = arguments.at(1).value<QVariantMap>();
+    } while (stats.contains("n_quads_requested") && stats["n_quads_requested"] != 0);
 
-    // vector_layer.scheduler->propagate_quad_requests(std::move(quads));
-    spy.wait(300000);
+    if (spy.empty())
+        spy.wait(300000);
 
-    REQUIRE(spy.count() == 1);
-    QList<QVariant> arguments = spy.takeFirst();
-    REQUIRE(arguments.size() == 2);
-    std::vector<nucleus::tile::Id> deleted_tiles = arguments.at(0).value<std::vector<nucleus::tile::Id>>();
-    std::vector<nucleus::tile::GpuVectorLayerTile> new_tiles = arguments.at(1).value<std::vector<nucleus::tile::GpuVectorLayerTile>>();
+    REQUIRE(spy.count() >= 1);
 
-    vectorlayer->update_gpu_tiles(deleted_tiles, new_tiles);
+    for (int i = 0; i < spy.count(); i++) {
+        QList<QVariant> arguments = spy.takeFirst();
+        REQUIRE(arguments.size() == 2);
+        std::vector<nucleus::tile::Id> deleted_tiles = arguments.at(0).value<std::vector<nucleus::tile::Id>>();
+        std::vector<nucleus::tile::GpuVectorLayerTile> new_tiles = arguments.at(1).value<std::vector<nucleus::tile::GpuVectorLayerTile>>();
+
+        vectorlayer->update_gpu_tiles(deleted_tiles, new_tiles);
+    }
 
     processor.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
     processor.scheduler.reset();
@@ -361,7 +376,110 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
     const auto aabb_decorator = AabbDecorator::make(std::move(h));
 
     // unittests
-    SECTION("tile drawing")
+    SECTION("tile drawing kals")
+    {
+
+        auto id_kals = nucleus::tile::Id { 18, { 140276, 92195 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
+        const auto camera = create_camera_for_id(id_kals);
+
+        auto load = [&id_kals](gl_engine::ShaderRegistry* shader_registry) {
+            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+            qDebug() << "otm";
+            style.load();
+            nucleus::vector_layer::Style style_qwant(":/vectorlayerstyles/qwant.json");
+            qDebug() << "qwant";
+            style_qwant.load();
+            nucleus::vector_layer::Style style_bright(":/vectorlayerstyles/osm-bright.json");
+            qDebug() << "bright";
+            style_bright.load();
+
+            auto layer = create_vectorlayer(shader_registry, style);
+
+            load_custom_vectortile(
+                layer, std::move(style), id_kals, QFile(QString("%1%2").arg(ALP_GL_TEST_DATA_DIR, "vectortile_openmaptile_18_140276_92195_kals.pbf")));
+
+            return layer;
+        };
+
+        auto outputs = std::vector<std::pair<QString, ConfigMode>> { std::make_pair("vectortile_kals.png", ConfigMode::no_overlay),
+            std::make_pair("vectortile_kals_cells.png", ConfigMode::cells) };
+
+        draw_tile(aabb_decorator, camera, { id_kals }, load, outputs);
+    }
+
+    SECTION("tile drawing airport")
+    {
+
+        auto id_airport = nucleus::tile::Id { 18, { 143144, 90996 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
+        // auto id_airport = nucleus::tile::Id { 18, { 143144, 90996 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms).parent().parent();
+        // auto id_airport = nucleus::tile::Id { 14, { 8936, 5681 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
+
+        const auto camera = create_camera_for_id(id_airport);
+
+        auto load = [&camera, &aabb_decorator](gl_engine::ShaderRegistry* shader_registry) {
+            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+            style.load();
+
+            auto layer = create_vectorlayer(shader_registry, style);
+
+            load_vectortiles(layer, aabb_decorator, camera);
+            return layer;
+        };
+
+        auto outputs = std::vector<std::pair<QString, ConfigMode>> { std::make_pair("vectortile_airport.png", ConfigMode::no_overlay),
+            std::make_pair("vectortile_airport_cells.png", ConfigMode::cells) };
+
+        draw_tile(aabb_decorator, camera, { id_airport }, load, outputs);
+        // draw_tile(aabb_decorator, camera, drawing::generate_list(camera, aabb_decorator, 19), load, outputs);
+    }
+
+    SECTION("tile drawing skilift")
+    {
+
+        auto id_ski = nucleus::tile::Id { 18, { 140269, 92190 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
+        const auto camera = create_camera_for_id(id_ski.children()[2].children()[2].children()[0]);
+
+        auto load = [&id_ski](gl_engine::ShaderRegistry* shader_registry) {
+            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+            style.load();
+
+            auto layer = create_vectorlayer(shader_registry, style);
+
+            load_custom_vectortile(layer, std::move(style), id_ski, QFile(QString("%1%2").arg(ALP_GL_TEST_DATA_DIR, "vectortile_skilift_18_140269_92190.pbf")));
+
+            return layer;
+        };
+
+        auto outputs = std::vector<std::pair<QString, ConfigMode>> { std::make_pair("vectortile_ski.png", ConfigMode::no_overlay),
+            std::make_pair("vectortile_ski_cells.png", ConfigMode::cells) };
+
+        draw_tile(aabb_decorator, camera, { id_ski }, load, outputs);
+    }
+
+    SECTION("tile drawing mountain")
+    {
+
+        auto id_mountain = nucleus::tile::Id { 14, { 8781, 5760 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
+        const auto camera = create_camera_for_id(id_mountain);
+
+        auto load = [&id_mountain](gl_engine::ShaderRegistry* shader_registry) {
+            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+            style.load();
+
+            auto layer = create_vectorlayer(shader_registry, style);
+
+            load_custom_vectortile(
+                layer, std::move(style), id_mountain, QFile(QString("%1%2").arg(ALP_GL_TEST_DATA_DIR, "vectortile_mountain_14_8781_5760.pbf")));
+
+            return layer;
+        };
+
+        auto outputs = std::vector<std::pair<QString, ConfigMode>> { std::make_pair("vectortile_mountain.png", ConfigMode::no_overlay) };
+
+        draw_tile(aabb_decorator, camera, { id_mountain }, load, outputs);
+    }
+
+    SECTION("tile drawing vienna")
     {
         auto id_wien = nucleus::tile::Id { 14, { 8936, 5681 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
         const auto camera = create_camera_for_id(id_wien);
@@ -381,28 +499,5 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
             std::make_pair("vectortile_vienna_uvs.png", ConfigMode::uvs) };
 
         draw_tile(aabb_decorator, camera, calc_children_ids(id_wien, 16), load, outputs);
-    }
-
-    SECTION("tile drawing custom")
-    {
-
-        auto id_wien = nucleus::tile::Id { 14, { 8936, 5681 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
-        const auto camera = create_camera_for_id(id_wien);
-
-        auto load = [&id_wien](gl_engine::ShaderRegistry* shader_registry) {
-            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
-            style.load();
-
-            auto layer = create_vectorlayer(shader_registry, style);
-
-            load_custom_vectortile(
-                layer, std::move(style), id_wien, QFile(QString("%1%2").arg(ALP_GL_TEST_DATA_DIR, "vectortile_openmaptile_18_140276_92195_kals.pbf")));
-
-            return layer;
-        };
-
-        auto outputs = std::vector<std::pair<QString, ConfigMode>> { std::make_pair("vectortile_custom.png", ConfigMode::no_overlay) };
-
-        draw_tile(aabb_decorator, camera, { id_wien }, load, outputs);
     }
 }

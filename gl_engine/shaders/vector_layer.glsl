@@ -43,10 +43,11 @@ const lowp int coordinate_shift4 = all_bits - (4 * coordinate_bits);
 
 const highp uint coordinate_bitmask = (1u << coordinate_bits) - 1u;
 
-const highp int cell_width = int(tile_extent / grid_size.x);
+// const highp int cell_width = int(tile_extent / grid_size.x);
 
-const highp int max_cell_width = (1 << (coordinate_bits));
-const highp int geometry_offset = (max_cell_width - cell_width - (2 * aa_border)) / 2;
+const highp int cell_width = 1 << cell_bits;
+const highp int max_cell_width = 1 << coordinate_bits;
+const highp int geometry_offset = (max_cell_width - cell_width - (0 * aa_border)) / 2;
 
 // end constants for data packing/unpacking
 /////////////////////////////////////////////

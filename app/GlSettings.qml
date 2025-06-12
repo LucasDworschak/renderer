@@ -56,6 +56,7 @@ SettingsPanel {
                 { text: "Draw Calls",           value: 208  }, // (only in vector_layer.frag)
                 { text: "Float Zoomlevel",      value: 209  }, // (only in vector_layer.frag)
                 { text: "Float vs tile zoom",   value: 210  }, // (only in vector_layer.frag)
+                { text: "Polygon over Line",    value: 211  }, // (only in vector_layer.frag)
             ]
             onActivated:  map.shared_config.overlay_mode = currentValue;
         }

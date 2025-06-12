@@ -49,10 +49,11 @@ constexpr int coordinate_shift4 = constants::all_bits - (4 * constants::coordina
 
 constexpr uint coordinate_bitmask = (1u << constants::coordinate_bits) - 1u;
 
-constexpr int cell_width = int(constants::tile_extent / constants::grid_size);
+// constexpr int cell_width = int((constants::tile_extent * constants::tile_scale) / constants::grid_size);
 
-constexpr int max_cell_width = (1 << (constants::coordinate_bits));
-constexpr int geometry_offset = (max_cell_width - cell_width - (2 * constants::aa_border)) / 2;
+constexpr int cell_width = 1 << constants::cell_bits;
+constexpr int max_cell_width = 1 << constants::coordinate_bits;
+constexpr int geometry_offset = (max_cell_width - cell_width - (0 * constants::aa_border)) / 2;
 
 //
 // end constants for data packing/unpacking

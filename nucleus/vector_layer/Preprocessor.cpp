@@ -86,9 +86,10 @@ GpuVectorLayerTile Preprocessor::create_default_gpu_tile()
 
 GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vector_tile_data)
 {
+    m_processed_amount = 0;
     if (vector_tile_data.isEmpty())
         return {};
-    // qDebug() << id.coords.x << ", " << id.coords.y << " z: " << id.zoom_level;
+    // qDebug() << " z: " << id.zoom_level << "coords: " << id.coords.x << ", " << id.coords.y << (id.scheme == Scheme::Tms);
 
     // DEBUG polygons
     // const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5 / 64.0 * constants::grid_size, 30.5 / 64.0 * constants::grid_size),
@@ -157,9 +158,9 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
 
     // bool first_layer = true;
     // uint32_t extent;
-    constexpr float scale = 1.0;
+    constexpr float scale = constants::tile_scale;
 
-    constexpr auto cell_scale = float(constants::grid_size) / float(constants::tile_extent);
+    constexpr auto cell_scale = float(constants::grid_size) / (float(constants::tile_extent) * scale);
 
     VectorLayers data;
 
@@ -187,7 +188,8 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
             const auto is_polygon = feature.getType() == mapbox::vector_tile::GeomType::POLYGON;
             PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
 
-            radix::geometry::Aabb2i aabb({ constants::grid_size * 2, constants::grid_size * 2 }, { -constants::grid_size * 2, -constants::grid_size * 2 });
+            radix::geometry::Aabb2i aabb({ constants::grid_size * 2 * constants::tile_scale, constants::grid_size * 2 * constants::tile_scale },
+                { -constants::grid_size * 2 * constants::tile_scale, -constants::grid_size * 2 * constants::tile_scale });
             // calculate bounds
             std::vector<ClipperRect> bounds;
             if (is_polygon) {
@@ -429,7 +431,6 @@ size_t Preprocessor::line_fully_covers(const ClipperPaths& solution, float line_
 // last vertex connects to first vertex
 void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 {
-
     // TODOs
     // - accelleration grid vector<map> to array<map> since size is given from start
     // -- maybe array<array<vector> -> since we also know the max amount of layer_indices and we can then also create the std::vectors with a default size
@@ -443,7 +444,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
     }
 
     m_processed_amount = 0;
-    constexpr auto scale = float(constants::grid_size) / float(constants::tile_extent);
+    constexpr auto scale = float(constants::grid_size) / (float(constants::tile_extent) * constants::tile_scale);
 
     for (auto it = layers.crbegin(); it != layers.crend(); ++it) {
 
@@ -472,8 +473,12 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 
                         // we only need one triangle that covers the whole cell
                         // this triangle is a bit larger to cover the whole cell even with antialiasing
-                        const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data(
-                            { { -cell_width, -cell_width }, { -cell_width, cell_width * 4 }, { cell_width * 4, -cell_width }, style_layer.first, true });
+
+                        const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { -constants::aa_border, -constants::aa_border },
+                            { -constants::aa_border, max_cell_width - geometry_offset - 1 },
+                            { max_cell_width - geometry_offset - 1, -constants::aa_border },
+                            style_layer.first,
+                            true });
 
                         cell.cell_data.push_back(data);
                         m_processed_amount++;
@@ -504,7 +509,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                 // Nevertheless, we artificially worsened the performance by introducing more cells where a line could be (although it is only there on
                 // specific zoom levels)
                 // This performance issue will be solved with Task #198 (mipmaps)
-                nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 2.0, scale);
+                nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 2.0 * constants::tile_scale, scale);
 
                 const auto& style_layer = data[i].style_layer;
                 const auto& vertices = data[i].vertices;
@@ -559,7 +564,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
             }
         }
 
-        // qDebug() << geometry_amount;
+        // qDebug() << m_processed_amount;
     }
 }
 

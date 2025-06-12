@@ -36,6 +36,7 @@ constexpr auto data_size = std::array<uint32_t, 4> { 64u, 128u, 256u, 512u }; //
 // automatically lowered IMPORTANT: only set -1u for the first values since those values will be combined to only one array_helper
 constexpr auto array_layer_tile_amount = std::array<uint32_t, 4> { -1u, -1u, 1524u, 256u };
 constexpr auto tile_extent = 1024;
+constexpr auto tile_scale = 1.0;
 
 // if you change one of the following setting you also need to change the other (that they match is asserted in style.cpp)
 // one bit is used to signal if it should blend with next style or not
@@ -44,6 +45,8 @@ constexpr auto style_buffer_size = 64;
 
 // number is used to multiply float numbers in style to get int values for storage ( e.g. style_precision:100 means 1.253 -> 125 -> 1.250)
 constexpr uint16_t style_precision = 100;
+// ensure that we know how large a line can get
+constexpr uint16_t max_line_width = 48;
 
 constexpr float line_width_multiplier = 1.25;
 constexpr glm::uvec2 style_zoom_range = glm::uvec2(8u, 18u);
@@ -61,6 +64,7 @@ constexpr auto max_style_expression_keys = 14;
 
 // data unpacking/packing constants
 constexpr int all_bits = 32; // per output channel
+constexpr int cell_bits = 4;
 constexpr int coordinate_bits = 8;
 constexpr int aa_border = 2;
 

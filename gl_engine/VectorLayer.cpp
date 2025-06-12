@@ -47,9 +47,11 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     defines.push_back(QString("#define max_zoom %1").arg(constants::style_zoom_range.y));
     defines.push_back(QString("#define zoom_blend_steps %1").arg(constants::style_zoom_blend_steps));
     defines.push_back(QString("#define tile_extent %1").arg(constants::tile_extent));
+    defines.push_back(QString("#define tile_scale %1").arg(constants::tile_scale));
     defines.push_back(QString("#define grid_size vec2(%1,%1)").arg(constants::grid_size));
 
     defines.push_back(QString("#define all_bits %1").arg(constants::all_bits));
+    defines.push_back(QString("#define cell_bits %1").arg(constants::cell_bits));
     defines.push_back(QString("#define coordinate_bits %1").arg(constants::coordinate_bits));
     defines.push_back(QString("#define aa_border %1").arg(constants::aa_border));
 
