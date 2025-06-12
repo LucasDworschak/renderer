@@ -18,6 +18,7 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *****************************************************************************/
 
+
 #include "shared_config.glsl"
 #include "camera_config.glsl"
 #include "encoder.glsl"
@@ -25,6 +26,8 @@
 #include "vector_layer.glsl"
 
 #include "hashing.glsl" // DEBUG
+
+#line 20031
 
 uniform highp usampler2DArray acceleration_grid_sampler;
 uniform highp usampler2D instanced_texture_array_index_sampler;
@@ -84,7 +87,7 @@ struct Layer_Style
 
 ///////////////////////////////////////////////
 
-const highp vec2 cell_size = vec2(tile_extent * tile_scale) / grid_size;
+const highp vec2 cell_size = vec2(float(tile_extent) * float(tile_scale)) / vec2(grid_size);
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 const highp uint bit_mask_ones = -1u;
 
@@ -202,7 +205,7 @@ mediump float float_zoom_interpolation()
     highp float static_factors = camera_factors * sqrt2 * cEarthCircumference / tile_size;
     highp float z = log2(static_factors / dist_camera / error_threshold_px)+1.0;
 
-    return clamp(z, 0.0, max_zoom);
+    return clamp(z, 0.0, float(max_zoom));
 }
 
 highp uvec3 u32_2_to_u16_u24_u24(highp uvec2 data){
@@ -225,7 +228,7 @@ Style_Data parse_style(highp uint style_index) {
     style.fill_color = vec4((style_data.r & 4278190080u) >> 24, (style_data.r & 16711680u) >> 16, (style_data.r & 65280u) >> 8, style_data.r & 255u) / vec4(255.0f);
     style.outline_color = vec4((style_data.g & 4278190080u) >> 24, (style_data.g & 16711680u) >> 16, (style_data.g & 65280u) >> 8, style_data.g & 255u) / vec4(255.0f);
 
-    style.outline_width = float(style_data.b) / style_precision;
+    style.outline_width = float(style_data.b) / float(style_precision);
     // lowp vec2 outline_dash; // TODO
 
     return style;
@@ -291,7 +294,7 @@ bool check_and_draw_layer(VectorLayerData geometry_data, inout Layer_Style layer
         // the outline_width is saved as tile_extent dependent
         // by dividing by tile_extent we get the width we want to draw
         // by further dividing the tile_extent by 2^zoom_offset, we reduce the tile_extent and increase the line width.
-        mediump float zoomed_tile_extent = tile_extent * pow(2.0, float(zoom_offset));
+        mediump float zoomed_tile_extent = float(tile_extent) * pow(2.0, float(zoom_offset));
 
         layer_style.current_zoom_style.outline_width /= zoomed_tile_extent;
         if(geometry_data.should_blend)
@@ -349,7 +352,7 @@ void main() {
     lowp vec3 debug_index_buffer_size = vec3(0.0f, 0.0, 0.0f); // DEBUG
     lowp vec3 debug_texture_layer = vec3(0.0f, 0.0, 0.0f); // DEBUG
     lowp int debug_draw_calls = 0; // DEBUG
-    lowp float debug_poly_over_line = 0; // DEBUG
+    lowp float debug_poly_over_line = 0.0; // DEBUG
 
 
 
@@ -514,7 +517,7 @@ void main() {
     }
 
     // mix polygon color with background
-    texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color), max(1.0, line_influence) * 0.5);
+    texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color), 0.5 + min(1.0, line_influence) * 0.5);
     // texout_albedo = pixel_color;
 
     if (conf.overlay_mode > 199u && conf.overlay_mode < 300u) {

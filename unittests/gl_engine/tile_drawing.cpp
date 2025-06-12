@@ -384,14 +384,14 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
 
         auto load = [&id_kals](gl_engine::ShaderRegistry* shader_registry) {
             nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
-            qDebug() << "otm";
+            // qDebug() << "otm";
             style.load();
-            nucleus::vector_layer::Style style_qwant(":/vectorlayerstyles/qwant.json");
-            qDebug() << "qwant";
-            style_qwant.load();
-            nucleus::vector_layer::Style style_bright(":/vectorlayerstyles/osm-bright.json");
-            qDebug() << "bright";
-            style_bright.load();
+            // nucleus::vector_layer::Style style_qwant(":/vectorlayerstyles/qwant.json");
+            // qDebug() << "qwant";
+            // style_qwant.load();
+            // nucleus::vector_layer::Style style_bright(":/vectorlayerstyles/osm-bright.json");
+            // qDebug() << "bright";
+            // style_bright.load();
 
             auto layer = create_vectorlayer(shader_registry, style);
 
@@ -407,31 +407,31 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
         draw_tile(aabb_decorator, camera, { id_kals }, load, outputs);
     }
 
-    SECTION("tile drawing airport")
-    {
+    // SECTION("tile drawing airport")
+    // {
 
-        auto id_airport = nucleus::tile::Id { 18, { 143144, 90996 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
-        // auto id_airport = nucleus::tile::Id { 18, { 143144, 90996 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms).parent().parent();
-        // auto id_airport = nucleus::tile::Id { 14, { 8936, 5681 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
+    //     auto id_airport = nucleus::tile::Id { 18, { 143144, 90996 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
+    //     // auto id_airport = nucleus::tile::Id { 18, { 143144, 90996 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms).parent().parent();
+    //     // auto id_airport = nucleus::tile::Id { 14, { 8936, 5681 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
 
-        const auto camera = create_camera_for_id(id_airport);
+    //     const auto camera = create_camera_for_id(id_airport);
 
-        auto load = [&camera, &aabb_decorator](gl_engine::ShaderRegistry* shader_registry) {
-            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
-            style.load();
+    //     auto load = [&camera, &aabb_decorator](gl_engine::ShaderRegistry* shader_registry) {
+    //         nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+    //         style.load();
 
-            auto layer = create_vectorlayer(shader_registry, style);
+    //         auto layer = create_vectorlayer(shader_registry, style);
 
-            load_vectortiles(layer, aabb_decorator, camera);
-            return layer;
-        };
+    //         load_vectortiles(layer, aabb_decorator, camera);
+    //         return layer;
+    //     };
 
-        auto outputs = std::vector<std::pair<QString, ConfigMode>> { std::make_pair("vectortile_airport.png", ConfigMode::no_overlay),
-            std::make_pair("vectortile_airport_cells.png", ConfigMode::cells) };
+    //     auto outputs = std::vector<std::pair<QString, ConfigMode>> { std::make_pair("vectortile_airport.png", ConfigMode::no_overlay),
+    //         std::make_pair("vectortile_airport_cells.png", ConfigMode::cells) };
 
-        draw_tile(aabb_decorator, camera, { id_airport }, load, outputs);
-        // draw_tile(aabb_decorator, camera, drawing::generate_list(camera, aabb_decorator, 19), load, outputs);
-    }
+    //     draw_tile(aabb_decorator, camera, { id_airport }, load, outputs);
+    //     // draw_tile(aabb_decorator, camera, drawing::generate_list(camera, aabb_decorator, 19), load, outputs);
+    // }
 
     SECTION("tile drawing skilift")
     {

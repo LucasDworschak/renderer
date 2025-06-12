@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#line 10020
+
 struct VectorLayerData{
     highp ivec2 a;
     highp ivec2 b;
