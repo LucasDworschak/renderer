@@ -41,7 +41,7 @@ layout (location = 0) out lowp vec3 texout_background;
 layout (location = 1) out highp vec4 texout_position;
 layout (location = 2) out highp uvec2 texout_normal;
 layout (location = 3) out lowp vec4 texout_depth;
-layout (location = 4) out lowp vec3 texout_albedo;
+layout (location = 4) out lowp vec4 texout_albedo;
 
 flat in highp uvec3 var_tile_id;
 in highp vec2 var_uv;
@@ -364,11 +364,11 @@ void main() {
     lowp vec4 pixel_color = vec4(0.0f, 0.0, 0.0f, 0.0f);
 
     // openmaptile
-    lowp vec4 background_color = vec4(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f, 0.0f);
+    lowp vec3 background_color = vec3(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f);
     // qwant
-    // lowp vec4 background_color = vec4(248.0f/255.0f, 248.0f/255.0f, 248.0f/255.0f, 0.0f);
+    // lowp vec3 background_color = vec3(248.0f/255.0f, 248.0f/255.0f, 248.0f/255.0f);
     // osm-bright
-    // lowp vec4 background_color = vec4(248.0f/255.0f, 244.0f/255.0f, 240.0f/255.0f, 0.0f);
+    // lowp vec3 background_color = vec3(248.0f/255.0f, 244.0f/255.0f, 240.0f/255.0f);
 
     decrease_zoom_level_until(tile_id, uv, texelFetch(instanced_texture_zoom_sampler, ivec2(instance_id, 0), 0).x);
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler, ivec2(instance_id, 0), 0).xy;
@@ -378,6 +378,8 @@ void main() {
     highp float zoom_offset = float_zoom-float(tile_id.z);
 
     highp float aa_half_radius = calculate_aa_half_radius(uv);
+
+    highp float line_influence = 0.0;
 
     if(texture_layer.x != bit_mask_ones && texture_layer.y != bit_mask_ones) // check for valid data
     {
@@ -472,11 +474,14 @@ void main() {
 
                 d = sd_Line_Triangle(uv, v0, v1, v2, geometry_data.is_polygon) - thickness;
 
+
                 highp float geometry_influence =  1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
 
                 // polygon does not influence pixel at all -> we do not draw it
                 if(geometry_influence <= 0.0)
                     continue;
+
+                line_influence += (1.0-float(geometry_data.is_polygon)) * geometry_influence;
 
                 if(geometry_data.is_polygon)
                   polygon_was_drawn += 1;
@@ -509,8 +514,8 @@ void main() {
     }
 
     // mix polygon color with background
-    texout_albedo = (pixel_color + ((1.0-pixel_color.a)*background_color)).rgb;
-
+    texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color), max(1.0, line_influence) * 0.5);
+    // texout_albedo = pixel_color;
 
     if (conf.overlay_mode > 199u && conf.overlay_mode < 300u) {
         lowp vec3 zoom_debug_color =  color_from_id_hash(uint(float_zoom));
@@ -531,22 +536,23 @@ void main() {
             case 209u: overlay_color = mix(vec3(1,1,1), zoom_debug_color, 1.0-fract(float_zoom));break;
             default: overlay_color = vertex_color;
         }
-        texout_albedo = mix(texout_albedo, overlay_color, conf.overlay_strength);
+        texout_albedo.rgb = mix(texout_albedo.rgb, overlay_color, conf.overlay_strength);
+
 
         if(conf.overlay_mode == 208u)
         {
             lowp float upper_limit = conf.overlay_strength * 255.0;
             if(debug_draw_calls > int(upper_limit))
-                texout_albedo = vec3(1.0, 0.0, 0.0);
+                texout_albedo.rgb = vec3(1.0, 0.0, 0.0);
             else if (debug_draw_calls == 0)
-                texout_albedo = vec3(0.0, 0.0, 0.0);
+                texout_albedo.rgb = vec3(0.0, 0.0, 0.0);
             else
-                texout_albedo = vec3(0.0, float(debug_draw_calls) / upper_limit, 0.0);
+                texout_albedo.rgb = vec3(0.0, float(debug_draw_calls) / upper_limit, 0.0);
         }
         else if(conf.overlay_mode == 210u)
         {
             // comparison between float zoom and tile zoom
-            texout_albedo = mix(zoom_debug_color, color_from_id_hash(uint(var_tile_id.z)), conf.overlay_strength);
+            texout_albedo.rgb = mix(zoom_debug_color, color_from_id_hash(uint(var_tile_id.z)), conf.overlay_strength);
         }
     }
 
@@ -577,12 +583,12 @@ void main() {
             case 1u: overlay_color = normal * 0.5 + 0.5; break;
             default: overlay_color = vertex_color;
         }
-        texout_albedo = mix(texout_albedo, overlay_color, conf.overlay_strength);
+        texout_albedo.rgb = mix(texout_albedo.rgb, overlay_color, conf.overlay_strength);
     }
 
 #if CURTAIN_DEBUG_MODE == 1
     if (is_curtain > 0.0) {
-        texout_albedo = vec3(1.0, 0.0, 0.0);
+        texout_albedo = vec3(1.0, 0.0, 0.0, 1.0);
         return;
     }
 #endif

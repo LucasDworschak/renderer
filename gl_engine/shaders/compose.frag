@@ -37,7 +37,7 @@ in highp vec2 texcoords;
 uniform sampler2D texin_albedo;             // 8vec3
 uniform highp sampler2D texin_position;     // f32vec4
 uniform highp usampler2D texin_normal;      // u16vec2
-uniform sampler2D texin_vector_map;         // 8vec3
+uniform sampler2D texin_vector_map;         // 8vec4
 
 uniform sampler2D texin_atmosphere;         // 8vec3
 uniform sampler2D texin_ssao;               // 8vec1
@@ -152,9 +152,10 @@ highp float csm_shadow_term(highp vec4 pos_cws, highp vec3 normal_ws, out lowp i
 
 void main() {
     lowp vec3 ortho = texture(texin_albedo, texcoords).rgb;
-    lowp vec3 vector_map = texture(texin_vector_map, texcoords).rgb;
+    lowp vec4 vector_map = texture(texin_vector_map, texcoords).rgba;
     // lowp vec3 albedo = 0.4 * ortho + 0.6 * vector_map; // simple blending
-    lowp vec3 albedo = ortho * vector_map;
+    // blending depending on vector_map alpha value (normally 0.5 but for lines 1.0)
+    lowp vec3 albedo = ortho * (1.0-vector_map.a) + vector_map.rgb * vector_map.a;
 
     highp vec4 pos_dist = texture(texin_position, texcoords);
     highp vec3 pos_cws = pos_dist.xyz;
