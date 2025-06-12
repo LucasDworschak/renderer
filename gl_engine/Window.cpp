@@ -178,6 +178,7 @@ void Window::initialise_gpu()
             Framebuffer::ColourFormat::RG16UI, // Octahedron Normals
             Framebuffer::ColourFormat::RGBA8, // Discretized Encoded Depth for readback IMPORTANT: IF YOU MOVE THIS YOU HAVE TO ADAPT THE GET DEPTH FUNCTION
             // TextureDefinition { Framebuffer::ColourFormat::R32UI }, // VertexID
+            Framebuffer::ColourFormat::RGBA8, // vector map colour
         });
 
     m_atmospherebuffer = std::make_unique<Framebuffer>(Framebuffer::DepthFormat::None, std::vector { Framebuffer::ColourFormat::RGBA8 });
@@ -343,13 +344,13 @@ void Window::paint(QOpenGLFramebufferObject* framebuffer)
     }
 
     f->glEnable(GL_DEPTH_TEST);
-    f->glDepthFunc(GL_GREATER); // reverse z
+    f->glDepthFunc(GL_GEQUAL); // reverse z
 
     m_timer->start_timer("tiles");
-    if (false)
-        m_context->ortho_layer()->draw(*m_context->tile_geometry(), m_camera, culled_draw_list);
-    else
-        m_context->vector_layer()->draw(*m_context->tile_geometry(), m_camera, culled_draw_list);
+    // if (false)
+    m_context->ortho_layer()->draw(*m_context->tile_geometry(), m_camera, culled_draw_list);
+    // else
+    m_context->vector_layer()->draw(*m_context->tile_geometry(), m_camera, culled_draw_list);
     m_timer->stop_timer("tiles");
 
     m_gbuffer->unbind();
@@ -388,15 +389,17 @@ void Window::paint(QOpenGLFramebufferObject* framebuffer)
     m_gbuffer->bind_colour_texture(1, 1);
     m_compose_shader->set_uniform("texin_normal", 2);
     m_gbuffer->bind_colour_texture(2, 2);
+    m_compose_shader->set_uniform("texin_vector_map", 3);
+    m_gbuffer->bind_colour_texture(4, 3);
 
-    m_compose_shader->set_uniform("texin_atmosphere", 3);
-    m_atmospherebuffer->bind_colour_texture(0, 3);
+    m_compose_shader->set_uniform("texin_atmosphere", 4);
+    m_atmospherebuffer->bind_colour_texture(0, 4);
 
-    m_compose_shader->set_uniform("texin_ssao", 4);
-    m_ssao->bind_ssao_texture(4);
+    m_compose_shader->set_uniform("texin_ssao", 5);
+    m_ssao->bind_ssao_texture(5);
 
-    /* texture units 5 - 8 */
-    m_shadowmapping->bind_shadow_maps(m_compose_shader.get(), 5);
+    /* texture units 6 - 9 */
+    m_shadowmapping->bind_shadow_maps(m_compose_shader.get(), 6);
 
     m_timer->start_timer("compose");
     m_screen_quad_geometry.draw();
