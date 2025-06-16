@@ -212,7 +212,7 @@ std::shared_ptr<gl_engine::TileGeometry> load_tile_geometry(
     geometry.scheduler->set_network_reachability(n->reachability());
     geometry.scheduler->set_ram_quad_limit(1024);
     geometry.scheduler->set_name("geometry");
-    geometry.scheduler->read_disk_cache();
+    // geometry.scheduler->read_disk_cache();
 
     geometry.scheduler->update_camera(camera);
 
@@ -245,7 +245,7 @@ std::shared_ptr<gl_engine::TileGeometry> load_tile_geometry(
         tile_geometry->update_gpu_tiles(deleted_tiles, new_tiles);
     }
 
-    geometry.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
+    // geometry.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
     geometry.scheduler.reset();
 
     return tile_geometry;
@@ -295,7 +295,7 @@ void load_vectortiles(std::shared_ptr<gl_engine::VectorLayer> vectorlayer,
     processor.scheduler->set_network_reachability(n->reachability());
     processor.scheduler->set_ram_quad_limit(1024);
     processor.scheduler->set_name("vector");
-    processor.scheduler->read_disk_cache();
+    // processor.scheduler->read_disk_cache();
 
     processor.scheduler->update_camera(camera);
     processor.scheduler->send_quad_requests();
@@ -321,7 +321,7 @@ void load_vectortiles(std::shared_ptr<gl_engine::VectorLayer> vectorlayer,
         vectorlayer->update_gpu_tiles(deleted_tiles, new_tiles);
     }
 
-    processor.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
+    // processor.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
     processor.scheduler.reset();
 }
 
