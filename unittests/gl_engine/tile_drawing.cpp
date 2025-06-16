@@ -212,7 +212,7 @@ std::shared_ptr<gl_engine::TileGeometry> load_tile_geometry(
     geometry.scheduler->set_network_reachability(n->reachability());
     geometry.scheduler->set_ram_quad_limit(1024);
     geometry.scheduler->set_name("geometry");
-    // geometry.scheduler->read_disk_cache();
+    geometry.scheduler->read_disk_cache();
 
     geometry.scheduler->update_camera(camera);
 
@@ -245,7 +245,7 @@ std::shared_ptr<gl_engine::TileGeometry> load_tile_geometry(
         tile_geometry->update_gpu_tiles(deleted_tiles, new_tiles);
     }
 
-    // geometry.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
+    geometry.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
     geometry.scheduler.reset();
 
     return tile_geometry;
@@ -295,7 +295,7 @@ void load_vectortiles(std::shared_ptr<gl_engine::VectorLayer> vectorlayer,
     processor.scheduler->set_network_reachability(n->reachability());
     processor.scheduler->set_ram_quad_limit(1024);
     processor.scheduler->set_name("vector");
-    // processor.scheduler->read_disk_cache();
+    processor.scheduler->read_disk_cache();
 
     processor.scheduler->update_camera(camera);
     processor.scheduler->send_quad_requests();
@@ -321,7 +321,7 @@ void load_vectortiles(std::shared_ptr<gl_engine::VectorLayer> vectorlayer,
         vectorlayer->update_gpu_tiles(deleted_tiles, new_tiles);
     }
 
-    // processor.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
+    processor.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
     processor.scheduler.reset();
 }
 
@@ -335,7 +335,7 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
     // define the camera
 
     // define what ids will ultimately be drawn
-    auto draw_list = nucleus::tile::drawing::compute_bounds(nucleus::tile::drawing::limit({ ids_to_draw }, 1024u), aabb_decorator);
+    auto draw_list = nucleus::tile::drawing::compute_bounds(nucleus::tile::drawing::limit(ids_to_draw, 1024u), aabb_decorator);
     // auto draw_list = drawing::compute_bounds(drawing::limit(drawing::generate_list(camera, aabb_decorator, 19), 1024u), aabb_decorator);
     draw_list = drawing::sort(drawing::cull(draw_list, camera), camera.position());
 
@@ -346,7 +346,19 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
     auto layer = load(&shader_registry);
 
     // bind framebuffer
-    Framebuffer b(Framebuffer::DepthFormat::Float32, { Framebuffer::ColourFormat::RGB8 }, { 1024, 1024 });
+    // Framebuffer b(Framebuffer::DepthFormat::Float32, { Framebuffer::ColourFormat::RGB8 }, { 1024, 1024 });
+    Framebuffer b(Framebuffer::DepthFormat::Float32,
+        std::vector {
+            Framebuffer::ColourFormat::RGBA8, // Albedo
+            Framebuffer::ColourFormat::RGBA32F, // Position WCS and distance (distance is optional, but i use it directly for a little speed improvement)
+            Framebuffer::ColourFormat::RG16UI, // Octahedron Normals
+            Framebuffer::ColourFormat::RGBA8, // Discretized Encoded Depth for readback IMPORTANT: IF YOU MOVE THIS YOU HAVE TO ADAPT THE GET DEPTH FUNCTION
+            // TextureDefinition { Framebuffer::ColourFormat::R32UI }, // VertexID
+            Framebuffer::ColourFormat::RGB8, // vector map colour
+            // Framebuffer::ColourFormat::RGBA8, // vector map colour
+        },
+        { 1024, 1024 });
+
     b.bind();
 
     // bind buffer and set opengl settings
@@ -357,7 +369,7 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
         auto shared_conf = bind_shared_config(&shader_registry, output.second);
         clear_buffer();
         layer->draw(*tile_geometry, camera, draw_list);
-        const QImage render_result = b.read_colour_attachment(0);
+        const QImage render_result = b.read_colour_attachment(4);
         render_result.save(output.first);
     }
 
@@ -368,6 +380,15 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
 
 TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
 {
+    SECTION("refine ids")
+    {
+        auto id_wien = nucleus::tile::Id { 14, { 8936, 5681 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
+
+        auto children = calc_children_ids(id_wien, 16);
+
+        CHECK(children.size() == 16);
+    }
+
     UnittestGLContext::initialise();
 
     // aabbdecorator -> makes sure that everything form 0-4000 z is included
