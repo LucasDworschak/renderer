@@ -34,26 +34,59 @@ using namespace nucleus::tile;
 
 /////////////////////////////////////////////
 // constants for data packing/unpacking
-// output 2*32 bit
-// triangles: 4*8 bits + (2*8 bits + 16 bits style)
-// lines: (3*10 bits + 2 bits unused) + (1*10 bits + 6 bits unused + 16 bits style)
-// style probably needs far less than we actually allocate
-//
 
-constexpr int available_style_bits = constants::all_bits - (2 * constants::coordinate_bits);
+// in order to minimize the divergence between lines and polygons, we pack the data as follows:
 
-constexpr int coordinate_shift1 = constants::all_bits - constants::coordinate_bits;
-constexpr int coordinate_shift2 = constants::all_bits - (2 * constants::coordinate_bits);
-constexpr int coordinate_shift3 = constants::all_bits - (3 * constants::coordinate_bits);
-constexpr int coordinate_shift4 = constants::all_bits - (4 * constants::coordinate_bits);
+// polygons
+// packed.x: x0(8 bits) y0(8 bits) x1(8 bits) y1(8 bits)
+// packed.y: x2(8 bits) y2(8 bits) style(16 bits)
 
-constexpr uint coordinate_bitmask = (1u << constants::coordinate_bits) - 1u;
+// lines
+// packed.x: x0_0(8 bits) y0_0(8 bits) x1_0(8 bits) y1_0(8 bits)
+// packed.y: x0_1(4 bits) y0_1(4 bits) x1_1(4 bits) y1_1(4 bits) style(16 bits)
+
+// a line consists of only 2 (x,y) coordinates -> xy0 xy1
+// in order to use all available bits, we store the most significant bits of the coordinates in x0_1, etc and combine them with bitshifts
+
+constexpr int available_style_bits = constants::all_bits - (2 * constants::coordinate_bits_polygons);
+
+constexpr int coordinate_shift1 = constants::all_bits - constants::coordinate_bits_polygons;
+constexpr int coordinate_shift2 = constants::all_bits - (2 * constants::coordinate_bits_polygons);
+constexpr int coordinate_shift3 = constants::all_bits - (3 * constants::coordinate_bits_polygons);
+constexpr int coordinate_shift4 = constants::all_bits - (4 * constants::coordinate_bits_polygons);
+
+// for packed.y -> we need to divide coordinate_bits_polygons by 2
+constexpr int coordinate_shift1_lines = constants::all_bits - int(0.5 * constants::coordinate_bits_polygons);
+constexpr int coordinate_shift2_lines = constants::all_bits - int(1.0 * constants::coordinate_bits_polygons);
+constexpr int coordinate_shift3_lines = constants::all_bits - int(1.5 * constants::coordinate_bits_polygons);
+constexpr int coordinate_shift4_lines = constants::all_bits - int(2.0 * constants::coordinate_bits_polygons);
+
+constexpr uint coordinate_bitmask = (1u << constants::coordinate_bits_polygons) - 1u;
+constexpr uint coordinate_bitmask_lines = (1u << constants::coordinate_bits_lines) - 1u;
+constexpr int remaining_coordinate_bits_lines = constants::coordinate_bits_lines - constants::coordinate_bits_polygons;
+constexpr uint remaining_coordinate_bitmask_lines = (1u << remaining_coordinate_bits_lines) - 1u;
+
+constexpr int cell_width = int((constants::tile_extent * constants::tile_scale) / constants::grid_size);
+
+constexpr int max_cell_width_polygons = (1 << (constants::coordinate_bits_polygons));
+constexpr int geometry_offset_polygons = (max_cell_width_polygons - cell_width) / 2;
+constexpr int max_cell_width_line = (1 << (constants::coordinate_bits_lines));
+constexpr int geometry_offset_line = (max_cell_width_line - cell_width) / 2;
+
+// constexpr int available_style_bits = constants::all_bits - (2 * constants::coordinate_bits_polygons);
+
+// constexpr int coordinate_shift1 = constants::all_bits - constants::coordinate_bits_polygons;
+// constexpr int coordinate_shift2 = constants::all_bits - (2 * constants::coordinate_bits_polygons);
+// constexpr int coordinate_shift3 = constants::all_bits - (3 * constants::coordinate_bits_polygons);
+// constexpr int coordinate_shift4 = constants::all_bits - (4 * constants::coordinate_bits_polygons);
+
+// constexpr uint coordinate_bitmask = (1u << constants::coordinate_bits_polygons) - 1u;
 
 // constexpr int cell_width = int((constants::tile_extent * constants::tile_scale) / constants::grid_size);
 
-constexpr int cell_width = 1 << constants::cell_bits;
-constexpr int max_cell_width = 1 << constants::coordinate_bits;
-constexpr int geometry_offset = (max_cell_width - cell_width - (0 * constants::aa_border)) / 2;
+// // constexpr int cell_width = 1 << constants::cell_bits;
+// constexpr int max_cell_width = 1 << constants::coordinate_bits_lines;
+// constexpr int geometry_offset = (max_cell_width - cell_width - (0 * constants::aa_border)) / 2;
 
 //
 // end constants for data packing/unpacking

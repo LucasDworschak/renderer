@@ -64,8 +64,8 @@ constexpr auto max_style_expression_keys = 14;
 
 // data unpacking/packing constants
 constexpr int all_bits = 32; // per output channel
-constexpr int cell_bits = 4;
-constexpr int coordinate_bits = 8;
+constexpr int coordinate_bits_polygons = 8;
+constexpr int coordinate_bits_lines = 12;
 constexpr int aa_border = 2;
 
 // array helper constants

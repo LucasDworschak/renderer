@@ -51,8 +51,8 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     defines.push_back(QString("#define grid_size vec2(%1,%1)").arg(constants::grid_size));
 
     defines.push_back(QString("#define all_bits %1").arg(constants::all_bits));
-    defines.push_back(QString("#define cell_bits %1").arg(constants::cell_bits));
-    defines.push_back(QString("#define coordinate_bits %1").arg(constants::coordinate_bits));
+    defines.push_back(QString("#define coordinate_bits_polygons %1").arg(constants::coordinate_bits_polygons));
+    defines.push_back(QString("#define coordinate_bits_lines %1").arg(constants::coordinate_bits_lines));
     defines.push_back(QString("#define aa_border %1").arg(constants::aa_border));
 
     defines.push_back(QString("#define sampler_offset %1").arg(constants::array_helper_all_bits - constants::array_helper_buffer_info_bits));
