@@ -54,12 +54,13 @@ const highp uint coordinate_bitmask_lines = (1u << coordinate_bits_lines) - 1u;
 const lowp int remaining_coordinate_bits_lines = coordinate_bits_lines - coordinate_bits_polygons;
 const highp uint remaining_coordinate_bitmask_lines = (1u << remaining_coordinate_bits_lines) - 1u;
 
-const lowp int cell_width = int((tile_extent * tile_scale) / grid_size);
+const highp int cell_width_polygons = int((tile_extent * scale_polygons) / grid_size);
+const highp int cell_width_lines = int((tile_extent * scale_lines) / grid_size);
 
-const lowp int max_cell_width_polygons = (1 << (coordinate_bits_polygons));
-const lowp int geometry_offset_polygons = (max_cell_width_polygons - cell_width) / 2;
-const lowp int max_cell_width_line = (1 << (coordinate_bits_lines));
-const lowp int geometry_offset_line = (max_cell_width_line - cell_width) / 2;
+const highp int max_cell_width_polygons = (1 << (coordinate_bits_polygons));
+const highp int geometry_offset_polygons = (max_cell_width_polygons - cell_width_polygons) / 2;
+const highp int max_cell_width_line = (1 << (coordinate_bits_lines));
+const highp int geometry_offset_line = (max_cell_width_line - cell_width_lines) / 2;
 
 
 

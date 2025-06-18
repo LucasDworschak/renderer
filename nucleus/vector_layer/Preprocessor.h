@@ -66,12 +66,13 @@ constexpr uint coordinate_bitmask_lines = (1u << constants::coordinate_bits_line
 constexpr int remaining_coordinate_bits_lines = constants::coordinate_bits_lines - constants::coordinate_bits_polygons;
 constexpr uint remaining_coordinate_bitmask_lines = (1u << remaining_coordinate_bits_lines) - 1u;
 
-constexpr int cell_width = int((constants::tile_extent * constants::tile_scale) / constants::grid_size);
+constexpr int cell_width_polygons = int((constants::tile_extent * constants::scale_polygons) / constants::grid_size);
+constexpr int cell_width_lines = int((constants::tile_extent * constants::scale_lines) / constants::grid_size);
 
 constexpr int max_cell_width_polygons = (1 << (constants::coordinate_bits_polygons));
-constexpr int geometry_offset_polygons = (max_cell_width_polygons - cell_width) / 2;
+constexpr int geometry_offset_polygons = (max_cell_width_polygons - cell_width_polygons) / 2;
 constexpr int max_cell_width_line = (1 << (constants::coordinate_bits_lines));
-constexpr int geometry_offset_line = (max_cell_width_line - cell_width) / 2;
+constexpr int geometry_offset_line = (max_cell_width_line - cell_width_lines) / 2;
 
 // constexpr int available_style_bits = constants::all_bits - (2 * constants::coordinate_bits_polygons);
 
@@ -158,7 +159,8 @@ using VectorLayerCell = std::vector<glm::u32vec2>;
 struct PreprocessCell {
     RectClip clipper;
     RectClipLines clipper_lines;
-    ClipperRect rect;
+    ClipperRect rect_polygons;
+    ClipperRect rect_lines;
     VectorLayerCell cell_data;
     bool is_done;
 };

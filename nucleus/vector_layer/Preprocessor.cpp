@@ -158,9 +158,7 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
 
     // bool first_layer = true;
     // uint32_t extent;
-    constexpr float scale = constants::tile_scale;
 
-    constexpr auto cell_scale = float(constants::grid_size) / (float(constants::tile_extent) * scale);
 
     VectorLayers data;
 
@@ -186,10 +184,12 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
                 continue;
 
             const auto is_polygon = feature.getType() == mapbox::vector_tile::GeomType::POLYGON;
+            const auto scale = (is_polygon) ? constants::scale_polygons : constants::scale_lines;
+            const auto cell_scale = float(constants::grid_size) / (float(constants::tile_extent) * scale);
             PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
 
-            radix::geometry::Aabb2i aabb({ constants::grid_size * 2 * constants::tile_scale, constants::grid_size * 2 * constants::tile_scale },
-                { -constants::grid_size * 2 * constants::tile_scale, -constants::grid_size * 2 * constants::tile_scale });
+            radix::geometry::Aabb2i aabb({ constants::grid_size * 2 * scale, constants::grid_size * 2 * scale },
+                { -constants::grid_size * 2 * scale, -constants::grid_size * 2 * scale });
             // calculate bounds
             std::vector<ClipperRect> bounds;
             if (is_polygon) {
@@ -369,8 +369,9 @@ size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, Vect
 
 void Preprocessor::generate_preprocess_grid()
 {
-    assert(cell_width < (1 << (constants::coordinate_bits_polygons)));
-    assert(cell_width < max_cell_width_line);
+    assert(cell_width_polygons < (1 << (constants::coordinate_bits_polygons)));
+    assert(cell_width_lines < (1 << (constants::coordinate_bits_lines)));
+    assert(cell_width_lines < max_cell_width_line);
 
     // since clipper sometimes returns shapes slightly outside rect -> we need a small margin
     constexpr auto clipper_margin = 1;
@@ -378,17 +379,22 @@ void Preprocessor::generate_preprocess_grid()
     std::vector<PreprocessCell> grid;
     for (int y = 0; y < constants::grid_size; y++) {
         for (int x = 0; x < constants::grid_size; x++) {
-            const auto rect = ClipperRect(x * cell_width - constants::aa_border,
-                y * cell_width - constants::aa_border,
-                (x + 1) * cell_width + constants::aa_border,
-                (y + 1) * cell_width + constants::aa_border);
-            // for clip lines we are using +0 since we are adding the max_cell_width
-            const auto rect_lines = ClipperRect(x * cell_width - geometry_offset_line + clipper_margin,
-                y * cell_width - geometry_offset_line + clipper_margin,
-                x * cell_width - geometry_offset_line + max_cell_width_line - clipper_margin,
-                y * cell_width - geometry_offset_line + max_cell_width_line - clipper_margin);
+            const auto rect = ClipperRect(x * cell_width_polygons - constants::aa_border,
+                y * cell_width_polygons - constants::aa_border,
+                (x + 1) * cell_width_polygons + constants::aa_border,
+                (y + 1) * cell_width_polygons + constants::aa_border);
+            const auto rect_lines = ClipperRect(x * cell_width_lines - constants::aa_border,
+                y * cell_width_lines - constants::aa_border,
+                (x + 1) * cell_width_lines + constants::aa_border,
+                (y + 1) * cell_width_lines + constants::aa_border);
 
-            grid.emplace_back(PreprocessCell { RectClip(rect), RectClipLines(rect_lines), rect, VectorLayerCell(), false });
+            // for clip lines we are using +0 since we are adding the max_cell_width
+            const auto max_rect_lines = ClipperRect(x * cell_width_lines - geometry_offset_line + clipper_margin,
+                y * cell_width_lines - geometry_offset_line + clipper_margin,
+                x * cell_width_lines - geometry_offset_line + max_cell_width_line - clipper_margin,
+                y * cell_width_lines - geometry_offset_line + max_cell_width_line - clipper_margin);
+
+            grid.emplace_back(PreprocessCell { RectClip(rect), RectClipLines(max_rect_lines), rect, rect_lines, VectorLayerCell(), false });
 
             // qDebug() << rect.left << rect.top << rect.right << rect.bottom;
         }
@@ -478,7 +484,6 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
     }
 
     m_processed_amount = 0;
-    constexpr auto scale = float(constants::grid_size) / (float(constants::tile_extent) * constants::tile_scale);
 
     for (auto it = layers.crbegin(); it != layers.crend(); ++it) {
 
@@ -502,7 +507,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                     if (m_clipper_result.empty())
                         return;
 
-                    if (fully_covers(m_clipper_result, cell.rect)) {
+                    if (fully_covers(m_clipper_result, cell.rect_polygons)) {
                         cell.is_done = true;
 
                         // we only need one triangle that covers the whole cell
@@ -519,13 +524,15 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 
                     } else {
                         // anchor clipped paths to cell origin
-                        Clipper2Lib::TranslatePathsInPlace(&m_clipper_result, -cell.rect.left, -cell.rect.top);
+                        Clipper2Lib::TranslatePathsInPlace(
+                            &m_clipper_result, -cell.rect_polygons.left - constants::aa_border, -cell.rect_polygons.top - constants::aa_border);
 
                         m_processed_amount += triangulize_earcut(m_clipper_result, &cell.cell_data, style_layer);
                     }
                 });
 
             } else {
+                constexpr auto scale = float(constants::grid_size) / (float(constants::tile_extent) * constants::scale_lines);
 
                 const auto line_width = float(m_style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision);
 
@@ -543,7 +550,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                 // Nevertheless, we artificially worsened the performance by introducing more cells where a line could be (although it is only there on
                 // specific zoom levels)
                 // This performance issue will be solved with Task #198 (mipmaps)
-                nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 2.0 * constants::tile_scale, scale);
+                nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 2.0 * constants::scale_lines, scale);
 
                 const auto& style_layer = data[i].style_layer;
                 const auto& vertices = data[i].vertices;
@@ -585,7 +592,8 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 
                     // TODO move translate before clipping and only clip with one single cell
                     // anchor clipped paths to cell origin
-                    Clipper2Lib::TranslatePathsInPlace(&m_clipper_result, -cell.rect.left, -cell.rect.top);
+                    Clipper2Lib::TranslatePathsInPlace(
+                        &m_clipper_result, -cell.rect_lines.left - constants::aa_border, -cell.rect_lines.top - constants::aa_border);
 
                     for (const auto& line : m_clipper_result) {
 

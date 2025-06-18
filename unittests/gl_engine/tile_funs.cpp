@@ -212,7 +212,8 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
     defines.push_back(QString("#define max_zoom %1").arg(nucleus::vector_layer::constants::style_zoom_range.y));
     defines.push_back(QString("#define zoom_blend_steps %1").arg(nucleus::vector_layer::constants::style_zoom_blend_steps));
     defines.push_back(QString("#define tile_extent %1").arg(nucleus::vector_layer::constants::tile_extent));
-    defines.push_back(QString("#define tile_scale %1").arg(nucleus::vector_layer::constants::tile_scale));
+    defines.push_back(QString("#define scale_polygons %1").arg(nucleus::vector_layer::constants::scale_polygons));
+    defines.push_back(QString("#define scale_lines %1").arg(nucleus::vector_layer::constants::scale_lines));
     defines.push_back(QString("#define grid_size vec2(%1,%1)").arg(nucleus::vector_layer::constants::grid_size));
 
     defines.push_back(QString("#define all_bits %1").arg(nucleus::vector_layer::constants::all_bits));

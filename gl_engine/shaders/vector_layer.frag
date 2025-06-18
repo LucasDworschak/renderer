@@ -87,7 +87,7 @@ struct Layer_Style
 
 ///////////////////////////////////////////////
 
-const highp vec2 cell_size = vec2(float(tile_extent) * float(tile_scale)) / vec2(grid_size);
+const highp vec2 cell_size = vec2(float(tile_extent)) / vec2(grid_size);
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 const highp uint bit_mask_ones = -1u;
 
@@ -114,6 +114,9 @@ highp float sd_Line_Triangle( in highp vec2 p, in highp vec2 p0, in highp vec2 p
     highp vec2 e0 = p1-p0;
     highp vec2 v0 = p-p0;
     highp vec2 pq0 = v0 - e0*clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );
+
+
+    // TODO is triangle_term * float(triangle) + line_term * float(1.0-triangle) faster than if?
 
     if(triangle)
     {
@@ -395,11 +398,10 @@ void main() {
         {
             // lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
             lowp vec3 raw_grid = vec3(1,0,0);// DEBUG
-            lowp ivec2 grid_cell = ivec2(int(grid_lookup.x), int(grid_lookup.y)); // DEBUG
+            lowp ivec2 grid_cell = ivec2(int(grid_lookup.x), int(grid_lookup.y));
             lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
 
 
-            highp vec2 cell_offset = vec2(grid_cell) * cell_size;
 
             // get the buffer index and extract the correct texture_layer.y
             lowp uint sampler_buffer_index = (texture_layer.y & ((bit_mask_ones << sampler_offset))) >> sampler_offset;
@@ -463,6 +465,8 @@ void main() {
 
                 highp float d = 0.0;
 
+                lowp float tile_scale = scale_lines * (1.0-float(geometry_data.is_polygon)) + scale_polygons * float(geometry_data.is_polygon);
+                highp vec2 cell_offset = vec2(grid_cell) * cell_size * tile_scale;
 
                 highp vec2 v0 = (vec2(geometry_data.a) + cell_offset) / vec2(tile_extent * tile_scale);
                 highp vec2 v1 = (vec2(geometry_data.b) + cell_offset) / vec2(tile_extent * tile_scale);

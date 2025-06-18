@@ -396,6 +396,78 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
     h.emplace({ 0, { 0, 0 } }, { 0, 4000 });
     const auto aabb_decorator = AabbDecorator::make(std::move(h));
 
+    SECTION("draw custom cell")
+    {
+        auto id_ski = nucleus::tile::Id { 18, { 140269, 92190 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
+        // const auto camera = create_camera_for_id(id_ski.children()[2].children()[2].children()[2]);
+        const auto camera = create_camera_for_id(id_ski.children()[0].children()[2].children()[0]);
+        // const auto camera = create_camera_for_id(id_ski);
+
+        auto load = [&id_ski](gl_engine::ShaderRegistry* shader_registry) {
+            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+            style.load();
+
+            auto layer = create_vectorlayer(shader_registry, style);
+
+            nucleus::vector_layer::Preprocessor preprocessor(std::move(style));
+            // auto tile = preprocessor.preprocess(id_ski, bytes);
+
+            const nucleus::vector_layer::ClipperPaths polygon = { {
+                { 156 * nucleus::vector_layer::constants::scale_polygons, 912 * nucleus::vector_layer::constants::scale_polygons },
+                { 68 * nucleus::vector_layer::constants::scale_polygons, 616 * nucleus::vector_layer::constants::scale_polygons },
+                { 150 * nucleus::vector_layer::constants::scale_polygons, 616 * nucleus::vector_layer::constants::scale_polygons },
+            } };
+            // const nucleus::vector_layer::ClipperPaths polygon = { {
+            //     { 72, 631 },
+            //     { 81, 662 },
+            //     { 82, 631 },
+            // } };
+            // const nucleus::vector_layer::ClipperPaths polygon = { { { 300, 300 }, { 500, 500 }, { 500, 800 } } };
+            // const nucleus::vector_layer::ClipperPaths polygon = { { { 48 + 16 + 4, 48 - 4 }, { 48 - 4, 48 - 4 }, { 48 + 8, 48 + 16 + 4 } } };
+            // const nucleus::vector_layer::ClipperPaths polygon = { { { 48 + 16, 48 }, { 48, 48 }, { 48 + 8, 48 + 16 } } };
+
+            // auto b = int16_t(nucleus::vector_layer::constants::aa_border);
+            // const nucleus::vector_layer::ClipperPaths polygon = { { { 48 + 16 - b, 48 + b }, { 48 + b, 48 + b }, { 48 + 8, 48 + 16 - b } } };
+
+            nucleus::vector_layer::VectorLayers tile_data;
+            std::vector<nucleus::vector_layer::ClipperRect> bounds;
+            radix::geometry::Aabb2i aabb({});
+            constexpr float scale = nucleus::vector_layer::constants::scale_polygons;
+            constexpr auto cell_scale = float(nucleus::vector_layer::constants::grid_size) / (float(nucleus::vector_layer::constants::tile_extent) * scale);
+
+            bounds.reserve(polygon.size());
+            for (size_t j = 0; j < polygon.size(); j++) {
+                const auto bound = Clipper2Lib::GetBounds(polygon[j]);
+
+                aabb.expand_by({ std::floor(float(bound.left) * cell_scale), std::floor(float(bound.top) * cell_scale) });
+                aabb.expand_by({ std::ceil(float(bound.right) * cell_scale), std::ceil(float(bound.bottom) * cell_scale) });
+                bounds.push_back(bound);
+            }
+
+            std::pair<uint32_t, uint32_t> style_layer = { 148u << 1, 0u };
+            // std::pair<uint32_t, uint32_t> style_layer = { 0, 0 };
+            tile_data[style_layer.second].emplace_back(polygon, bounds, aabb, style_layer, true);
+
+            preprocessor.preprocess_geometry(tile_data);
+            auto tile = preprocessor.create_gpu_tile();
+            tile.id = id_ski;
+
+            // add the current tile to deleted_tiles to ensure that we override any existing data
+            const std::vector<radix::tile::Id> deleted_tiles {}; // TODO currently only whole quads can be deleted...
+            std::vector<nucleus::tile::GpuVectorLayerTile> new_tiles;
+            new_tiles.push_back(tile);
+
+            layer->update_gpu_tiles(deleted_tiles, new_tiles);
+
+            return layer;
+        };
+
+        auto outputs = std::vector<std::pair<QString, ConfigMode>> { std::make_pair("vectortile_cell_test.png", ConfigMode::no_overlay),
+            std::make_pair("vectortile_cell_test_cells.png", ConfigMode::cells) };
+
+        draw_tile(aabb_decorator, camera, { id_ski }, load, outputs);
+    }
+
     // unittests
     SECTION("tile drawing kals")
     {
@@ -456,7 +528,6 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
 
     SECTION("tile drawing skilift")
     {
-
         auto id_ski = nucleus::tile::Id { 18, { 140269, 92190 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
         const auto camera = create_camera_for_id(id_ski.children()[2].children()[2].children()[0]);
 
@@ -473,6 +544,28 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
 
         auto outputs = std::vector<std::pair<QString, ConfigMode>> { std::make_pair("vectortile_ski.png", ConfigMode::no_overlay),
             std::make_pair("vectortile_ski_cells.png", ConfigMode::cells) };
+
+        draw_tile(aabb_decorator, camera, { id_ski }, load, outputs);
+    }
+
+    SECTION("tile drawing straight polygon")
+    {
+        auto id_ski = nucleus::tile::Id { 18, { 140269, 92190 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
+        const auto camera = create_camera_for_id(id_ski.children()[0].children()[2].children()[0]);
+
+        auto load = [&id_ski](gl_engine::ShaderRegistry* shader_registry) {
+            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+            style.load();
+
+            auto layer = create_vectorlayer(shader_registry, style);
+
+            load_custom_vectortile(layer, std::move(style), id_ski, QFile(QString("%1%2").arg(ALP_GL_TEST_DATA_DIR, "vectortile_skilift_18_140269_92190.pbf")));
+
+            return layer;
+        };
+
+        auto outputs = std::vector<std::pair<QString, ConfigMode>> { std::make_pair("vectortile_straight.png", ConfigMode::no_overlay),
+            std::make_pair("vectortile_straight_cells.png", ConfigMode::cells) };
 
         draw_tile(aabb_decorator, camera, { id_ski }, load, outputs);
     }
