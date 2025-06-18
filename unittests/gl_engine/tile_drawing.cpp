@@ -378,7 +378,8 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
 
 } // namespace
 
-TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
+// TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
+TEST_CASE("gl_engine/tile_drawing")
 {
     SECTION("refine ids")
     {

@@ -115,9 +115,6 @@ highp float sd_Line_Triangle( in highp vec2 p, in highp vec2 p0, in highp vec2 p
     highp vec2 v0 = p-p0;
     highp vec2 pq0 = v0 - e0*clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );
 
-
-    // TODO is triangle_term * float(triangle) + line_term * float(1.0-triangle) faster than if?
-
     if(triangle)
     {
         highp vec2 e1 = p2 - p1;
