@@ -487,7 +487,8 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
         // constexpr size_t expected_process_amount = 147725;
         // constexpr size_t expected_process_amount = 65171;
 
-        constexpr size_t expected_process_amount = 152781;
+        // constexpr size_t expected_process_amount = 152781;
+        constexpr size_t expected_process_amount = 153941;
 
         Style style(":/vectorlayerstyles/openstreetmap.json"); // 13
         // Style style(":/vectorlayerstyles/qwant.json"); // 9

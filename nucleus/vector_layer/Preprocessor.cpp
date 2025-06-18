@@ -379,14 +379,14 @@ void Preprocessor::generate_preprocess_grid()
     std::vector<PreprocessCell> grid;
     for (int y = 0; y < constants::grid_size; y++) {
         for (int x = 0; x < constants::grid_size; x++) {
-            const auto rect = ClipperRect(x * cell_width_polygons - constants::aa_border,
-                y * cell_width_polygons - constants::aa_border,
-                (x + 1) * cell_width_polygons + constants::aa_border,
-                (y + 1) * cell_width_polygons + constants::aa_border);
-            const auto rect_lines = ClipperRect(x * cell_width_lines - constants::aa_border,
-                y * cell_width_lines - constants::aa_border,
-                (x + 1) * cell_width_lines + constants::aa_border,
-                (y + 1) * cell_width_lines + constants::aa_border);
+            const auto rect = ClipperRect(x * cell_width_polygons - constants::aa_border * constants::scale_polygons,
+                y * cell_width_polygons - constants::aa_border * constants::scale_polygons,
+                (x + 1) * cell_width_polygons + constants::aa_border * constants::scale_polygons,
+                (y + 1) * cell_width_polygons + constants::aa_border * constants::scale_polygons);
+            const auto rect_lines = ClipperRect(x * cell_width_lines - constants::aa_border * constants::scale_lines,
+                y * cell_width_lines - constants::aa_border * constants::scale_lines,
+                (x + 1) * cell_width_lines + constants::aa_border * constants::scale_lines,
+                (y + 1) * cell_width_lines + constants::aa_border * constants::scale_lines);
 
             // for clip lines we are using +0 since we are adding the max_cell_width
             const auto max_rect_lines = ClipperRect(x * cell_width_lines - geometry_offset_line + clipper_margin,
@@ -513,19 +513,21 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                         // we only need one triangle that covers the whole cell
                         // this triangle is a bit larger to cover the whole cell even with antialiasing
 
-                        const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { -constants::aa_border, -constants::aa_border },
-                            { -constants::aa_border, max_cell_width_polygons - geometry_offset_polygons - 1 },
-                            { max_cell_width_polygons - geometry_offset_polygons - 1, -constants::aa_border },
-                            style_layer.first,
-                            true });
+                        const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data(
+                            { { -constants::aa_border * constants::scale_polygons, -constants::aa_border * constants::scale_polygons },
+                                { -constants::aa_border * constants::scale_polygons, max_cell_width_polygons - geometry_offset_polygons - 1 },
+                                { max_cell_width_polygons - geometry_offset_polygons - 1, -constants::aa_border * constants::scale_polygons },
+                                style_layer.first,
+                                true });
 
                         cell.cell_data.push_back(data);
                         m_processed_amount++;
 
                     } else {
                         // anchor clipped paths to cell origin
-                        Clipper2Lib::TranslatePathsInPlace(
-                            &m_clipper_result, -cell.rect_polygons.left - constants::aa_border, -cell.rect_polygons.top - constants::aa_border);
+                        Clipper2Lib::TranslatePathsInPlace(&m_clipper_result,
+                            -cell.rect_polygons.left - constants::aa_border * constants::scale_polygons,
+                            -cell.rect_polygons.top - constants::aa_border * constants::scale_polygons);
 
                         m_processed_amount += triangulize_earcut(m_clipper_result, &cell.cell_data, style_layer);
                     }
@@ -592,8 +594,9 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 
                     // TODO move translate before clipping and only clip with one single cell
                     // anchor clipped paths to cell origin
-                    Clipper2Lib::TranslatePathsInPlace(
-                        &m_clipper_result, -cell.rect_lines.left - constants::aa_border, -cell.rect_lines.top - constants::aa_border);
+                    Clipper2Lib::TranslatePathsInPlace(&m_clipper_result,
+                        -cell.rect_lines.left - constants::aa_border * constants::scale_lines,
+                        -cell.rect_lines.top - constants::aa_border * constants::scale_lines);
 
                     for (const auto& line : m_clipper_result) {
 
