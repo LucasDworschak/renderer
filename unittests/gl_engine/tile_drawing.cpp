@@ -278,52 +278,53 @@ void load_custom_vectortile(std::shared_ptr<gl_engine::VectorLayer> vectorlayer,
     vectorlayer->update_gpu_tiles(deleted_tiles, new_tiles);
 }
 
-void load_vectortiles(std::shared_ptr<gl_engine::VectorLayer> vectorlayer,
-    const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
-    const nucleus::camera::Definition& camera)
-{
+// void load_vectortiles(std::shared_ptr<gl_engine::VectorLayer> vectorlayer,
+//     const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
+//     const nucleus::camera::Definition& camera)
+// {
 
-    auto vector_layer_service
-        = std::make_unique<TileLoadService>("http://localhost:3000/tiles/", nucleus::tile::TileLoadService::UrlPattern::ZXY_yPointingSouth, "");
-    auto processor = nucleus::vector_layer::setup::scheduler(std::move(vector_layer_service), aabb_decorator);
-    QSignalSpy spy_stats(processor.scheduler.get(), &nucleus::vector_layer::Scheduler::stats_ready);
-    QSignalSpy spy(processor.scheduler.get(), &nucleus::vector_layer::Scheduler::gpu_tiles_updated);
+//     auto vector_layer_service
+//         = std::make_unique<TileLoadService>("http://localhost:3000/tiles/", nucleus::tile::TileLoadService::UrlPattern::ZXY_yPointingSouth, "");
+//     auto processor = nucleus::vector_layer::setup::scheduler(std::move(vector_layer_service), aabb_decorator);
+//     QSignalSpy spy_stats(processor.scheduler.get(), &nucleus::vector_layer::Scheduler::stats_ready);
+//     QSignalSpy spy(processor.scheduler.get(), &nucleus::vector_layer::Scheduler::gpu_tiles_updated);
 
-    processor.scheduler->set_enabled(true);
-    // vector_layer.scheduler->set_update_timeout(500);
-    QNetworkInformation* n = QNetworkInformation::instance();
-    processor.scheduler->set_network_reachability(n->reachability());
-    processor.scheduler->set_ram_quad_limit(1024);
-    processor.scheduler->set_name("vector");
-    processor.scheduler->read_disk_cache();
+//     // vector_layer.scheduler->set_update_timeout(500);
+//     QNetworkInformation* n = QNetworkInformation::instance();
+//     processor.scheduler->set_network_reachability(n->reachability());
+//     processor.scheduler->set_ram_quad_limit(1024);
+//     processor.scheduler->set_name("vector");
+//     processor.scheduler->read_disk_cache();
+//     processor.scheduler->set_enabled(true);
 
-    processor.scheduler->update_camera(camera);
-    processor.scheduler->send_quad_requests();
+//     processor.scheduler->update_camera(camera);
+//     processor.scheduler->send_quad_requests();
 
-    QVariantMap stats;
-    do {
-        spy_stats.wait(300000);
-        QList<QVariant> arguments = spy_stats.takeFirst();
-        stats = arguments.at(1).value<QVariantMap>();
-    } while (stats.contains("n_quads_requested") && stats["n_quads_requested"] != 0);
+//     QVariantMap stats;
+//     do {
+//         spy_stats.wait(300000);
+//         REQUIRE(spy.count() >= 1);
+//         QList<QVariant> arguments = spy_stats.takeFirst();
+//         stats = arguments.at(1).value<QVariantMap>();
+//     } while (stats.contains("n_quads_requested") && stats["n_quads_requested"] != 0);
 
-    if (spy.empty())
-        spy.wait(300000);
+//     if (spy.empty())
+//         spy.wait(300000);
 
-    REQUIRE(spy.count() >= 1);
+//     REQUIRE(spy.count() >= 1);
 
-    for (int i = 0; i < spy.count(); i++) {
-        QList<QVariant> arguments = spy.takeFirst();
-        REQUIRE(arguments.size() == 2);
-        std::vector<nucleus::tile::Id> deleted_tiles = arguments.at(0).value<std::vector<nucleus::tile::Id>>();
-        std::vector<nucleus::tile::GpuVectorLayerTile> new_tiles = arguments.at(1).value<std::vector<nucleus::tile::GpuVectorLayerTile>>();
+//     for (int i = 0; i < spy.count(); i++) {
+//         QList<QVariant> arguments = spy.takeFirst();
+//         REQUIRE(arguments.size() == 2);
+//         std::vector<nucleus::tile::Id> deleted_tiles = arguments.at(0).value<std::vector<nucleus::tile::Id>>();
+//         std::vector<nucleus::tile::GpuVectorLayerTile> new_tiles = arguments.at(1).value<std::vector<nucleus::tile::GpuVectorLayerTile>>();
 
-        vectorlayer->update_gpu_tiles(deleted_tiles, new_tiles);
-    }
+//         vectorlayer->update_gpu_tiles(deleted_tiles, new_tiles);
+//     }
 
-    processor.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
-    processor.scheduler.reset();
-}
+//     processor.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
+//     processor.scheduler.reset();
+// }
 
 template <typename LoadTileFunc>
 void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
