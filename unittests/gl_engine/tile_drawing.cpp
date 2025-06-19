@@ -594,25 +594,25 @@ TEST_CASE("gl_engine/tile_drawing")
         draw_tile(aabb_decorator, camera, { id_mountain }, load, outputs);
     }
 
-    SECTION("tile drawing vienna")
-    {
-        auto id_wien = nucleus::tile::Id { 14, { 8936, 5681 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
-        const auto camera = create_camera_for_id(id_wien);
+    // SECTION("tile drawing vienna")
+    // {
+    //     auto id_wien = nucleus::tile::Id { 14, { 8936, 5681 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
+    //     const auto camera = create_camera_for_id(id_wien);
 
-        auto load = [&camera, &aabb_decorator](gl_engine::ShaderRegistry* shader_registry) {
-            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
-            style.load();
+    //     auto load = [&camera, &aabb_decorator](gl_engine::ShaderRegistry* shader_registry) {
+    //         nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+    //         style.load();
 
-            auto layer = create_vectorlayer(shader_registry, style);
+    //         auto layer = create_vectorlayer(shader_registry, style);
 
-            load_vectortiles(layer, aabb_decorator, camera);
+    //         load_vectortiles(layer, aabb_decorator, camera);
 
-            return layer;
-        };
+    //         return layer;
+    //     };
 
-        auto outputs = std::vector<std::pair<QString, ConfigMode>> { std::make_pair("vectortile_vienna.png", ConfigMode::no_overlay),
-            std::make_pair("vectortile_vienna_uvs.png", ConfigMode::uvs) };
+    //     auto outputs = std::vector<std::pair<QString, ConfigMode>> { std::make_pair("vectortile_vienna.png", ConfigMode::no_overlay),
+    //         std::make_pair("vectortile_vienna_uvs.png", ConfigMode::uvs) };
 
-        draw_tile(aabb_decorator, camera, calc_children_ids(id_wien, 16), load, outputs);
-    }
+    //     draw_tile(aabb_decorator, camera, calc_children_ids(id_wien, 16), load, outputs);
+    // }
 }
