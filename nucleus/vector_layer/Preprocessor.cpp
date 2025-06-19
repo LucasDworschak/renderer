@@ -227,22 +227,22 @@ glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
         data.c += geometry_offset_polygons;
 
         // make sure that we do not remove bits from the coordinates
-        assert((uint32_t(data.a.x) & coordinate_bitmask) == uint32_t(data.a.x));
-        assert((uint32_t(data.a.y) & coordinate_bitmask) == uint32_t(data.a.y));
-        assert((uint32_t(data.b.x) & coordinate_bitmask) == uint32_t(data.b.x));
-        assert((uint32_t(data.b.y) & coordinate_bitmask) == uint32_t(data.b.y));
-        assert((uint32_t(data.c.x) & coordinate_bitmask) == uint32_t(data.c.x));
-        assert((uint32_t(data.c.y) & coordinate_bitmask) == uint32_t(data.c.y));
+        assert((uint(data.a.x) & coordinate_bitmask) == uint(data.a.x));
+        assert((uint(data.a.y) & coordinate_bitmask) == uint(data.a.y));
+        assert((uint(data.b.x) & coordinate_bitmask) == uint(data.b.x));
+        assert((uint(data.b.y) & coordinate_bitmask) == uint(data.b.y));
+        assert((uint(data.c.x) & coordinate_bitmask) == uint(data.c.x));
+        assert((uint(data.c.y) & coordinate_bitmask) == uint(data.c.y));
 
     } else {
         data.a += geometry_offset_line;
         data.b += geometry_offset_line;
 
         // make sure that we do not remove bits from the coordinates
-        assert((uint32_t(data.a.x) & coordinate_bitmask_lines) == uint32_t(data.a.x));
-        assert((uint32_t(data.a.y) & coordinate_bitmask_lines) == uint32_t(data.a.y));
-        assert((uint32_t(data.b.x) & coordinate_bitmask_lines) == uint32_t(data.b.x));
-        assert((uint32_t(data.b.y) & coordinate_bitmask_lines) == uint32_t(data.b.y));
+        assert((uint(data.a.x) & coordinate_bitmask_lines) == uint(data.a.x));
+        assert((uint(data.a.y) & coordinate_bitmask_lines) == uint(data.a.y));
+        assert((uint(data.b.x) & coordinate_bitmask_lines) == uint(data.b.x));
+        assert((uint(data.b.y) & coordinate_bitmask_lines) == uint(data.b.y));
     }
 
     // if (data.a.x < 0 || data.a.x > max_cell_width_polygons || data.a.y < 0 || data.a.y > max_cell_width_polygons || data.b.x < 0
@@ -252,20 +252,20 @@ glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
 
     assert(constants::style_bits + 1 <= available_style_bits); // make sure that the stylebits we need are available here
 
-    packed_data.x = uint32_t(data.a.x) << coordinate_shift1;
-    packed_data.x = packed_data.x | ((uint32_t(data.a.y) & coordinate_bitmask) << coordinate_shift2);
+    packed_data.x = uint(data.a.x) << coordinate_shift1;
+    packed_data.x = packed_data.x | ((uint(data.a.y) & coordinate_bitmask) << coordinate_shift2);
 
-    packed_data.x = packed_data.x | ((uint32_t(data.b.x) & coordinate_bitmask) << coordinate_shift3);
-    packed_data.x = packed_data.x | ((uint32_t(data.b.y) & coordinate_bitmask) << coordinate_shift4);
+    packed_data.x = packed_data.x | ((uint(data.b.x) & coordinate_bitmask) << coordinate_shift3);
+    packed_data.x = packed_data.x | ((uint(data.b.y) & coordinate_bitmask) << coordinate_shift4);
 
     if (data.is_polygon) {
-        packed_data.y = uint32_t(data.c.x) << coordinate_shift1;
-        packed_data.y = packed_data.y | ((uint32_t(data.c.y) & coordinate_bitmask) << coordinate_shift2);
+        packed_data.y = uint(data.c.x) << coordinate_shift1;
+        packed_data.y = packed_data.y | ((uint(data.c.y) & coordinate_bitmask) << coordinate_shift2);
     } else {
-        packed_data.y = ((uint32_t(data.a.x) >> constants::coordinate_bits_polygons) << coordinate_shift1_lines);
-        packed_data.y = packed_data.y | ((uint32_t(data.a.y) >> constants::coordinate_bits_polygons) << coordinate_shift2_lines);
-        packed_data.y = packed_data.y | ((uint32_t(data.b.x) >> constants::coordinate_bits_polygons) << coordinate_shift3_lines);
-        packed_data.y = packed_data.y | ((uint32_t(data.b.y) >> constants::coordinate_bits_polygons) << coordinate_shift4_lines);
+        packed_data.y = ((uint(data.a.x) >> constants::coordinate_bits_polygons) << coordinate_shift1_lines);
+        packed_data.y = packed_data.y | ((uint(data.a.y) >> constants::coordinate_bits_polygons) << coordinate_shift2_lines);
+        packed_data.y = packed_data.y | ((uint(data.b.x) >> constants::coordinate_bits_polygons) << coordinate_shift3_lines);
+        packed_data.y = packed_data.y | ((uint(data.b.y) >> constants::coordinate_bits_polygons) << coordinate_shift4_lines);
     }
 
     packed_data.y = packed_data.y | ((data.style_index << 1) | ((data.is_polygon) ? 1u : 0u));
@@ -279,16 +279,16 @@ VectorLayerData Preprocessor::unpack_data(glm::uvec2 packed_data)
 {
     VectorLayerData unpacked_data;
 
-    unpacked_data.a.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
-    unpacked_data.a.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
-    unpacked_data.b.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift3)) >> coordinate_shift3);
-    unpacked_data.b.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift4)) >> coordinate_shift4);
+    unpacked_data.a.x = int((packed_data.x & (coordinate_bitmask_shift1)) >> coordinate_shift1);
+    unpacked_data.a.y = int((packed_data.x & (coordinate_bitmask_shift2)) >> coordinate_shift2);
+    unpacked_data.b.x = int((packed_data.x & (coordinate_bitmask_shift3)) >> coordinate_shift3);
+    unpacked_data.b.y = int((packed_data.x & (coordinate_bitmask_shift4)) >> coordinate_shift4);
 
     glm::uvec2 c;
-    c.x = (packed_data.y & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1;
-    c.y = (packed_data.y & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2;
+    c.x = (packed_data.y & (coordinate_bitmask_shift1)) >> coordinate_shift1;
+    c.y = (packed_data.y & (coordinate_bitmask_shift2)) >> coordinate_shift2;
 
-    const uint32_t style_and_blend = (packed_data.y & ((1u << available_style_bits) - 1u)) >> 1;
+    const uint style_and_blend = (packed_data.y & ((1u << available_style_bits) - 1u)) >> 1;
     // NOTE: the should_blend bit is only necessary for the shader -> on cpu side we do not need to separate them
     unpacked_data.style_index = style_and_blend; // >> 1;
     // unpacked_data.should_blend = (style_and_blend & 1u) == 1u;
@@ -301,11 +301,9 @@ VectorLayerData Preprocessor::unpack_data(glm::uvec2 packed_data)
         unpacked_data.c = glm::ivec2(c) - geometry_offset_polygons;
     } else {
         // unpack most significant coordinates of the line and add them to the unpacked lines
-        unpacked_data.a.x
-            = unpacked_data.a.x | int(((c.x & (remaining_coordinate_bitmask_lines << remaining_coordinate_bits_lines)) << remaining_coordinate_bits_lines));
+        unpacked_data.a.x = unpacked_data.a.x | int(((c.x & (remaining_coordinates_bitmask_shift)) << remaining_coordinate_bits_lines));
         unpacked_data.a.y = unpacked_data.a.y | int(((c.x & remaining_coordinate_bitmask_lines) << constants::coordinate_bits_polygons));
-        unpacked_data.b.x
-            = unpacked_data.b.x | int(((c.y & (remaining_coordinate_bitmask_lines << remaining_coordinate_bits_lines)) << remaining_coordinate_bits_lines));
+        unpacked_data.b.x = unpacked_data.b.x | int(((c.y & (remaining_coordinates_bitmask_shift)) << remaining_coordinate_bits_lines));
         unpacked_data.b.y = unpacked_data.b.y | int(((c.y & remaining_coordinate_bitmask_lines) << constants::coordinate_bits_polygons));
 
         unpacked_data.a -= geometry_offset_line;

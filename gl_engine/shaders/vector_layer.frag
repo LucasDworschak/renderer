@@ -173,16 +173,23 @@ VectorLayerData vertex_sample(lowp uint sampler_index, highp uint index, highp u
 
     // return unpack_data(texelFetch(geometry_buffer_sampler[sampler_index], dict_px, 0).rg);
 
+    highp uvec2 data;
+
     switch (sampler_index) {
         case 0u:
-            return unpack_data(texelFetch(geometry_buffer_sampler_0, dict_px, 0).rg);
+            data = texelFetch(geometry_buffer_sampler_0, dict_px, 0).rg;
+            break;
         case 1u:
-            return unpack_data(texelFetch(geometry_buffer_sampler_1, dict_px, 0).rg);
+            data = texelFetch(geometry_buffer_sampler_1, dict_px, 0).rg;
+            break;
         case 2u:
-            return unpack_data(texelFetch(geometry_buffer_sampler_2, dict_px, 0).rg);
+            data = texelFetch(geometry_buffer_sampler_2, dict_px, 0).rg;
+            break;
         default:
-            return unpack_data(texelFetch(geometry_buffer_sampler_3, dict_px, 0).rg);
+            data = texelFetch(geometry_buffer_sampler_3, dict_px, 0).rg;
     }
+
+    return unpack_data(data);
 }
 
 mediump float float_zoom_interpolation()
@@ -519,6 +526,8 @@ void main() {
 
     // mix polygon color with background
     texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color), 0.5 + min(1.0, line_influence) * 0.5);
+    // texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color), 0.0 + min(1.0, line_influence) * 1.0);
+    // texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color), 1.0 + min(1.0, line_influence) * 0.0);
     // texout_albedo = pixel_color;
 
     if (conf.overlay_mode > 199u && conf.overlay_mode < 300u) {

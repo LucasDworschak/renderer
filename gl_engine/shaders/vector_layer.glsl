@@ -38,21 +38,27 @@ struct VectorLayerData{
 
 const lowp int available_style_bits = all_bits - (2 * coordinate_bits_polygons);
 
+const highp uint coordinate_bitmask = (1u << coordinate_bits_polygons) - 1u;
+const highp uint coordinate_bitmask_lines = (1u << coordinate_bits_lines) - 1u;
+const lowp int remaining_coordinate_bits_lines = coordinate_bits_lines - coordinate_bits_polygons;
+const highp uint remaining_coordinate_bitmask_lines = (1u << remaining_coordinate_bits_lines) - 1u;
+
 const lowp int coordinate_shift1 = all_bits - coordinate_bits_polygons;
 const lowp int coordinate_shift2 = all_bits - (2 * coordinate_bits_polygons);
 const lowp int coordinate_shift3 = all_bits - (3 * coordinate_bits_polygons);
 const lowp int coordinate_shift4 = all_bits - (4 * coordinate_bits_polygons);
+
+const highp uint coordinate_bitmask_shift1 = coordinate_bitmask << coordinate_shift1;
+const highp uint coordinate_bitmask_shift2 = coordinate_bitmask << coordinate_shift2;
+const highp uint coordinate_bitmask_shift3 = coordinate_bitmask << coordinate_shift3;
+const highp uint coordinate_bitmask_shift4 = coordinate_bitmask << coordinate_shift4;
+const highp uint remaining_coordinates_bitmask_shift = remaining_coordinate_bitmask_lines << remaining_coordinate_bits_lines;
 
 // for packed.y -> we need to divide coordinate_bits_polygons by 2
 const lowp int coordinate_shift1_lines = all_bits - int(0.5 * coordinate_bits_polygons);
 const lowp int coordinate_shift2_lines = all_bits - int(1.0 * coordinate_bits_polygons);
 const lowp int coordinate_shift3_lines = all_bits - int(1.5 * coordinate_bits_polygons);
 const lowp int coordinate_shift4_lines = all_bits - int(2.0 * coordinate_bits_polygons);
-
-const highp uint coordinate_bitmask = (1u << coordinate_bits_polygons) - 1u;
-const highp uint coordinate_bitmask_lines = (1u << coordinate_bits_lines) - 1u;
-const lowp int remaining_coordinate_bits_lines = coordinate_bits_lines - coordinate_bits_polygons;
-const highp uint remaining_coordinate_bitmask_lines = (1u << remaining_coordinate_bits_lines) - 1u;
 
 const highp int cell_width_polygons = int((tile_extent * scale_polygons) / grid_size);
 const highp int cell_width_lines = int((tile_extent * scale_lines) / grid_size);
@@ -105,17 +111,16 @@ highp uvec2 pack_vectorlayer_data(VectorLayerData data)
 
 VectorLayerData unpack_data(highp uvec2 packed_data)
 {
-
     VectorLayerData unpacked_data;
 
-    unpacked_data.a.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1);
-    unpacked_data.a.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2);
-    unpacked_data.b.x = int((packed_data.x & (coordinate_bitmask << coordinate_shift3)) >> coordinate_shift3);
-    unpacked_data.b.y = int((packed_data.x & (coordinate_bitmask << coordinate_shift4)) >> coordinate_shift4);
+    unpacked_data.a.x = int((packed_data.x & (coordinate_bitmask_shift1)) >> coordinate_shift1);
+    unpacked_data.a.y = int((packed_data.x & (coordinate_bitmask_shift2)) >> coordinate_shift2);
+    unpacked_data.b.x = int((packed_data.x & (coordinate_bitmask_shift3)) >> coordinate_shift3);
+    unpacked_data.b.y = int((packed_data.x & (coordinate_bitmask_shift4)) >> coordinate_shift4);
 
-    uvec2 c;
-    c.x = (packed_data.y & (coordinate_bitmask << coordinate_shift1)) >> coordinate_shift1;
-    c.y = (packed_data.y & (coordinate_bitmask << coordinate_shift2)) >> coordinate_shift2;
+    highp uvec2 c;
+    c.x = (packed_data.y & (coordinate_bitmask_shift1)) >> coordinate_shift1;
+    c.y = (packed_data.y & (coordinate_bitmask_shift2)) >> coordinate_shift2;
 
     highp uint style_and_blend = (packed_data.y & ((1u << available_style_bits) - 1u)) >> 1;
     // NOTE: the should_blend bit is only necessary for the shader -> on cpu side we do not need to separate them
@@ -130,11 +135,9 @@ VectorLayerData unpack_data(highp uvec2 packed_data)
         unpacked_data.c = ivec2(c) - geometry_offset_polygons;
     } else {
         // unpack most significant coordinates of the line and add them to the unpacked lines
-        unpacked_data.a.x
-            = unpacked_data.a.x | int(((c.x & (remaining_coordinate_bitmask_lines << remaining_coordinate_bits_lines)) << remaining_coordinate_bits_lines));
+        unpacked_data.a.x = unpacked_data.a.x | int(((c.x & (remaining_coordinates_bitmask_shift)) << remaining_coordinate_bits_lines));
         unpacked_data.a.y = unpacked_data.a.y | int(((c.x & remaining_coordinate_bitmask_lines) << coordinate_bits_polygons));
-        unpacked_data.b.x
-            = unpacked_data.b.x | int(((c.y & (remaining_coordinate_bitmask_lines << remaining_coordinate_bits_lines)) << remaining_coordinate_bits_lines));
+        unpacked_data.b.x = unpacked_data.b.x | int(((c.y & (remaining_coordinates_bitmask_shift)) << remaining_coordinate_bits_lines));
         unpacked_data.b.y = unpacked_data.b.y | int(((c.y & remaining_coordinate_bitmask_lines) << coordinate_bits_polygons));
 
         unpacked_data.a -= geometry_offset_line;

@@ -50,21 +50,27 @@ using namespace nucleus::tile;
 
 constexpr int available_style_bits = constants::all_bits - (2 * constants::coordinate_bits_polygons);
 
+constexpr uint coordinate_bitmask = (1u << constants::coordinate_bits_polygons) - 1u;
+constexpr uint coordinate_bitmask_lines = (1u << constants::coordinate_bits_lines) - 1u;
+constexpr int remaining_coordinate_bits_lines = constants::coordinate_bits_lines - constants::coordinate_bits_polygons;
+constexpr uint remaining_coordinate_bitmask_lines = (1u << remaining_coordinate_bits_lines) - 1u;
+
 constexpr int coordinate_shift1 = constants::all_bits - constants::coordinate_bits_polygons;
 constexpr int coordinate_shift2 = constants::all_bits - (2 * constants::coordinate_bits_polygons);
 constexpr int coordinate_shift3 = constants::all_bits - (3 * constants::coordinate_bits_polygons);
 constexpr int coordinate_shift4 = constants::all_bits - (4 * constants::coordinate_bits_polygons);
+
+constexpr uint coordinate_bitmask_shift1 = coordinate_bitmask << coordinate_shift1;
+constexpr uint coordinate_bitmask_shift2 = coordinate_bitmask << coordinate_shift2;
+constexpr uint coordinate_bitmask_shift3 = coordinate_bitmask << coordinate_shift3;
+constexpr uint coordinate_bitmask_shift4 = coordinate_bitmask << coordinate_shift4;
+constexpr uint remaining_coordinates_bitmask_shift = remaining_coordinate_bitmask_lines << remaining_coordinate_bits_lines;
 
 // for packed.y -> we need to divide coordinate_bits_polygons by 2
 constexpr int coordinate_shift1_lines = constants::all_bits - int(0.5 * constants::coordinate_bits_polygons);
 constexpr int coordinate_shift2_lines = constants::all_bits - int(1.0 * constants::coordinate_bits_polygons);
 constexpr int coordinate_shift3_lines = constants::all_bits - int(1.5 * constants::coordinate_bits_polygons);
 constexpr int coordinate_shift4_lines = constants::all_bits - int(2.0 * constants::coordinate_bits_polygons);
-
-constexpr uint coordinate_bitmask = (1u << constants::coordinate_bits_polygons) - 1u;
-constexpr uint coordinate_bitmask_lines = (1u << constants::coordinate_bits_lines) - 1u;
-constexpr int remaining_coordinate_bits_lines = constants::coordinate_bits_lines - constants::coordinate_bits_polygons;
-constexpr uint remaining_coordinate_bitmask_lines = (1u << remaining_coordinate_bits_lines) - 1u;
 
 constexpr int cell_width_polygons = int((constants::tile_extent * constants::scale_polygons) / constants::grid_size);
 constexpr int cell_width_lines = int((constants::tile_extent * constants::scale_lines) / constants::grid_size);
