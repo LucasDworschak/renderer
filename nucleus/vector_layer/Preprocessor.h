@@ -164,7 +164,6 @@ using VectorLayerCell = std::vector<glm::u32vec2>;
 
 struct PreprocessCell {
     RectClip clipper;
-    RectClipLines clipper_lines;
     ClipperRect rect_polygons;
     ClipperRect rect_lines;
     VectorLayerCell cell_data;

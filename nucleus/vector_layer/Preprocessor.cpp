@@ -371,9 +371,6 @@ void Preprocessor::generate_preprocess_grid()
     assert(cell_width_lines < (1 << (constants::coordinate_bits_lines)));
     assert(cell_width_lines < max_cell_width_line);
 
-    // since clipper sometimes returns shapes slightly outside rect -> we need a small margin
-    constexpr auto clipper_margin = 1;
-
     std::vector<PreprocessCell> grid;
     for (int y = 0; y < constants::grid_size; y++) {
         for (int x = 0; x < constants::grid_size; x++) {
@@ -386,13 +383,7 @@ void Preprocessor::generate_preprocess_grid()
                 (x + 1) * cell_width_lines + constants::aa_border * constants::scale_lines,
                 (y + 1) * cell_width_lines + constants::aa_border * constants::scale_lines);
 
-            // for clip lines we are using +0 since we are adding the max_cell_width
-            const auto max_rect_lines = ClipperRect(x * cell_width_lines - geometry_offset_line + clipper_margin,
-                y * cell_width_lines - geometry_offset_line + clipper_margin,
-                x * cell_width_lines - geometry_offset_line + max_cell_width_line - clipper_margin,
-                y * cell_width_lines - geometry_offset_line + max_cell_width_line - clipper_margin);
-
-            grid.emplace_back(PreprocessCell { RectClip(rect), RectClipLines(max_rect_lines), rect, rect_lines, VectorLayerCell(), false });
+            grid.emplace_back(PreprocessCell { RectClip(rect), rect, rect_lines, VectorLayerCell(), false });
 
             // qDebug() << rect.left << rect.top << rect.right << rect.bottom;
         }
@@ -571,13 +562,6 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                             { long(vertices[index.x][index.y + 1].x), long(vertices[index.x][index.y + 1].y) } });
                     }
 
-                    // ClipperPaths solution;
-
-                    cell.clipper_lines.ExecuteRepeated(shapes, &m_clipper_result);
-
-                    if (m_clipper_result.empty())
-                        continue;
-
                     // TODO this would set cells to is_done if a line fully covers it. but:
                     //  1) this does not fully work for some zoom levels -> investigate why we have some white cells in certain circumstances
                     //      -> currently I think it has something to do with the * 2.0 multiplier when selecting cells, and/or the blending between 2 zooms
@@ -592,17 +576,17 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 
                     // TODO move translate before clipping and only clip with one single cell
                     // anchor clipped paths to cell origin
-                    Clipper2Lib::TranslatePathsInPlace(&m_clipper_result,
+                    Clipper2Lib::TranslatePathsInPlace(&shapes,
                         -cell.rect_lines.left - constants::aa_border * constants::scale_lines,
                         -cell.rect_lines.top - constants::aa_border * constants::scale_lines);
 
-                    for (const auto& line : m_clipper_result) {
+                    for (const auto& line : shapes) {
 
                         const auto packed_data
                             = nucleus::vector_layer::Preprocessor::pack_line_data({ line[0].x, line[0].y }, { line[1].x, line[1].y }, style_layer.first);
                         cell.cell_data.push_back(packed_data);
                     }
-                    m_processed_amount += m_clipper_result.size();
+                    m_processed_amount += shapes.size();
                 }
             }
         }
