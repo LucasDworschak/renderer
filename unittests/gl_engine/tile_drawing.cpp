@@ -207,11 +207,13 @@ void loading(LoadFunc load_func, QSignalSpy& spy_stats, QSignalSpy& spy_tile)
     spy_stats.wait(1000);
     QVariantMap stats;
     do {
+        if (spy_stats.isEmpty())
+            spy_stats.wait(10000);
         REQUIRE(spy_stats.count() >= 1);
         QList<QVariant> arguments = spy_stats.takeLast();
         stats = arguments.at(1).value<QVariantMap>();
         spy_stats.wait(1000);
-    } while (!spy_stats.isEmpty() || !stats.contains("n_quads_requested") || stats["n_quads_requested"] != 0);
+    } while (!spy_stats.isEmpty() || (stats.contains("n_quads_requested") && stats["n_quads_requested"] != 0));
 
     spy_tile.wait(1000);
     do {
