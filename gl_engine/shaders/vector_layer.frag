@@ -91,6 +91,8 @@ const highp vec2 cell_size = vec2(float(tile_extent)) / vec2(grid_size);
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 const highp uint bit_mask_ones = -1u;
 
+const highp float full_threshold = 0.999;
+
 
 highp float calculate_falloff(highp float dist, highp float from, highp float to) {
     return clamp(1.0 - (dist - from) / (to - from), 0.0, 1.0);
@@ -264,24 +266,28 @@ void draw_layer(inout Layer_Style layer_style, inout lowp vec4 pixel_color, high
     }
 }
 
-bool check_and_draw_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, inout lowp vec4 pixel_color, highp float float_zoom_offset)
+bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, inout lowp vec4 pixel_color, highp float float_zoom_offset)
 {
     // we need to make sure that a layer with < 1 opacity does only fill the correct amount of opacity
     // we therefore fill colors per layerstyle
+
     if(layer_style.last_style == geometry_data.style_index)
-    {
-        if(layer_style.layer_alpha >= 1.0)
+    { // new geometry is on same layer as previous one
+
+        if(layer_style.layer_alpha >= full_threshold)
         {
             // we already fully filled the current layer -> go to the next layer
             return true;
         }
     }
     else
-    {
-        // we encountered a new layer
+    {// we encountered a new layer
 
-        // draw the previous style to pixel_color
-        draw_layer(layer_style, pixel_color, fract(float_zoom_offset));
+        if(layer_style.layer_alpha < full_threshold)
+        {
+            // we havent drawn this layer yet
+            draw_layer(layer_style, pixel_color, fract(float_zoom_offset));
+        }
 
         // current discrete tile z 8
         // floating tile zoom z 6.8
@@ -462,8 +468,8 @@ void main() {
                 VectorLayerData geometry_data = vertex_sample(sampler_buffer_index,i, texture_layer.y);
 
 
-                bool check_next_geometry = check_and_draw_layer(geometry_data, layer_style, pixel_color, zoom_offset);
-                if(check_next_geometry)
+                bool check_next_geometry = check_layer(geometry_data, layer_style, pixel_color, zoom_offset);
+                if(check_next_geometry) // current layer is full -> we want to move on to a geometry on a different layer
                     continue;
 
 
@@ -513,14 +519,23 @@ void main() {
                 // set layer_alpha from the current geometry
                 layer_style.layer_alpha = min(1.0, layer_style.layer_alpha + geometry_influence);
 
-                // we do not need to check any other geometry -> pixel is already fully filled
-                if(pixel_color.a >= 1.0)
+                // we do not need to check any other geometry on this layer -> layer is already fully filled
+                // -> draw the current layer to see if we can exit the whole loop in next if
+                if(layer_style.layer_alpha >= full_threshold)
+                    draw_layer(layer_style, pixel_color, fract(zoom_offset));
+
+                // current pixel is fully filled -> no need to check anything further
+                if(pixel_color.a >= full_threshold)
                     break;
+
             }
 
 
-            // mix the last layer we parsed
-            draw_layer(layer_style, pixel_color, fract(float_zoom));
+            if(layer_style.layer_alpha < full_threshold)
+            {
+                // mix the last layer we parsed
+                draw_layer(layer_style, pixel_color, fract(float_zoom));
+            }
         }
     }
 
