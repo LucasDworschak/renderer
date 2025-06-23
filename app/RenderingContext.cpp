@@ -88,9 +88,8 @@ RenderingContext::RenderingContext(QObject* parent)
 
     m->scheduler_director = std::make_unique<nucleus::tile::SchedulerDirector>();
 
-    //    m->ortho_service.reset(new TileLoadService("https://tiles.bergfex.at/styles/bergfex-osm/", TileLoadService::UrlPattern::ZXY_yPointingSouth,
-    //    ".jpeg")); m->ortho_service.reset(new TileLoadService("https://alpinemaps.cg.tuwien.ac.at/tiles/ortho/",
-    //    TileLoadService::UrlPattern::ZYX_yPointingSouth, ".jpeg"));
+    // m->ortho_service.reset(new TileLoadService("https://tiles.bergfex.at/styles/bergfex-osm/", TileLoadService::UrlPattern::ZXY_yPointingSouth, ".jpeg"));
+    // m->ortho_service.reset(new TileLoadService("https://alpinemaps.cg.tuwien.ac.at/tiles/ortho/", TileLoadService::UrlPattern::ZYX_yPointingSouth, ".jpeg"));
     // m->ortho_service.reset(new TileLoadService("https://maps%1.wien.gv.at/basemap/bmaporthofoto30cm/normal/google3857/",
     //                                           TileLoadService::UrlPattern::ZYX_yPointingSouth,
     //                                           ".jpeg",
