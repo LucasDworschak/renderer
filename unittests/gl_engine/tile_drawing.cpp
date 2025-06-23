@@ -36,6 +36,7 @@
 #include <gl_engine/helpers.h>
 #include <nucleus/camera/PositionStorage.h>
 #include <nucleus/srs.h>
+#include <nucleus/tile/conversion.h>
 #include <nucleus/tile/drawing.h>
 #include <nucleus/tile/setup.h>
 #include <nucleus/tile/utils.h>
@@ -68,7 +69,6 @@ enum DrawMode { NoOverlay, CellSize, UVs, Cells };
 struct DrawConfig {
     QString name;
     DrawMode mode;
-    bool write_image = false;
 };
 
 struct Config {
@@ -201,6 +201,29 @@ std::shared_ptr<gl_engine::UniformBuffer<gl_engine::uboSharedConfig>> bind_share
 
     return shared_config_ubo;
 }
+template <typename LoadFunc>
+void loading(LoadFunc load_func, QSignalSpy& spy_stats, QSignalSpy& spy_tile)
+{
+    spy_stats.wait(1000);
+    QVariantMap stats;
+    do {
+        REQUIRE(spy_stats.count() >= 1);
+        QList<QVariant> arguments = spy_stats.takeLast();
+        stats = arguments.at(1).value<QVariantMap>();
+        spy_stats.wait(1000);
+    } while (!spy_stats.isEmpty() || !stats.contains("n_quads_requested") || stats["n_quads_requested"] != 0);
+
+    spy_tile.wait(1000);
+    do {
+        for (int i = 0; i < spy_tile.count(); i++) {
+            QList<QVariant> arguments = spy_tile.takeFirst();
+            REQUIRE(arguments.size() == 2);
+
+            load_func(arguments);
+        }
+        spy_tile.wait(1000);
+    } while (!spy_tile.isEmpty());
+}
 
 std::shared_ptr<gl_engine::TileGeometry> load_tile_geometry(
     const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator, const nucleus::camera::Definition& camera, bool real_heights)
@@ -227,23 +250,9 @@ std::shared_ptr<gl_engine::TileGeometry> load_tile_geometry(
     geometry.scheduler->read_disk_cache();
 
     geometry.scheduler->update_camera(camera);
-
     geometry.scheduler->send_quad_requests();
 
-    QVariantMap stats;
-    do {
-        spy_stats.wait(300000);
-        QList<QVariant> arguments = spy_stats.takeFirst();
-        stats = arguments.at(1).value<QVariantMap>();
-    } while (stats.contains("n_quads_requested") && stats["n_quads_requested"] != 0);
-
-    if (spy.empty())
-        spy.wait(300000);
-
-    REQUIRE(spy.count() >= 1);
-    for (int i = 0; i < spy.count(); i++) {
-        QList<QVariant> arguments = spy.takeFirst();
-        REQUIRE(arguments.size() == 2);
+    auto load_func = [&tile_geometry, &real_heights](QList<QVariant> arguments) {
         std::vector<nucleus::tile::Id> deleted_tiles = arguments.at(0).value<std::vector<nucleus::tile::Id>>();
         std::vector<nucleus::tile::GpuGeometryTile> actual_new_tiles = arguments.at(1).value<std::vector<nucleus::tile::GpuGeometryTile>>();
 
@@ -254,12 +263,13 @@ std::shared_ptr<gl_engine::TileGeometry> load_tile_geometry(
             for (const auto& tile : actual_new_tiles) {
                 // replace tile with 0 height tiles
                 new_tiles.push_back({ tile.id, tile.bounds, std::make_shared<const nucleus::Raster<uint16_t>>(glm::uvec2(65), uint16_t(0)) });
-                // new_tiles.push_back(tile);
             }
 
             tile_geometry->update_gpu_tiles(deleted_tiles, new_tiles);
         }
-    }
+    };
+
+    loading(load_func, spy_stats, spy);
 
     geometry.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
     geometry.scheduler.reset();
@@ -317,30 +327,71 @@ void load_vectortiles(std::shared_ptr<gl_engine::VectorLayer> vectorlayer,
     processor.scheduler->update_camera(camera);
     processor.scheduler->send_quad_requests();
 
-    QVariantMap stats;
-    do {
-        spy_stats.wait(30000);
-        REQUIRE(spy_stats.count() >= 1);
-        QList<QVariant> arguments = spy_stats.takeLast();
-        stats = arguments.at(1).value<QVariantMap>();
-    } while (stats.contains("n_quads_requested") && stats["n_quads_requested"] != 0);
-
-    if (spy.empty())
-        spy.wait(300000);
-
-    REQUIRE(spy.count() >= 1);
-
-    for (int i = 0; i < spy.count(); i++) {
-        QList<QVariant> arguments = spy.takeFirst();
-        REQUIRE(arguments.size() == 2);
+    auto load_func = [&vectorlayer](QList<QVariant> arguments) {
         std::vector<nucleus::tile::Id> deleted_tiles = {};
         std::vector<nucleus::tile::GpuVectorLayerTile> new_tiles = arguments.at(1).value<std::vector<nucleus::tile::GpuVectorLayerTile>>();
 
         vectorlayer->update_gpu_tiles(deleted_tiles, new_tiles);
-    }
+    };
+
+    loading(load_func, spy_stats, spy);
 
     processor.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
     processor.scheduler.reset();
+}
+
+void compare_images(QImage render_result, QString name)
+{
+    auto file = QFile(QString("%1%2").arg(ALP_GL_TEST_DATA_DIR, name + ".png"));
+
+    file.open(QFile::ReadOnly);
+    const auto bytes = file.readAll();
+    auto comparison_image = QImage::fromData(bytes);
+
+    if (comparison_image.isNull()) {
+        qDebug() << "no comparison image found for" << name << "-> only writing out result";
+        render_result.save(name + ".png");
+
+        CHECK(false);
+        return;
+    }
+
+    // convert to same format
+    comparison_image = comparison_image.convertedTo(QImage::Format_RGBA8888);
+    render_result = render_result.convertedTo(QImage::Format_RGBA8888);
+
+    // determine if render result is equal to the comparison image
+    CHECK(comparison_image == render_result);
+
+    if (comparison_image != render_result) {
+
+        // make difference comparison_image
+        // use the comparison image as the input and output of the diff raster
+
+        // output the current reference image -> easier to compare between render and reference
+        comparison_image.save(name + "_reference.png");
+
+        auto diff_raster = nucleus::tile::conversion::to_rgba8raster(comparison_image);
+        auto render_raster = nucleus::tile::conversion::to_rgba8raster(render_result);
+
+        const auto w0 = 0;
+        const auto h0 = 0;
+        const auto w1 = diff_raster.width();
+        const auto h1 = diff_raster.height();
+        for (unsigned x = w0; x < w1; x++) {
+            for (unsigned y = h0; y < h1; y++) {
+                diff_raster.pixel({ x, y }) = abs(diff_raster.pixel({ x, y }) - render_raster.pixel({ x, y }));
+                diff_raster.pixel({ x, y }).w = 255; // ensure that we have an opaque image -> easier to see differences
+            }
+        }
+
+        auto diff_image = nucleus::tile::conversion::to_QImage(diff_raster);
+
+        // save the current render result
+        diff_image.save(name + "_diff.png");
+
+        render_result.save(name + "_render.png");
+    }
 }
 
 template <typename LoadTileFunc>
@@ -389,8 +440,7 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
         layer->draw(*tile_geometry, camera, draw_list);
         const QImage render_result = b.read_colour_attachment(4);
 
-        if (config.write_image)
-            render_result.save(config.name + ".png");
+        compare_images(render_result, config.name);
     }
 
     Framebuffer::unbind();
@@ -473,7 +523,7 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
     //         tile.id = id_ski;
 
     //         // add the current tile to deleted_tiles to ensure that we override any existing data
-    //         const std::vector<radix::tile::Id> deleted_tiles {}; // TODO currently only whole quads can be deleted...
+    //         const std::vector<radix::tile::Id> deleted_tiles {};
     //         std::vector<nucleus::tile::GpuVectorLayerTile> new_tiles;
     //         new_tiles.push_back(tile);
 
@@ -498,7 +548,6 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
             style.load();
 
             auto layer = create_vectorlayer(shader_registry, style);
-
             load_custom_vectortile(layer, std::move(style), id_ski, QFile(QString("%1%2").arg(ALP_GL_TEST_DATA_DIR, "vectortile_skilift_18_140269_92190.pbf")));
 
             return layer;
@@ -519,7 +568,6 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
             style.load();
 
             auto layer = create_vectorlayer(shader_registry, style);
-
             load_custom_vectortile(layer, std::move(style), id_ski, QFile(QString("%1%2").arg(ALP_GL_TEST_DATA_DIR, "vectortile_skilift_18_140269_92190.pbf")));
 
             return layer;
@@ -540,7 +588,6 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
             style.load();
 
             auto layer = create_vectorlayer(shader_registry, style);
-
             load_vectortiles(layer, aabb_decorator, camera);
 
             return layer;
@@ -551,30 +598,7 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
         draw_tile(aabb_decorator, camera, calc_children_ids(id_wien, 16), load, config);
     }
 
-    SECTION("tile drawing vienna camera")
-    {
-        auto id_wien = nucleus::tile::Id { 14, { 8936, 5681 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
-        const auto camera = create_camera_for_id(id_wien);
-
-        auto load = [&camera, &aabb_decorator](gl_engine::ShaderRegistry* shader_registry) {
-            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
-            style.load();
-
-            auto layer = create_vectorlayer(shader_registry, style);
-
-            load_vectortiles(layer, aabb_decorator, camera);
-
-            return layer;
-        };
-
-        auto config = Config { false, std::vector<DrawConfig> { { "vectortile_vienna_top", DrawMode::NoOverlay } } };
-
-        const auto draw_list = drawing::generate_list(camera, aabb_decorator, 19);
-
-        draw_tile(aabb_decorator, camera, draw_list, load, config);
-    }
-
-    SECTION("tile drawing vienna side")
+    SECTION("tile drawing vienna view")
     {
         auto camera = nucleus::camera::stored_positions::wien();
         camera.set_viewport_size({ 1920, 1080 });
@@ -585,13 +609,58 @@ TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
             style.load();
 
             auto layer = create_vectorlayer(shader_registry, style);
-
             load_vectortiles(layer, aabb_decorator, camera);
 
             return layer;
         };
 
-        auto config = Config { true, std::vector<DrawConfig> { { "vectortile_vienna_side", DrawMode::NoOverlay, true } } };
+        auto config = Config { true, std::vector<DrawConfig> { { "vectortile_vienna_view", DrawMode::NoOverlay } } };
+
+        const auto draw_list = drawing::generate_list(camera, aabb_decorator, 19);
+
+        draw_tile(aabb_decorator, camera, draw_list, load, config);
+    }
+
+    SECTION("tile drawing grossglockner view")
+    {
+        auto camera = nucleus::camera::stored_positions::grossglockner();
+        camera.set_viewport_size({ 1920, 1080 });
+        camera.set_field_of_view(60); // FOV 60 is the default fov used
+
+        auto load = [&camera, &aabb_decorator](gl_engine::ShaderRegistry* shader_registry) {
+            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+            style.load();
+
+            auto layer = create_vectorlayer(shader_registry, style);
+            load_vectortiles(layer, aabb_decorator, camera);
+
+            return layer;
+        };
+
+        auto config = Config { true, std::vector<DrawConfig> { { "vectortile_grossglockner_view", DrawMode::NoOverlay } } };
+
+        const auto draw_list = drawing::generate_list(camera, aabb_decorator, 19);
+
+        draw_tile(aabb_decorator, camera, draw_list, load, config);
+    }
+
+    SECTION("tile drawing weichtalhaus view")
+    {
+        auto camera = nucleus::camera::stored_positions::weichtalhaus();
+        camera.set_viewport_size({ 1920, 1080 });
+        camera.set_field_of_view(60); // FOV 60 is the default fov used
+
+        auto load = [&camera, &aabb_decorator](gl_engine::ShaderRegistry* shader_registry) {
+            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+            style.load();
+
+            auto layer = create_vectorlayer(shader_registry, style);
+            load_vectortiles(layer, aabb_decorator, camera);
+
+            return layer;
+        };
+
+        auto config = Config { true, std::vector<DrawConfig> { { "vectortile_weichtalhaus_view", DrawMode::NoOverlay } } };
 
         const auto draw_list = drawing::generate_list(camera, aabb_decorator, 19);
 
