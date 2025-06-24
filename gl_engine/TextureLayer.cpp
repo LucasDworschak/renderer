@@ -48,12 +48,10 @@ void gl_engine::TextureLayer::init(ShaderRegistry* shader_registry)
     m_instanced_array_index->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
 }
 
-void TextureLayer::draw(
-    const TileGeometry& tile_geometry, const nucleus::camera::Definition& camera, const std::vector<nucleus::tile::TileBounds>& draw_list) const
+void TextureLayer::bind_buffer(const std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const
 {
-    m_shader->bind();
     m_texture_array->bind(2);
-    m_shader->set_uniform("texture_sampler", 2);
+    shader->set_uniform("texture_sampler", 2);
 
     nucleus::Raster<uint8_t> zoom_level_raster = { glm::uvec2 { 1024, 1 } };
     nucleus::Raster<uint16_t> array_index_raster = { glm::uvec2 { 1024, 1 } };
@@ -64,12 +62,20 @@ void TextureLayer::draw(
     }
 
     m_instanced_array_index->bind(7);
-    m_shader->set_uniform("instanced_texture_array_index_sampler", 7);
+    shader->set_uniform("instanced_texture_array_index_sampler", 7);
     m_instanced_array_index->upload(array_index_raster);
 
     m_instanced_zoom->bind(8);
-    m_shader->set_uniform("instanced_texture_zoom_sampler", 8);
+    shader->set_uniform("instanced_texture_zoom_sampler", 8);
     m_instanced_zoom->upload(zoom_level_raster);
+}
+
+void TextureLayer::draw(
+    const TileGeometry& tile_geometry, const nucleus::camera::Definition& camera, const std::vector<nucleus::tile::TileBounds>& draw_list) const
+{
+    m_shader->bind();
+
+    bind_buffer(m_shader, draw_list);
 
     tile_geometry.draw(m_shader.get(), camera, draw_list);
 }

@@ -38,15 +38,22 @@ class ShaderRegistry;
 class ShaderProgram;
 class Texture;
 class TileGeometry;
+class TextureLayer;
 
 class VectorLayer : public QObject {
     Q_OBJECT
 public:
     explicit VectorLayer(QObject* parent = nullptr);
     void init(ShaderRegistry* shader_registry); // needs OpenGL context
-    void draw(const TileGeometry& tile_geometry, const nucleus::camera::Definition& camera, const std::vector<nucleus::tile::TileBounds>& draw_list) const;
+    void draw(const TileGeometry& tile_geometry,
+        const TextureLayer& texture_layer,
+        const nucleus::camera::Definition& camera,
+        const std::vector<nucleus::tile::TileBounds>& draw_list) const;
 
     unsigned tile_count() const;
+
+    void set_defines(const std::unordered_map<QString, QString>& defines);
+    static std::unordered_map<QString, QString> default_defines();
 
 public slots:
     void update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted_tiles, const std::vector<nucleus::tile::GpuVectorLayerTile>& new_tiles);
@@ -69,7 +76,6 @@ private:
 
     bool m_initialized;
 
-    // nucleus::tile::IdMap<std::shared_ptr<const std::vector<uint32_t>>> m_id_to_data_bridge;
-    // nucleus::tile::IdMap<std::shared_ptr<const std::vector<uint32_t>>> m_id_to_triangle_data;
+    std::unordered_map<QString, QString> m_defines;
 };
 } // namespace gl_engine

@@ -29,6 +29,7 @@
 #include <gl_engine/ShaderProgram.h>
 #include <gl_engine/ShaderRegistry.h>
 #include <gl_engine/Texture.h>
+#include <gl_engine/TextureLayer.h>
 #include <gl_engine/TileGeometry.h>
 #include <gl_engine/UniformBuffer.h>
 #include <gl_engine/UniformBufferObjects.h>
@@ -279,9 +280,65 @@ std::shared_ptr<gl_engine::TileGeometry> load_tile_geometry(
     return tile_geometry;
 }
 
+std::shared_ptr<gl_engine::TextureLayer> load_texture_layer(
+    gl_engine::ShaderRegistry* shader_registry, const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator, const nucleus::camera::Definition& camera)
+{
+    auto texture_layer = std::make_shared<gl_engine::TextureLayer>(512);
+    texture_layer->set_tile_limit(1024);
+    texture_layer->init(shader_registry);
+
+    auto ortho_service = std::make_unique<TileLoadService>(
+        "https://mapsneu.wien.gv.at/basemap/bmapoberflaeche/grau/google3857/", nucleus::tile::TileLoadService::UrlPattern::ZYX_yPointingSouth, ".jpeg");
+
+    auto ortho_texture = nucleus::tile::setup::texture_scheduler(std::move(ortho_service), aabb_decorator);
+
+    QSignalSpy spy_stats(ortho_texture.scheduler.get(), &nucleus::tile::TextureScheduler::stats_ready);
+    QSignalSpy spy(ortho_texture.scheduler.get(), &nucleus::tile::TextureScheduler::gpu_tiles_updated);
+
+    ortho_texture.scheduler->set_enabled(true);
+    QNetworkInformation* n = QNetworkInformation::instance();
+    ortho_texture.scheduler->set_network_reachability(n->reachability());
+    ortho_texture.scheduler->set_ram_quad_limit(1024);
+    ortho_texture.scheduler->set_name("ortho");
+    ortho_texture.scheduler->read_disk_cache();
+
+    ortho_texture.scheduler->update_camera(camera);
+    ortho_texture.scheduler->send_quad_requests();
+
+    auto load_func = [&texture_layer](QList<QVariant> arguments) {
+        std::vector<nucleus::tile::Id> deleted_tiles = arguments.at(0).value<std::vector<nucleus::tile::Id>>();
+        std::vector<GpuTextureTile> actual_new_tiles = arguments.at(1).value<std::vector<GpuTextureTile>>();
+
+        // if (real_ortho) {
+        texture_layer->update_gpu_tiles(deleted_tiles, actual_new_tiles);
+        // } else {
+        //     std::vector<GpuTextureTile> new_tiles;
+        //     for (const auto& tile : actual_new_tiles) {
+        //         // replace tile with 0 height tiles
+        //         new_tiles.push_back({ tile.id, std::make_shared<const nucleus::Raster<uint16_t>>(glm::uvec2(256), uint16_t(0)) });
+        //     }
+
+        //     texture_layer->update_gpu_tiles(deleted_tiles, new_tiles);
+        // }
+    };
+
+    loading(load_func, spy_stats, spy);
+
+    ortho_texture.scheduler->persist_tiles(); // not sure yet if it is good to persist tiles in a test/testing tool
+    ortho_texture.scheduler.reset();
+
+    return texture_layer;
+}
+
 std::shared_ptr<gl_engine::VectorLayer> create_vectorlayer(gl_engine::ShaderRegistry* shader_registry, const nucleus::vector_layer::Style& style)
 {
     auto vectorlayer = std::make_shared<gl_engine::VectorLayer>();
+
+    auto defines_map = gl_engine::VectorLayer::default_defines();
+    defines_map[QString("display_mode")] = QString::number(1);
+
+    vectorlayer->set_defines(defines_map);
+
     vectorlayer->set_tile_limit(1024);
     vectorlayer->init(shader_registry);
     vectorlayer->update_style(style.styles());
@@ -413,6 +470,7 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
     // loading tiles and upload to gpu
     auto shader_registry = gl_engine::ShaderRegistry();
     auto tile_geometry = load_tile_geometry(aabb_decorator, camera, config.real_heights);
+    auto texture_layer = load_texture_layer(&shader_registry, aabb_decorator, camera);
 
     auto layer = load(&shader_registry);
 
@@ -420,12 +478,12 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
     // Framebuffer b(Framebuffer::DepthFormat::Float32, { Framebuffer::ColourFormat::RGB8 }, { 1024, 1024 });
     Framebuffer b(Framebuffer::DepthFormat::Float32,
         std::vector {
-            Framebuffer::ColourFormat::RGBA8, // Albedo
-            Framebuffer::ColourFormat::RGBA32F, // Position WCS and distance (distance is optional, but i use it directly for a little speed improvement)
-            Framebuffer::ColourFormat::RG16UI, // Octahedron Normals
-            Framebuffer::ColourFormat::RGBA8, // Discretized Encoded Depth for readback IMPORTANT: IF YOU MOVE THIS YOU HAVE TO ADAPT THE GET DEPTH FUNCTION
+            Framebuffer::ColourFormat::RGB8, // Albedo
+            // Framebuffer::ColourFormat::RGBA32F, // Position WCS and distance (distance is optional, but i use it directly for a little speed improvement)
+            // Framebuffer::ColourFormat::RG16UI, // Octahedron Normals
+            // Framebuffer::ColourFormat::RGBA8, // Discretized Encoded Depth for readback IMPORTANT: IF YOU MOVE THIS YOU HAVE TO ADAPT THE GET DEPTH FUNCTION
             // TextureDefinition { Framebuffer::ColourFormat::R32UI }, // VertexID
-            Framebuffer::ColourFormat::RGB8, // vector map colour
+            // Framebuffer::ColourFormat::RGB8, // vector map colour
             // Framebuffer::ColourFormat::RGBA8, // vector map colour
         },
         { camera.viewport_size() });
@@ -439,8 +497,8 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
     for (const auto& config : config.draw_config) {
         auto shared_conf = bind_shared_config(&shader_registry, config.mode);
         clear_buffer();
-        layer->draw(*tile_geometry, camera, draw_list);
-        const QImage render_result = b.read_colour_attachment(4);
+        layer->draw(*tile_geometry, *texture_layer, camera, draw_list);
+        const QImage render_result = b.read_colour_attachment(0);
 
         compare_images(render_result, config.name);
     }

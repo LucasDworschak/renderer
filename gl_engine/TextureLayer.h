@@ -48,6 +48,8 @@ public:
 
     unsigned int tile_count() const;
 
+    void bind_buffer(const std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const;
+
 public slots:
     void update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted_tiles, const std::vector<nucleus::tile::GpuTextureTile>& new_tiles);
 

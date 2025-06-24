@@ -26,6 +26,7 @@
 #include <gl_engine/Framebuffer.h>
 #include <gl_engine/ShaderProgram.h>
 #include <gl_engine/Texture.h>
+#include <gl_engine/VectorLayer.h>
 #include <gl_engine/helpers.h>
 #include <nucleus/camera/PositionStorage.h>
 #include <nucleus/srs.h>
@@ -206,23 +207,12 @@ void packing_cpp_same_as_glsl(const Id& id)
 
 void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLayerData& data)
 {
+    auto defines_map = gl_engine::VectorLayer::default_defines();
+    defines_map[QString("display_mode")] = QString::number(1);
     std::vector<QString> defines;
-    defines.push_back(QString("#define style_bits %1").arg(nucleus::vector_layer::constants::style_bits));
-    defines.push_back(QString("#define style_precision %1").arg(nucleus::vector_layer::constants::style_precision));
-    defines.push_back(QString("#define max_zoom %1").arg(nucleus::vector_layer::constants::style_zoom_range.y));
-    defines.push_back(QString("#define zoom_blend_steps %1").arg(nucleus::vector_layer::constants::style_zoom_blend_steps));
-    defines.push_back(QString("#define tile_extent %1").arg(nucleus::vector_layer::constants::tile_extent));
-    defines.push_back(QString("#define scale_polygons %1").arg(nucleus::vector_layer::constants::scale_polygons));
-    defines.push_back(QString("#define scale_lines %1").arg(nucleus::vector_layer::constants::scale_lines));
-    defines.push_back(QString("#define grid_size vec2(%1,%1)").arg(nucleus::vector_layer::constants::grid_size));
-
-    defines.push_back(QString("#define all_bits %1").arg(nucleus::vector_layer::constants::all_bits));
-    defines.push_back(QString("#define coordinate_bits_polygons %1").arg(nucleus::vector_layer::constants::coordinate_bits_polygons));
-    defines.push_back(QString("#define coordinate_bits_lines %1").arg(nucleus::vector_layer::constants::coordinate_bits_lines));
-    defines.push_back(QString("#define aa_border %1").arg(nucleus::vector_layer::constants::aa_border));
-
-    defines.push_back(QString("#define sampler_offset %1")
-            .arg(nucleus::vector_layer::constants::array_helper_all_bits - nucleus::vector_layer::constants::array_helper_buffer_info_bits));
+    for (const auto& define : defines_map) {
+        defines.push_back("#define " + define.first + " " + define.second);
+    }
 
     {
         Framebuffer b(Framebuffer::DepthFormat::None, { Framebuffer::ColourFormat::RGBA8 }, { 1, 1 });

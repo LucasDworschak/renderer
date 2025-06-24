@@ -29,9 +29,13 @@
 
 #line 20031
 
-uniform highp usampler2DArray acceleration_grid_sampler;
+uniform lowp sampler2DArray texture_sampler;
 uniform highp usampler2D instanced_texture_array_index_sampler;
 uniform highp usampler2D instanced_texture_zoom_sampler;
+
+uniform highp usampler2DArray acceleration_grid_sampler;
+uniform highp usampler2D instanced_texture_array_index_sampler_vector;
+uniform highp usampler2D instanced_texture_zoom_sampler_vector;
 
 uniform highp usampler2D styles_sampler;
 
@@ -40,11 +44,10 @@ uniform highp usampler2DArray geometry_buffer_sampler_1;
 uniform highp usampler2DArray geometry_buffer_sampler_2;
 uniform highp usampler2DArray geometry_buffer_sampler_3;
 
-layout (location = 0) out lowp vec3 texout_background;
+layout (location = 0) out lowp vec3 texout_albedo;
 layout (location = 1) out highp vec4 texout_position;
 layout (location = 2) out highp uvec2 texout_normal;
 layout (location = 3) out lowp vec4 texout_depth;
-layout (location = 4) out lowp vec4 texout_albedo;
 
 flat in highp uvec3 var_tile_id;
 in highp vec2 var_uv;
@@ -386,8 +389,16 @@ void main() {
     // osm-bright
     // lowp vec3 background_color = vec3(248.0f/255.0f, 244.0f/255.0f, 240.0f/255.0f);
 
-    decrease_zoom_level_until(tile_id, uv, texelFetch(instanced_texture_zoom_sampler, ivec2(instance_id, 0), 0).x);
-    highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler, ivec2(instance_id, 0), 0).xy;
+    // ORTHO color -> note we wrap tile_id in uvec3 and use ortho_uv, to not change those variables for the vector color
+    highp vec2 ortho_uv = uv;
+    decrease_zoom_level_until(uvec3(tile_id), ortho_uv, texelFetch(instanced_texture_zoom_sampler, ivec2(instance_id, 0), 0).x);
+    highp float texture_layer_f = float(texelFetch(instanced_texture_array_index_sampler, ivec2(instance_id, 0), 0).x);
+    lowp vec3 ortho_color = texture(texture_sampler, vec3(ortho_uv, texture_layer_f)).rgb;
+    ortho_color = mix(ortho_color, conf.material_color.rgb, conf.material_color.a);
+
+    // VECTOR color
+    decrease_zoom_level_until(tile_id, uv, texelFetch(instanced_texture_zoom_sampler_vector, ivec2(instance_id, 0), 0).x);
+    highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, 0), 0).xy;
 
 
     highp float float_zoom = float_zoom_interpolation();
@@ -540,10 +551,21 @@ void main() {
     }
 
     // mix polygon color with background
-    texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color), 0.5 + min(1.0, line_influence) * 0.5);
-    // texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color), 0.0 + min(1.0, line_influence) * 1.0);
-    // texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color), 1.0 + min(1.0, line_influence) * 0.0);
-    // texout_albedo = pixel_color;
+    float vector_surface_mix = 0.0;
+    if(display_mode == 0)
+    {
+        // mixed surface/vectortile
+        vector_surface_mix = 0.5 + min(1.0, line_influence) * 0.5;
+    }
+    else if(display_mode == 1)
+    {
+        // only vector tile
+        vector_surface_mix = 1.0;
+    }
+    // else // -> only surface/ortho
+
+    highp vec3 vector_color = vec3(pixel_color.rgb + ((1.0-pixel_color.a)*background_color));
+    texout_albedo = mix(ortho_color, vector_color, vector_surface_mix);
 
     if (conf.overlay_mode > 199u && conf.overlay_mode < 300u) {
         lowp vec3 zoom_debug_color =  color_from_id_hash(uint(float_zoom));

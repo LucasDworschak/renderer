@@ -22,6 +22,7 @@
 #include "ShaderProgram.h"
 #include "ShaderRegistry.h"
 #include "Texture.h"
+#include "TextureLayer.h"
 #include "TileGeometry.h"
 #include <QOpenGLExtraFunctions>
 
@@ -37,26 +38,42 @@ VectorLayer::VectorLayer(QObject* parent)
     , m_initialized(false)
 
 {
+
+    m_defines = default_defines();
 }
+
+std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
+{
+    std::unordered_map<QString, QString> defines;
+
+    defines[QString("style_bits")] = QString::number(constants::style_bits);
+    defines[QString("style_precision")] = QString::number(constants::style_precision);
+    defines[QString("max_zoom")] = QString::number(constants::style_zoom_range.y);
+    defines[QString("zoom_blend_steps")] = QString::number(constants::style_zoom_blend_steps);
+    defines[QString("tile_extent")] = QString::number(constants::tile_extent);
+    defines[QString("scale_polygons")] = QString::number(constants::scale_polygons);
+    defines[QString("scale_lines")] = QString::number(constants::scale_lines);
+    defines[QString("grid_size")] = QString("vec2(%1,%1)").arg(constants::grid_size);
+
+    defines[QString("all_bits")] = QString::number(constants::all_bits);
+    defines[QString("coordinate_bits_polygons")] = QString::number(constants::coordinate_bits_polygons);
+    defines[QString("coordinate_bits_lines")] = QString::number(constants::coordinate_bits_lines);
+    defines[QString("aa_border")] = QString::number(constants::aa_border);
+    defines[QString("display_mode")] = QString::number(0);
+
+    defines[QString("sampler_offset")] = QString::number(constants::array_helper_all_bits - constants::array_helper_buffer_info_bits);
+
+    return defines;
+}
+
+void gl_engine::VectorLayer::set_defines(const std::unordered_map<QString, QString>& defines) { m_defines = defines; }
 
 void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
 {
     std::vector<QString> defines;
-    defines.push_back(QString("#define style_bits %1").arg(constants::style_bits));
-    defines.push_back(QString("#define style_precision %1").arg(constants::style_precision));
-    defines.push_back(QString("#define max_zoom %1").arg(constants::style_zoom_range.y));
-    defines.push_back(QString("#define zoom_blend_steps %1").arg(constants::style_zoom_blend_steps));
-    defines.push_back(QString("#define tile_extent %1").arg(constants::tile_extent));
-    defines.push_back(QString("#define scale_polygons %1").arg(constants::scale_polygons));
-    defines.push_back(QString("#define scale_lines %1").arg(constants::scale_lines));
-    defines.push_back(QString("#define grid_size vec2(%1,%1)").arg(constants::grid_size));
-
-    defines.push_back(QString("#define all_bits %1").arg(constants::all_bits));
-    defines.push_back(QString("#define coordinate_bits_polygons %1").arg(constants::coordinate_bits_polygons));
-    defines.push_back(QString("#define coordinate_bits_lines %1").arg(constants::coordinate_bits_lines));
-    defines.push_back(QString("#define aa_border %1").arg(constants::aa_border));
-
-    defines.push_back(QString("#define sampler_offset %1").arg(constants::array_helper_all_bits - constants::array_helper_buffer_info_bits));
+    for (const auto& define : m_defines) {
+        defines.push_back("#define " + define.first + " " + define.second);
+    }
 
     m_shader = std::make_shared<ShaderProgram>("tile.vert", "vector_layer.frag", ShaderCodeSource::FILE, defines);
     shader_registry->add_shader(m_shader);
@@ -92,12 +109,17 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
 
 unsigned VectorLayer::tile_count() const { return m_gpu_multi_array_helper.n_occupied(); }
 
-void VectorLayer::draw(
-    const TileGeometry& tile_geometry, const nucleus::camera::Definition& camera, const std::vector<nucleus::tile::TileBounds>& draw_list) const
+void VectorLayer::draw(const TileGeometry& tile_geometry,
+    const TextureLayer& texture_layer,
+    const nucleus::camera::Definition& camera,
+    const std::vector<nucleus::tile::TileBounds>& draw_list) const
 {
     m_shader->bind();
-    m_shader->set_uniform("acceleration_grid_sampler", 2);
-    m_acceleration_grid_texture->bind(2);
+
+    texture_layer.bind_buffer(m_shader, draw_list);
+
+    m_shader->set_uniform("acceleration_grid_sampler", 9);
+    m_acceleration_grid_texture->bind(9);
 
     nucleus::Raster<uint8_t> zoom_level_raster = { glm::uvec2 { 1024, 1 } };
     nucleus::Raster<glm::u16vec2> array_index_raster = { glm::uvec2 { 1024, 1 } };
@@ -107,20 +129,20 @@ void VectorLayer::draw(
         array_index_raster.pixel({ i, 0 }) = { layer.index1, layer.index2 };
     }
 
-    m_instanced_array_index->bind(5);
-    m_shader->set_uniform("instanced_texture_array_index_sampler", 5);
+    m_instanced_array_index->bind(10);
+    m_shader->set_uniform("instanced_texture_array_index_sampler_vector", 10);
     m_instanced_array_index->upload(array_index_raster);
 
-    m_instanced_zoom->bind(6);
-    m_shader->set_uniform("instanced_texture_zoom_sampler", 6);
+    m_instanced_zoom->bind(11);
+    m_shader->set_uniform("instanced_texture_zoom_sampler_vector", 11);
     m_instanced_zoom->upload(zoom_level_raster);
 
-    m_shader->set_uniform("styles_sampler", 7);
-    m_styles_texture->bind(7);
+    m_shader->set_uniform("styles_sampler", 12);
+    m_styles_texture->bind(12);
 
     // upload all geometry buffers
     // binds the buffers to "...buffer_sampler_[0-max]"
-    constexpr uint8_t triangle_vertex_buffer_start = 8;
+    constexpr uint8_t triangle_vertex_buffer_start = 13;
     for (uint8_t i = 0; i < constants::array_layer_tile_amount.size(); i++) {
         m_shader->set_uniform("geometry_buffer_sampler_" + std::to_string(i), triangle_vertex_buffer_start + i);
         m_geometry_buffer_texture[i]->bind(triangle_vertex_buffer_start + i);
