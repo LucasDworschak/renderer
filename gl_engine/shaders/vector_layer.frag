@@ -331,6 +331,19 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
 
 }
 
+void decrease_zoom_level_until2(inout highp uvec3 id, inout highp vec2 uv, in lowp uint zoom_level) {
+    if(id.z <= zoom_level)
+        return;
+    highp uint z_delta = id.z - zoom_level;
+    highp uint border_mask = (1u << z_delta) - 1u;
+    highp float x_border = float(id.x & border_mask) / float(1u << z_delta);
+    highp float y_border = float((id.y ^ border_mask) & border_mask) / float(1u << z_delta);
+    id.z = id.z - z_delta;
+    id.x = id.x >> z_delta;
+    id.y = id.y >> z_delta;
+    uv = uv / float(1u << z_delta) + vec2(x_border, y_border);
+}
+
 
 highp float calculate_aa_half_radius(highp vec2 uv)
 {
@@ -345,8 +358,6 @@ highp float calculate_aa_half_radius(highp vec2 uv)
   // return 0.0;
   return sqrt(abs(determinant(jacobian))) / 2.0;
 }
-
-
 
 void main() {
 #if CURTAIN_DEBUG_MODE == 2
@@ -398,11 +409,18 @@ void main() {
 
     // VECTOR color
     decrease_zoom_level_until(tile_id, uv, texelFetch(instanced_texture_zoom_sampler_vector, ivec2(instance_id, 0), 0).x);
-    highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, 0), 0).xy;
 
+    // decrease_zoom_level_until(tile_id, uv, uint(float_zoom));
+
+    lowp uint zoom_test = 1u;
+    decrease_zoom_level_until2(tile_id, uv, tile_id.z - zoom_test);
+
+    highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, zoom_test), 0).xy;
 
     highp float float_zoom = float_zoom_interpolation();
+    // float_zoom = tile_id.z;     // DEBUG
     highp float zoom_offset = float_zoom-float(tile_id.z);
+
 
     highp float aa_half_radius = calculate_aa_half_radius(uv);
 
