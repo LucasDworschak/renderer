@@ -412,7 +412,7 @@ void main() {
     {
         // acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
         highp vec2 grid_lookup = grid_size*uv;
-        offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(int(grid_lookup.x), int(grid_lookup.y), texture_layer.x & layer_mask),0).r);
+        offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(int(grid_lookup.x) + int(grid_lookup.y)*grid_size.x, 0,  texture_layer.x & layer_mask),0).r);
 
         // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
         if(offset_size.y != uint(0)) // only if we have data here

@@ -159,7 +159,10 @@ struct GeometryData {
     bool is_polygon;
 };
 
+// VectorLayers needs to be an ordered map since we want to go over each layer in order
+// alternatives array with predetermined size or linked list
 using VectorLayers = std::map<uint32_t, std::vector<GeometryData>>;
+using MipMappedVectorLayers = std::array<VectorLayers, constants::mipmap_levels>;
 using VectorLayerCell = std::vector<glm::u32vec2>;
 
 struct PreprocessCell {
@@ -176,8 +179,8 @@ public:
 
     GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data);
 
-    VectorLayers parse_tile(tile::Id id, const QByteArray& vector_tile_data);
-    void preprocess_geometry(const VectorLayers& layers);
+    MipMappedVectorLayers parse_tile(tile::Id id, const QByteArray& vector_tile_data);
+    void preprocess_geometry(const MipMappedVectorLayers& layers);
     GpuVectorLayerTile create_gpu_tile();
 
     static glm::u32vec2 pack_triangle_data(VectorLayerData data);
@@ -205,7 +208,7 @@ private:
     const Style m_style;
     const std::vector<glm::u32vec4> m_style_buffer;
 
-    nucleus::Raster<PreprocessCell> m_preprocess_grid;
+    std::array<nucleus::Raster<PreprocessCell>, constants::mipmap_levels> m_preprocess_grids;
 
     size_t m_processed_amount;
 

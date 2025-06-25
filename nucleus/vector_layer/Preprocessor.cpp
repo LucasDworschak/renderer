@@ -77,7 +77,7 @@ GpuVectorLayerTile Preprocessor::create_default_gpu_tile()
 {
     GpuVectorLayerTile default_tile;
     default_tile.buffer_info = 0;
-    default_tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(glm::uvec2(constants::grid_size), 0));
+    default_tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>({ constants::mipmap_size, 1 }, 0));
     default_tile.geometry_buffer
         = std::make_shared<const nucleus::Raster<glm::u32vec2>>(nucleus::Raster<glm::u32vec2>(glm::uvec2(constants::data_size[0]), glm::u32vec2(-1u)));
 
@@ -90,12 +90,6 @@ GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vecto
     if (vector_tile_data.isEmpty())
         return {};
     // qDebug() << " z: " << id.zoom_level << "coords: " << id.coords.x << ", " << id.coords.y << (id.scheme == Scheme::Tms);
-
-    // DEBUG polygons
-    // const std::vector<std::vector<glm::vec2>> triangle_points = { { glm::vec2(10.5 / 64.0 * constants::grid_size, 30.5 / 64.0 * constants::grid_size),
-    //     glm::vec2(30.5 / 64.0 * constants::grid_size, 10.5 / 64.0 * constants::grid_size),
-    //     glm::vec2(50.5 / 64.0 * constants::grid_size, 50.5 / 64.0 * constants::grid_size) } };
-    // const std::vector<unsigned int> style_indices = { 1 };
 
     auto tile_data = parse_tile(id, vector_tile_data);
 
@@ -151,7 +145,7 @@ std::vector<std::pair<uint32_t, uint32_t>> Preprocessor::simplify_styles(
     return out_styles;
 }
 
-VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile_data)
+MipMappedVectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile_data)
 {
     const auto d = vector_tile_data.toStdString();
     const mapbox::vector_tile::buffer tile(d);
@@ -159,8 +153,7 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
     // bool first_layer = true;
     // uint32_t extent;
 
-
-    VectorLayers data;
+    MipMappedVectorLayers data;
 
     std::array<int, constants::max_style_expression_keys> temp_values;
 
@@ -183,8 +176,11 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
             if (style_and_layer_indices.size() == 0) // no styles found -> we do not visualize it
                 continue;
 
+            const auto mipmap_level = 0; // TODO debug only -> remove
+            const auto mipmap_scale = 1.0 / pow(2.0, mipmap_level);
+
             const auto is_polygon = feature.getType() == mapbox::vector_tile::GeomType::POLYGON;
-            const auto scale = (is_polygon) ? constants::scale_polygons : constants::scale_lines;
+            const auto scale = ((is_polygon) ? constants::scale_polygons : constants::scale_lines) * mipmap_scale;
             const auto cell_scale = float(constants::grid_size) / (float(constants::tile_extent) * scale);
             PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
 
@@ -207,7 +203,7 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
             }
 
             for (const auto& style_layer : style_and_layer_indices) {
-                data[style_layer.second].emplace_back(ClipperPaths(geom.begin(), geom.end()), bounds, aabb, style_layer, is_polygon);
+                data[mipmap_level][style_layer.second].emplace_back(ClipperPaths(geom.begin(), geom.end()), bounds, aabb, style_layer, is_polygon);
             }
         }
     }
@@ -371,25 +367,27 @@ void Preprocessor::generate_preprocess_grid()
     assert(cell_width_lines < (1 << (constants::coordinate_bits_lines)));
     assert(cell_width_lines < max_cell_width_line);
 
-    std::vector<PreprocessCell> grid;
-    for (int y = 0; y < constants::grid_size; y++) {
-        for (int x = 0; x < constants::grid_size; x++) {
-            const auto rect = ClipperRect(x * cell_width_polygons - constants::aa_border * constants::scale_polygons,
-                y * cell_width_polygons - constants::aa_border * constants::scale_polygons,
-                (x + 1) * cell_width_polygons + constants::aa_border * constants::scale_polygons,
-                (y + 1) * cell_width_polygons + constants::aa_border * constants::scale_polygons);
-            const auto rect_lines = ClipperRect(x * cell_width_lines - constants::aa_border * constants::scale_lines,
-                y * cell_width_lines - constants::aa_border * constants::scale_lines,
-                (x + 1) * cell_width_lines + constants::aa_border * constants::scale_lines,
-                (y + 1) * cell_width_lines + constants::aa_border * constants::scale_lines);
+    for (int mipmap_level = 0; mipmap_level < constants::mipmap_levels; mipmap_level++) {
+        std::vector<PreprocessCell> grid;
+        const auto grid_size = constants::grid_size / (pow(2, mipmap_level));
+        for (int y = 0; y < grid_size; y++) {
+            for (int x = 0; x < grid_size; x++) {
+                const auto rect = ClipperRect(x * cell_width_polygons - constants::aa_border * constants::scale_polygons,
+                    y * cell_width_polygons - constants::aa_border * constants::scale_polygons,
+                    (x + 1) * cell_width_polygons + constants::aa_border * constants::scale_polygons,
+                    (y + 1) * cell_width_polygons + constants::aa_border * constants::scale_polygons);
+                const auto rect_lines = ClipperRect(x * cell_width_lines - constants::aa_border * constants::scale_lines,
+                    y * cell_width_lines - constants::aa_border * constants::scale_lines,
+                    (x + 1) * cell_width_lines + constants::aa_border * constants::scale_lines,
+                    (y + 1) * cell_width_lines + constants::aa_border * constants::scale_lines);
 
-            grid.emplace_back(PreprocessCell { RectClip(rect), rect, rect_lines, VectorLayerCell(), false });
+                grid.emplace_back(PreprocessCell { RectClip(rect), rect, rect_lines, VectorLayerCell(), false });
 
-            // qDebug() << rect.left << rect.top << rect.right << rect.bottom;
+                // qDebug() << rect.left << rect.top << rect.right << rect.bottom;
+            }
         }
+        m_preprocess_grids[mipmap_level] = nucleus::Raster<PreprocessCell>(grid_size, std::move(grid));
     }
-
-    m_preprocess_grid = nucleus::Raster<PreprocessCell>(constants::grid_size, std::move(grid));
 }
 
 bool Preprocessor::fully_covers(const ClipperPaths& solution, const ClipperRect& rect)
@@ -458,7 +456,7 @@ size_t Preprocessor::line_fully_covers(const ClipperPaths& solution, float line_
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-void Preprocessor::preprocess_geometry(const VectorLayers& layers)
+void Preprocessor::preprocess_geometry(const MipMappedVectorLayers& layers)
 {
     // TODOs
     // - accelleration grid vector<map> to array<map> since size is given from start
@@ -466,132 +464,138 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
     // beforehand
 
     // reset grid
-    for (auto& cell : m_preprocess_grid) {
-        cell.is_done = false;
+    for (int mipmap_level = 0; mipmap_level < constants::mipmap_levels; mipmap_level++) {
+        for (auto& cell : m_preprocess_grids[mipmap_level]) {
+            cell.is_done = false;
 
-        cell.cell_data.clear();
+            cell.cell_data.clear();
+        }
     }
 
     m_processed_amount = 0;
 
-    for (auto it = layers.crbegin(); it != layers.crend(); ++it) {
+    for (int mipmap_level = 0; mipmap_level < constants::mipmap_levels; mipmap_level++) {
+        for (auto it = layers[mipmap_level].crbegin(); it != layers[mipmap_level].crend(); ++it) {
 
-        auto& data = it->second;
+            auto& data = it->second;
 
-        for (size_t i = 0; i < data.size(); ++i) {
-            if (data[i].is_polygon) {
+            for (size_t i = 0; i < data.size(); ++i) {
+                if (data[i].is_polygon) {
 
-                const auto& style_layer = data[i].style_layer;
-                const auto& vertices = data[i].vertices;
-                const auto& bounds = data[i].bounds;
+                    const auto& style_layer = data[i].style_layer;
+                    const auto& vertices = data[i].vertices;
+                    const auto& bounds = data[i].bounds;
 
-                m_preprocess_grid.visit(data[i].aabb, [this, &vertices, &bounds, &style_layer](glm::uvec2, PreprocessCell& cell) {
-                    if (cell.is_done) {
-                        // qDebug() << "cell_done";
-                        return;
-                    }
+                    m_preprocess_grids[mipmap_level].visit(data[i].aabb, [this, &vertices, &bounds, &style_layer](glm::uvec2, PreprocessCell& cell) {
+                        if (cell.is_done) {
+                            // qDebug() << "cell_done";
+                            return;
+                        }
 
-                    cell.clipper.ExecuteRepeated(vertices, bounds, &m_clipper_result);
+                        cell.clipper.ExecuteRepeated(vertices, bounds, &m_clipper_result);
 
-                    if (m_clipper_result.empty())
-                        return;
+                        if (m_clipper_result.empty())
+                            return;
 
-                    if (fully_covers(m_clipper_result, cell.rect_polygons)) {
-                        cell.is_done = true;
+                        if (fully_covers(m_clipper_result, cell.rect_polygons)) {
+                            cell.is_done = true;
 
-                        // we only need one triangle that covers the whole cell
-                        // this triangle is a bit larger to cover the whole cell even with antialiasing
+                            // we only need one triangle that covers the whole cell
+                            // this triangle is a bit larger to cover the whole cell even with antialiasing
 
-                        const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data(
-                            { { -constants::aa_border * constants::scale_polygons, -constants::aa_border * constants::scale_polygons },
-                                { -constants::aa_border * constants::scale_polygons, max_cell_width_polygons - geometry_offset_polygons - 1 },
-                                { max_cell_width_polygons - geometry_offset_polygons - 1, -constants::aa_border * constants::scale_polygons },
-                                style_layer.first,
-                                true });
+                            const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data(
+                                { { -constants::aa_border * constants::scale_polygons, -constants::aa_border * constants::scale_polygons },
+                                    { -constants::aa_border * constants::scale_polygons, max_cell_width_polygons - geometry_offset_polygons - 1 },
+                                    { max_cell_width_polygons - geometry_offset_polygons - 1, -constants::aa_border * constants::scale_polygons },
+                                    style_layer.first,
+                                    true });
 
-                        cell.cell_data.push_back(data);
-                        m_processed_amount++;
+                            cell.cell_data.push_back(data);
+                            m_processed_amount++;
 
-                    } else {
+                        } else {
+                            // anchor clipped paths to cell origin
+                            Clipper2Lib::TranslatePathsInPlace(&m_clipper_result,
+                                -cell.rect_polygons.left - constants::aa_border * constants::scale_polygons,
+                                -cell.rect_polygons.top - constants::aa_border * constants::scale_polygons);
+
+                            m_processed_amount += triangulize_earcut(m_clipper_result, &cell.cell_data, style_layer);
+                        }
+                    });
+
+                } else {
+                    constexpr auto scale = float(constants::grid_size) / (float(constants::tile_extent) * constants::scale_lines);
+                    const auto mipmap_scale = 1.0 / pow(2.0, mipmap_level);
+
+                    const auto line_width = float(m_style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision);
+
+                    std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
+
+                    const auto cell_writer = [&cell_list](glm::vec2 pos, const glm::uvec2& data_index) {
+                        // if in grid_size bounds and not already present -> than add index to vector
+                        if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(constants::grid_size), pos))) {
+                            cell_list[glm::uvec2(pos)].insert(data_index);
+                        }
+                    };
+
+                    // TODO: according to Task #151 -> we doubled the line width that goes into the acceleration structure because we are looking at tiles
+                    // that are bigger
+                    // Nevertheless, we artificially worsened the performance by introducing more cells where a line could be (although it is only there on
+                    // specific zoom levels)
+                    // This performance issue will be solved with Task #198 (mipmaps)
+                    nucleus::utils::rasterizer::rasterize_lines(
+                        cell_writer, data[i].vertices, line_width * scale * constants::scale_lines, scale * mipmap_scale);
+
+                    const auto& style_layer = data[i].style_layer;
+                    const auto& vertices = data[i].vertices;
+
+                    for (const auto& [cell_pos, indices] : cell_list) {
+                        auto& cell = m_preprocess_grids[mipmap_level].pixel(cell_pos);
+
+                        if (cell.is_done) {
+                            // qDebug() << "cell_done";
+                            continue;
+                        }
+
+                        auto shapes = ClipperPaths {};
+                        for (const auto& index : indices) {
+
+                            // assert(data[i].vertices[0].size() > size_t(index + 1));
+                            shapes.emplace_back(ClipperPath { { long(vertices[index.x][index.y].x), long(vertices[index.x][index.y].y) },
+                                { long(vertices[index.x][index.y + 1].x), long(vertices[index.x][index.y + 1].y) } });
+                        }
+
+                        // TODO this would set cells to is_done if a line fully covers it. but:
+                        //  1) this does not fully work for some zoom levels -> investigate why we have some white cells in certain circumstances
+                        //      -> currently I think it has something to do with the * 2.0 multiplier when selecting cells, and/or the blending between 2 zooms
+                        //  2) this does not really work for the most troublesome zoom levels (like 13/14) since the lines are too small to be much of concern
+                        // there
+                        //      -> maybe more useful when we reduce the grid cell size and or for optimizing close cells
+
+                        // size_t full_cover_line_index = line_fully_covers(m_clipper_result, line_width, cell.rect);
+                        // if (full_cover_line_index != -1u) {
+                        //     cell.is_done = true;
+                        // }
+
+                        // TODO move translate before clipping and only clip with one single cell
                         // anchor clipped paths to cell origin
-                        Clipper2Lib::TranslatePathsInPlace(&m_clipper_result,
-                            -cell.rect_polygons.left - constants::aa_border * constants::scale_polygons,
-                            -cell.rect_polygons.top - constants::aa_border * constants::scale_polygons);
+                        Clipper2Lib::TranslatePathsInPlace(&shapes,
+                            -cell.rect_lines.left - constants::aa_border * constants::scale_lines,
+                            -cell.rect_lines.top - constants::aa_border * constants::scale_lines);
 
-                        m_processed_amount += triangulize_earcut(m_clipper_result, &cell.cell_data, style_layer);
+                        for (const auto& line : shapes) {
+
+                            const auto packed_data
+                                = nucleus::vector_layer::Preprocessor::pack_line_data({ line[0].x, line[0].y }, { line[1].x, line[1].y }, style_layer.first);
+                            cell.cell_data.push_back(packed_data);
+                        }
+                        m_processed_amount += shapes.size();
                     }
-                });
-
-            } else {
-                constexpr auto scale = float(constants::grid_size) / (float(constants::tile_extent) * constants::scale_lines);
-
-                const auto line_width = float(m_style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision);
-
-                std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
-
-                const auto cell_writer = [&cell_list](glm::vec2 pos, const glm::uvec2& data_index) {
-                    // if in grid_size bounds and not already present -> than add index to vector
-                    if (glm::all(glm::lessThanEqual({ 0, 0 }, pos)) && glm::all(glm::greaterThan(glm::vec2(constants::grid_size), pos))) {
-                        cell_list[glm::uvec2(pos)].insert(data_index);
-                    }
-                };
-
-                // TODO: according to Task #151 -> we doubled the line width that goes into the acceleration structure because we are looking at tiles
-                // that are bigger
-                // Nevertheless, we artificially worsened the performance by introducing more cells where a line could be (although it is only there on
-                // specific zoom levels)
-                // This performance issue will be solved with Task #198 (mipmaps)
-                nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 2.0 * constants::scale_lines, scale);
-
-                const auto& style_layer = data[i].style_layer;
-                const auto& vertices = data[i].vertices;
-
-                for (const auto& [cell_pos, indices] : cell_list) {
-                    auto& cell = m_preprocess_grid.pixel(cell_pos);
-
-                    if (cell.is_done) {
-                        // qDebug() << "cell_done";
-                        continue;
-                    }
-
-                    auto shapes = ClipperPaths {};
-                    for (const auto& index : indices) {
-
-                        // assert(data[i].vertices[0].size() > size_t(index + 1));
-                        shapes.emplace_back(ClipperPath { { long(vertices[index.x][index.y].x), long(vertices[index.x][index.y].y) },
-                            { long(vertices[index.x][index.y + 1].x), long(vertices[index.x][index.y + 1].y) } });
-                    }
-
-                    // TODO this would set cells to is_done if a line fully covers it. but:
-                    //  1) this does not fully work for some zoom levels -> investigate why we have some white cells in certain circumstances
-                    //      -> currently I think it has something to do with the * 2.0 multiplier when selecting cells, and/or the blending between 2 zooms
-                    //  2) this does not really work for the most troublesome zoom levels (like 13/14) since the lines are too small to be much of concern
-                    // there
-                    //      -> maybe more useful when we reduce the grid cell size and or for optimizing close cells
-
-                    // size_t full_cover_line_index = line_fully_covers(m_clipper_result, line_width, cell.rect);
-                    // if (full_cover_line_index != -1u) {
-                    //     cell.is_done = true;
-                    // }
-
-                    // TODO move translate before clipping and only clip with one single cell
-                    // anchor clipped paths to cell origin
-                    Clipper2Lib::TranslatePathsInPlace(&shapes,
-                        -cell.rect_lines.left - constants::aa_border * constants::scale_lines,
-                        -cell.rect_lines.top - constants::aa_border * constants::scale_lines);
-
-                    for (const auto& line : shapes) {
-
-                        const auto packed_data
-                            = nucleus::vector_layer::Preprocessor::pack_line_data({ line[0].x, line[0].y }, { line[1].x, line[1].y }, style_layer.first);
-                        cell.cell_data.push_back(packed_data);
-                    }
-                    m_processed_amount += shapes.size();
                 }
             }
-        }
 
-        // qDebug() << m_processed_amount;
+            // qDebug() << m_processed_amount;
+        }
     }
 }
 
@@ -626,40 +630,41 @@ GpuVectorLayerTile Preprocessor::create_gpu_tile()
     geometry_buffer.reserve(constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index]);
 
     // size_t max = 0;
-
-    for (const auto& cell : m_preprocess_grid) {
-        // go through every cell
-        if (cell.cell_data.size() == 0) {
-            acceleration_grid.push_back(0); // no data -> only add an emtpy cell
-        } else {
-
-            auto start_offset = geometry_buffer.size();
-
-            geometry_buffer.insert(geometry_buffer.end(), cell.cell_data.cbegin(), cell.cell_data.cend());
-
-            auto cell_size = geometry_buffer.size() - start_offset;
-
-            // we have to add a new element
-            // if (cell_size > max)
-            //     max = cell_size;
-
-            // TODO enable assert again
-            // assert(cell_size< 256); // make sure that we are not removing indices we want to draw
-            if (cell_size > 255)
-                cell_size = 255; // just cap it to 255 as we currently cant go any higher
-
-            if (cell_size == 0)
+    for (int mipmap_level = 0; mipmap_level < constants::mipmap_levels; mipmap_level++) {
+        for (const auto& cell : m_preprocess_grids[mipmap_level]) {
+            // go through every cell
+            if (cell.cell_data.size() == 0) {
                 acceleration_grid.push_back(0); // no data -> only add an emtpy cell
-            else {
-                const auto offset_size = nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(cell_size));
-                acceleration_grid.push_back(offset_size);
-            }
+            } else {
 
-            // TODO possible performance
-            // change geometry buffer to RGBA32UI to save 2 geometries at the same time
-            // -> we most likely want to test a few geometries one after another and this might be better
-            // also possible to use a 1 bit in the offset_size to indicate the start (to pack the data tightly even if the previous geometry belongs to
-            // previous cell)
+                auto start_offset = geometry_buffer.size();
+
+                geometry_buffer.insert(geometry_buffer.end(), cell.cell_data.cbegin(), cell.cell_data.cend());
+
+                auto cell_size = geometry_buffer.size() - start_offset;
+
+                // we have to add a new element
+                // if (cell_size > max)
+                //     max = cell_size;
+
+                // TODO enable assert again
+                // assert(cell_size< 256); // make sure that we are not removing indices we want to draw
+                if (cell_size > 255)
+                    cell_size = 255; // just cap it to 255 as we currently cant go any higher
+
+                if (cell_size == 0) {
+                    acceleration_grid.push_back(0); // no data -> only add an emtpy cell
+                } else {
+                    const auto offset_size = nucleus::utils::bit_coding::u24_u8_to_u32(start_offset, uint8_t(cell_size));
+                    acceleration_grid.push_back(offset_size);
+                }
+
+                // TODO possible performance
+                // change geometry buffer to RGBA32UI to save 2 geometries at the same time
+                // -> we most likely want to test a few geometries one after another and this might be better
+                // also possible to use a 1 bit in the offset_size to indicate the start (to pack the data tightly even if the previous geometry belongs to
+                // previous cell)
+            }
         }
     }
 
@@ -668,8 +673,8 @@ GpuVectorLayerTile Preprocessor::create_gpu_tile()
     // make sure that the buffer size is still like we expected and resize the data to actual buffer size
     assert(geometry_buffer.size() <= constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index]);
     geometry_buffer.resize(constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index], glm::u32vec2(-1u));
-
-    tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size, std::move(acceleration_grid)));
+    tile.acceleration_grid
+        = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>({ constants::mipmap_size, 1 }, std::move(acceleration_grid)));
     tile.geometry_buffer = std::make_shared<const nucleus::Raster<glm::u32vec2>>(
         nucleus::Raster<glm::u32vec2>(constants::data_size[fitting_cascade_index], std::move(geometry_buffer)));
 

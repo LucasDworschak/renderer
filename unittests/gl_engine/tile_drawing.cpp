@@ -510,6 +510,37 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
 
 TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
 {
+
+    UnittestGLContext::initialise();
+
+    // aabbdecorator -> makes sure that everything form 0-4000 z is included
+    TileHeights h;
+    h.emplace({ 0, { 0, 0 } }, { 0, 4000 });
+    const auto aabb_decorator = AabbDecorator::make(std::move(h));
+
+    SECTION("tile drawing vienna uniform tiles")
+    {
+        auto id_wien = nucleus::tile::Id { 14, { 8936, 5681 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
+        const auto camera = create_camera_for_id(id_wien);
+
+        auto load = [&camera, &aabb_decorator](gl_engine::ShaderRegistry* shader_registry) {
+            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+            style.load();
+
+            auto layer = create_vectorlayer(shader_registry, style);
+            load_vectortiles(layer, aabb_decorator, camera);
+
+            return layer;
+        };
+
+        auto config = Config { false, std::vector<DrawConfig> { { "vectortile_vienna_uniform_test", DrawMode::NoOverlay } } };
+
+        draw_tile(aabb_decorator, camera, calc_children_ids(id_wien, 16), load, config);
+    }
+}
+
+TEST_CASE("gl_engine/tile_drawing2", "[!mayfail]")
+{
     SECTION("refine ids")
     {
         auto id_wien = nucleus::tile::Id { 14, { 8936, 5681 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);

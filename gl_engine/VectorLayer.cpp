@@ -81,7 +81,8 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_acceleration_grid_texture = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
     m_acceleration_grid_texture->setParams(gl_engine::Texture::Filter::Nearest, gl_engine::Texture::Filter::Nearest);
     // // TODO: might become larger than GL_MAX_ARRAY_TEXTURE_LAYERS
-    m_acceleration_grid_texture->allocate_array(constants::grid_size, constants::grid_size, unsigned(m_gpu_multi_array_helper.layer_amount(0)));
+
+    m_acceleration_grid_texture->allocate_array(constants::mipmap_size, 1, unsigned(m_gpu_multi_array_helper.layer_amount(0)));
 
     m_instanced_zoom = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::R8UI);
     m_instanced_zoom->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
