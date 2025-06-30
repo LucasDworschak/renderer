@@ -331,7 +331,6 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
 
 }
 
-
 highp float calculate_aa_half_radius(highp vec2 uv)
 {
   //////////////////////
@@ -345,8 +344,6 @@ highp float calculate_aa_half_radius(highp vec2 uv)
   // return 0.0;
   return sqrt(abs(determinant(jacobian))) / 2.0;
 }
-
-
 
 void main() {
 #if CURTAIN_DEBUG_MODE == 2
@@ -398,11 +395,17 @@ void main() {
 
     // VECTOR color
     decrease_zoom_level_until(tile_id, uv, texelFetch(instanced_texture_zoom_sampler_vector, ivec2(instance_id, 0), 0).x);
-    highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, 0), 0).xy;
 
 
     highp float float_zoom = float_zoom_interpolation();
+    // float_zoom = tile_id.z;     // DEBUG
+    lowp uint mipmap_level = uint(-clamp(int(floor(float_zoom-float(tile_id.z))), -mipmap_levels-1, 0));
+
+    highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, mipmap_level), 0).xy;
+
+    decrease_zoom_level_until(tile_id, uv, tile_id.z - mipmap_level);
     highp float zoom_offset = float_zoom-float(tile_id.z);
+
 
     highp float aa_half_radius = calculate_aa_half_radius(uv);
 
