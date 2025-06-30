@@ -39,19 +39,6 @@ constexpr auto tile_extent = 1024;
 constexpr auto scale_polygons = 4.0;
 constexpr auto scale_lines = 1.0;
 
-constexpr auto mipmap_levels = 4; // includes original level
-constexpr int calc_mipmap_size()
-{
-    int mipmap_size = 0;
-    int grid_size = constants::grid_size;
-    for (int i = 0; i < constants::mipmap_levels; i++) {
-        mipmap_size += grid_size * grid_size;
-        grid_size /= 2;
-    }
-    return mipmap_size;
-}
-constexpr auto mipmap_size = calc_mipmap_size();
-
 // if you change one of the following setting you also need to change the other (that they match is asserted in style.cpp)
 // one bit is used to signal if it should blend with next style or not
 constexpr auto style_bits = 13;

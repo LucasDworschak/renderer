@@ -46,14 +46,6 @@ public:
     {
         assert(m_data.size() == m_width * m_height);
     }
-
-    Raster(const glm::uvec2& size, std::vector<T>&& vector)
-        : m_data(std::move(vector))
-        , m_width(size.x)
-        , m_height(size.y)
-    {
-        assert(m_data.size() == m_width * m_height);
-    }
     Raster(unsigned square_side_length)
         : m_data(square_side_length * square_side_length)
         , m_width(square_side_length)
