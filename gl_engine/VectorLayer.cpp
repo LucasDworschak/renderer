@@ -54,6 +54,7 @@ std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
     defines[QString("scale_polygons")] = QString::number(constants::scale_polygons);
     defines[QString("scale_lines")] = QString::number(constants::scale_lines);
     defines[QString("grid_size")] = QString("vec2(%1,%1)").arg(constants::grid_size);
+    defines[QString("mipmap_levels")] = QString::number(constants::mipmap_levels);
 
     defines[QString("all_bits")] = QString::number(constants::all_bits);
     defines[QString("coordinate_bits_polygons")] = QString::number(constants::coordinate_bits_polygons);
@@ -128,12 +129,25 @@ void VectorLayer::draw(const TileGeometry& tile_geometry,
         zoom_level_raster.pixel({ i, 0 }) = layer0.id.zoom_level;
         array_index_raster.pixel({ i, 0 }) = { layer0.index1, layer0.index2 };
 
-        const auto layer1 = m_gpu_multi_array_helper.layer(draw_list[i].id.parent());
-        array_index_raster.pixel({ i, 1 }) = { layer1.index1, layer1.index2 };
-        const auto layer2 = m_gpu_multi_array_helper.layer(draw_list[i].id.parent().parent());
-        array_index_raster.pixel({ i, 2 }) = { layer2.index1, layer2.index2 };
-        const auto layer3 = m_gpu_multi_array_helper.layer(draw_list[i].id.parent().parent().parent());
-        array_index_raster.pixel({ i, 3 }) = { layer3.index1, layer3.index2 };
+        // load the mipmaps -> also make sure that all mipmaps are loaded -> otherwise use parent mipmap
+        const auto layer1 = m_gpu_multi_array_helper.layer(layer0.id.parent());
+        if (layer1.id.zoom_level < 200) {
+            array_index_raster.pixel({ i, 1 }) = { layer1.index1, layer1.index2 };
+        } else {
+            array_index_raster.pixel({ i, 1 }) = array_index_raster.pixel({ i, 0 });
+        }
+        const auto layer2 = m_gpu_multi_array_helper.layer(layer0.id.parent().parent());
+        if (layer2.id.zoom_level < 200) {
+            array_index_raster.pixel({ i, 2 }) = { layer2.index1, layer2.index2 };
+        } else {
+            array_index_raster.pixel({ i, 2 }) = array_index_raster.pixel({ i, 1 });
+        }
+        const auto layer3 = m_gpu_multi_array_helper.layer(layer0.id.parent().parent().parent());
+        if (layer3.id.zoom_level < 200) {
+            array_index_raster.pixel({ i, 3 }) = { layer3.index1, layer3.index2 };
+        } else {
+            array_index_raster.pixel({ i, 3 }) = array_index_raster.pixel({ i, 2 });
+        }
     }
 
     m_instanced_array_index->bind(10);

@@ -541,7 +541,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                 // Nevertheless, we artificially worsened the performance by introducing more cells where a line could be (although it is only there on
                 // specific zoom levels)
                 // This performance issue will be solved with Task #198 (mipmaps)
-                nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 2.0 * constants::scale_lines, scale);
+                nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 1.0 * constants::scale_lines, scale);
 
                 const auto& style_layer = data[i].style_layer;
                 const auto& vertices = data[i].vertices;

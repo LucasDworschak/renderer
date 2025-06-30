@@ -98,6 +98,9 @@ unsigned GpuMultiArrayHelper::n_occupied() const
 
 GpuMultiArrayHelper::MultiLayerInfo GpuMultiArrayHelper::layer(tile::Id tile_id) const
 {
+    if (tile_id.zoom_level > 200) // zoom may be -1u during startup
+        return { {}, 0, 0 };
+
     const auto layer_info_common = helpers[0].layer(tile_id);
 
     if (layer_info_common.id == tile::Id {})
