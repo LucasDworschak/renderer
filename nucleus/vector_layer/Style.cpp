@@ -350,7 +350,7 @@ void Style::load()
                 uint8_t first_zoom = style_map.begin()->first;
                 const auto first_style = style_map.at(first_zoom);
 
-                for (uint8_t zoom = first_zoom - constants::style_zoom_blend_steps; zoom < first_zoom; zoom++) {
+                for (uint8_t zoom = first_zoom - constants::mipmap_levels + 1; zoom < first_zoom; zoom++) {
                     style_values.push_back({ 0, first_style.outline_color, first_style.outline_width, first_style.outline_dash });
                 }
             }

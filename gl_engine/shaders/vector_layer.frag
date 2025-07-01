@@ -298,30 +298,39 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
 
         // at this pixel, how many styles do we have to reduce to get the current style
         // next style (if we blend) will be always +1 (since we only blend one pixel)
-        lowp int zoom_offset = 0;
+        lowp int zoom_offset_current = 0;
 
         if(geometry_data.should_blend)
-            zoom_offset = int(max(int(floor(float_zoom_offset)), -zoom_blend_steps)); // calculate an integer zoom offset and make sure that we do not go below -zoom_blend_steps
+        {
+            zoom_offset_current = clamp(int(floor(float_zoom_offset-1.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for current style and clamp
+        }
 
         // get and store new style info
         layer_style.last_style = geometry_data.style_index;
-        layer_style.current_zoom_style = parse_style(uint(int(geometry_data.style_index) + zoom_offset));
+        layer_style.current_zoom_style = parse_style(uint(int(geometry_data.style_index) + zoom_offset_current));
 
         // the outline_width is saved as tile_extent dependent
         // by dividing by tile_extent we get the width we want to draw
         // by further dividing the tile_extent by 2^zoom_offset, we reduce the tile_extent and increase the line width.
-        mediump float zoomed_tile_extent = float(tile_extent) * pow(2.0, float(zoom_offset));
+        // we have to increase the zoom_offset by one in order to use the same size as in the preprocessor
+        mediump float zoomed_tile_extent = float(tile_extent) * pow(2.0, float(zoom_offset_current+1.0));
 
         layer_style.current_zoom_style.outline_width /= zoomed_tile_extent;
+
         if(geometry_data.should_blend)
         {
-            layer_style.next_zoom_style = parse_style(uint(int(geometry_data.style_index)+zoom_offset+1));
-            layer_style.next_zoom_style.outline_width /= (zoomed_tile_extent * 2.0);
+            lowp int zoom_offset_next = zoom_offset_next = clamp(int(floor(float_zoom_offset-0.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for next style and clamp
+
+            layer_style.next_zoom_style = parse_style(uint(int(geometry_data.style_index)+zoom_offset_next));
+
+            mediump float zoomed_tile_extent_next = float(tile_extent) * pow(2.0, float(zoom_offset_next+1.0));
+            layer_style.next_zoom_style.outline_width /= zoomed_tile_extent_next;
         }
         else
         {
             layer_style.next_zoom_style = layer_style.current_zoom_style;
         }
+
         layer_style.should_blend = geometry_data.should_blend;
         // how much alpha per layer we accumulate
         layer_style.layer_alpha = 0.0;
@@ -399,7 +408,7 @@ void main() {
 
     highp float float_zoom = float_zoom_interpolation();
     // float_zoom = tile_id.z;     // DEBUG
-    lowp uint mipmap_level = uint(-clamp(int(floor(float_zoom-float(tile_id.z))), -mipmap_levels-1, 0));
+    lowp uint mipmap_level = uint(clamp(int(ceil(float(tile_id.z)-float_zoom)), 0,mipmap_levels-1));
 
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, mipmap_level), 0).xy;
 

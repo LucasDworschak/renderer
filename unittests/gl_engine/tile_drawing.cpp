@@ -65,7 +65,7 @@ using radix::TileHeights;
 
 namespace {
 
-enum DrawMode { NoOverlay, CellSize, UVs, Cells };
+enum DrawMode { NoOverlay, CellSize, UVs, Cells, FloatZoom };
 
 struct DrawConfig {
     QString name;
@@ -192,6 +192,9 @@ std::shared_ptr<gl_engine::UniformBuffer<gl_engine::uboSharedConfig>> bind_share
         break;
     case Cells:
         config->m_overlay_mode = 204u;
+        break;
+    case FloatZoom:
+        config->m_overlay_mode = 209u;
         break;
     case NoOverlay:
     default:
@@ -510,41 +513,6 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
 
 TEST_CASE("gl_engine/tile_drawing", "[!mayfail]")
 {
-    UnittestGLContext::initialise();
-
-    // aabbdecorator -> makes sure that everything form 0-4000 z is included
-    TileHeights h;
-    h.emplace({ 0, { 0, 0 } }, { 0, 4000 });
-    const auto aabb_decorator = AabbDecorator::make(std::move(h));
-    SECTION("tile drawing landstrasse view")
-    {
-        const auto coords_lookat = nucleus::srs::lat_long_alt_to_world({ 48.20618344255035, 16.385128312902415, 0 });
-        const auto coords_position = nucleus::srs::lat_long_alt_to_world({ 48.20618344255035, 16.385128312902415, 200 });
-        auto camera = nucleus::camera::Definition { coords_position, coords_lookat };
-
-        camera.set_viewport_size({ 1920, 1080 });
-        camera.set_field_of_view(60); // FOV 60 is the default fov used
-
-        auto load = [&camera, &aabb_decorator](gl_engine::ShaderRegistry* shader_registry) {
-            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
-            style.load();
-
-            auto layer = create_vectorlayer(shader_registry, style);
-            load_vectortiles(layer, aabb_decorator, camera);
-
-            return layer;
-        };
-
-        auto config = Config { true, std::vector<DrawConfig> { { "vectortile_landstrasse_view", DrawMode::NoOverlay } } };
-
-        const auto draw_list = drawing::generate_list(camera, aabb_decorator, 19);
-
-        draw_tile(aabb_decorator, camera, draw_list, load, config);
-    }
-}
-
-TEST_CASE("gl_engine/tile_drawing2", "[!mayfail]")
-{
     SECTION("refine ids")
     {
         auto id_wien = nucleus::tile::Id { 14, { 8936, 5681 }, nucleus::tile::Scheme::SlippyMap }.to(nucleus::tile::Scheme::Tms);
@@ -756,6 +724,56 @@ TEST_CASE("gl_engine/tile_drawing2", "[!mayfail]")
         };
 
         auto config = Config { true, std::vector<DrawConfig> { { "vectortile_weichtalhaus_view", DrawMode::NoOverlay } } };
+
+        const auto draw_list = drawing::generate_list(camera, aabb_decorator, 19);
+
+        draw_tile(aabb_decorator, camera, draw_list, load, config);
+    }
+
+    SECTION("tile drawing landstrasse view")
+    {
+        const auto coords_lookat = nucleus::srs::lat_long_alt_to_world({ 48.20618344255035, 16.385128312902415, 0 });
+        const auto coords_position = nucleus::srs::lat_long_alt_to_world({ 48.20618344255035, 16.385128312902415, 200 });
+        auto camera = nucleus::camera::Definition { coords_position, coords_lookat };
+
+        camera.set_viewport_size({ 1920, 1080 });
+        camera.set_field_of_view(60); // FOV 60 is the default fov used
+
+        auto load = [&camera, &aabb_decorator](gl_engine::ShaderRegistry* shader_registry) {
+            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+            style.load();
+
+            auto layer = create_vectorlayer(shader_registry, style);
+            load_vectortiles(layer, aabb_decorator, camera);
+
+            return layer;
+        };
+
+        auto config = Config { true, std::vector<DrawConfig> { { "vectortile_landstrasse_view", DrawMode::NoOverlay } } };
+
+        const auto draw_list = drawing::generate_list(camera, aabb_decorator, 19);
+
+        draw_tile(aabb_decorator, camera, draw_list, load, config);
+    }
+
+    SECTION("tile drawing highway view")
+    {
+        nucleus::camera::Definition camera = { { 1.81929e+06, 6.11431e+06, 1671.63 }, { 1.81929e+06, 6.11431e+06 + 100, 1671.63 - 100 } };
+
+        camera.set_viewport_size({ 1920, 1080 });
+        camera.set_field_of_view(60); // FOV 60 is the default fov used
+
+        auto load = [&camera, &aabb_decorator](gl_engine::ShaderRegistry* shader_registry) {
+            nucleus::vector_layer::Style style(":/vectorlayerstyles/openstreetmap.json");
+            style.load();
+
+            auto layer = create_vectorlayer(shader_registry, style);
+            load_vectortiles(layer, aabb_decorator, camera);
+
+            return layer;
+        };
+
+        auto config = Config { false, std::vector<DrawConfig> { { "vectortile_highway", DrawMode::NoOverlay } } };
 
         const auto draw_list = drawing::generate_list(camera, aabb_decorator, 19);
 

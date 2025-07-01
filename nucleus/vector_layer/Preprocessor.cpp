@@ -525,7 +525,13 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
             } else {
                 constexpr auto scale = float(constants::grid_size) / (float(constants::tile_extent) * constants::scale_lines);
 
-                const auto line_width = float(m_style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision);
+                float line_width = 0;
+                if ((data[i].style_layer.first & 1u) == 1u) {
+                    // if we blend -> use the line width of the previous style
+                    line_width = float(m_style_buffer[(data[i].style_layer.first >> 1) - 1u].z) / float(constants::style_precision);
+                } else {
+                    line_width = float(m_style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision);
+                }
 
                 std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
 
