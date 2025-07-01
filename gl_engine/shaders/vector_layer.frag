@@ -319,7 +319,7 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
 
         if(geometry_data.should_blend)
         {
-            lowp int zoom_offset_next = zoom_offset_next = clamp(int(floor(float_zoom_offset-0.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for next style and clamp
+            lowp int zoom_offset_next = clamp(int(floor(float_zoom_offset-0.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for next style and clamp
 
             layer_style.next_zoom_style = parse_style(uint(int(geometry_data.style_index)+zoom_offset_next));
 
