@@ -50,7 +50,7 @@ constexpr uint16_t style_precision = 100;
 // ensure that we know how large a line can get
 constexpr uint16_t max_line_width = 48;
 
-constexpr float line_width_multiplier = 1.25;
+constexpr float line_width_multiplier = 1.56;
 constexpr glm::uvec2 style_zoom_range = glm::uvec2(8u, 18u);
 
 constexpr float small_line_px = 0.5; // how many px on a 256x256 resolution
