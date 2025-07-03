@@ -70,7 +70,7 @@ Preprocessor::Preprocessor(Style&& style)
     generate_preprocess_grid();
 }
 
-const Style& Preprocessor::style() { return m_style; }
+const std::shared_ptr<const nucleus::Raster<glm::u32vec4>> Preprocessor::style() { return m_style.styles(); }
 size_t Preprocessor::processed_amount() { return m_processed_amount; }
 
 GpuVectorLayerTile Preprocessor::create_default_gpu_tile()

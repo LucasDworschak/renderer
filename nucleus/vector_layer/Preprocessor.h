@@ -192,7 +192,7 @@ public:
     static std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(
         std::vector<std::pair<uint32_t, uint32_t>>* styles, const std::vector<glm::u32vec4>& style_buffer);
 
-    const Style& style();
+    const std::shared_ptr<const nucleus::Raster<glm::u32vec4>> style();
     size_t processed_amount();
 
 private:

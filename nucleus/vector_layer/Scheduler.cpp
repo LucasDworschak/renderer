@@ -58,7 +58,7 @@ void Scheduler::set_enabled(bool new_enabled)
     nucleus::tile::Scheduler::set_enabled(new_enabled);
 
     if (m_needs_to_update_style) {
-        emit style_updated(m_preprocessor.style().styles());
+        emit style_updated(m_preprocessor.style());
         m_needs_to_update_style = false;
     }
 }
