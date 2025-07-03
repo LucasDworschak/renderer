@@ -71,8 +71,8 @@ struct Layer_Style
 {
     highp uint last_style;
     lowp float layer_alpha;
-    Style_Data current_zoom_style;
-    Style_Data next_zoom_style;
+    Style_Data lower_zoom_style;
+    Style_Data higher_zoom_style;
     bool should_blend;
 };
 
@@ -247,7 +247,7 @@ Style_Data parse_style(highp uint style_index) {
 }
 
 /**
-  * zoom_blend: value between 0-1, determines how much of the current and how much of the next style should be used
+  * zoom_blend: value between 0-1, determines how much of the lower and how much of the higher style should be used
   */
 void draw_layer(inout Layer_Style layer_style, inout lowp vec4 pixel_color, highp float zoom_blend)
 {
@@ -257,15 +257,15 @@ void draw_layer(inout Layer_Style layer_style, inout lowp vec4 pixel_color, high
     // mix the previous layer color information with output
     if(layer_style.should_blend)
     {
-        // calculate color of current layer by blending the styles of current and next zoom step (depending on zoom_blend factor)
-        lowp vec4 col = mix(layer_style.current_zoom_style.fill_color, layer_style.next_zoom_style.fill_color, zoom_blend);
+        // calculate color of current layer by blending the styles of lower and higher zoom step (depending on zoom_blend factor)
+        lowp vec4 col = mix(layer_style.lower_zoom_style.fill_color, layer_style.higher_zoom_style.fill_color, zoom_blend);
 
         // merge current layer color with previous pixel color
         pixel_color = pixel_color + ((1.0-pixel_color.a)*col) * layer_style.layer_alpha;
     }
     else
     {
-         pixel_color = pixel_color + ((1.0-pixel_color.a)*layer_style.current_zoom_style.fill_color) * layer_style.layer_alpha;
+         pixel_color = pixel_color + ((1.0-pixel_color.a)*layer_style.lower_zoom_style.fill_color) * layer_style.layer_alpha;
     }
 }
 
@@ -292,43 +292,36 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
             draw_layer(layer_style, pixel_color, fract(float_zoom_offset));
         }
 
-        // current discrete tile z 8
-        // floating tile zoom z 6.8
-        // zoom_offset 2 (current style z 6 next style z 7)
-
-        // at this pixel, how many styles do we have to reduce to get the current style
-        // next style (if we blend) will be always +1 (since we only blend one pixel)
-        lowp int zoom_offset_current = 0;
-
+        lowp int zoom_offset_lower = 0;
         if(geometry_data.should_blend)
         {
-            zoom_offset_current = clamp(int(floor(float_zoom_offset-1.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for current style and clamp
+            zoom_offset_lower = clamp(int(floor(float_zoom_offset-1.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for lower style and clamp
         }
 
         // get and store new style info
         layer_style.last_style = geometry_data.style_index;
-        layer_style.current_zoom_style = parse_style(uint(int(geometry_data.style_index) + zoom_offset_current));
+        layer_style.lower_zoom_style = parse_style(uint(int(geometry_data.style_index) + zoom_offset_lower));
 
         // the outline_width is saved as tile_extent dependent
         // by dividing by tile_extent we get the width we want to draw
         // by further dividing the tile_extent by 2^zoom_offset, we reduce the tile_extent and increase the line width.
         // we have to increase the zoom_offset by one in order to use the same size as in the preprocessor
-        mediump float zoomed_tile_extent = float(tile_extent) * pow(2.0, float(zoom_offset_current+1.0));
+        mediump float zoomed_tile_extent = float(tile_extent) * pow(2.0, float(zoom_offset_lower+1.0));
 
-        layer_style.current_zoom_style.outline_width /= zoomed_tile_extent;
+        layer_style.lower_zoom_style.outline_width /= zoomed_tile_extent;
 
         if(geometry_data.should_blend)
         {
-            lowp int zoom_offset_next = clamp(int(floor(float_zoom_offset-0.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for next style and clamp
+            lowp int zoom_offset_higher = clamp(int(floor(float_zoom_offset-0.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for higher style and clamp
 
-            layer_style.next_zoom_style = parse_style(uint(int(geometry_data.style_index)+zoom_offset_next));
+            layer_style.higher_zoom_style = parse_style(uint(int(geometry_data.style_index)+zoom_offset_higher));
 
-            mediump float zoomed_tile_extent_next = float(tile_extent) * pow(2.0, float(zoom_offset_next+1.0));
-            layer_style.next_zoom_style.outline_width /= zoomed_tile_extent_next;
+            mediump float zoomed_tile_extent_higher = float(tile_extent) * pow(2.0, float(zoom_offset_higher+1.0));
+            layer_style.higher_zoom_style.outline_width /= zoomed_tile_extent_higher;
         }
         else
         {
-            layer_style.next_zoom_style = layer_style.current_zoom_style;
+            layer_style.higher_zoom_style = layer_style.lower_zoom_style;
         }
 
         layer_style.should_blend = geometry_data.should_blend;
@@ -475,8 +468,8 @@ void main() {
 
             Layer_Style layer_style;
             layer_style.last_style = -1u;
-            layer_style.current_zoom_style = Style_Data(vec4(0.0), vec4(0.0), 0.0, vec2(0.0));
-            layer_style.next_zoom_style = layer_style.current_zoom_style;
+            layer_style.lower_zoom_style = Style_Data(vec4(0.0), vec4(0.0), 0.0, vec2(0.0));
+            layer_style.higher_zoom_style = layer_style.lower_zoom_style;
             layer_style.layer_alpha = 0.0;
 
             int polygon_was_drawn = 0;
@@ -506,10 +499,9 @@ void main() {
                 highp vec2 v2 = (vec2(geometry_data.c) + cell_offset) / vec2(tile_extent * tile_scale);
 
 
-
-                lowp float thickness_current = layer_style.current_zoom_style.outline_width;
-                lowp float thickness_next = layer_style.next_zoom_style.outline_width;
-                lowp float thickness = mix(thickness_current, thickness_next, fract(float_zoom));
+                lowp float thickness_lower = layer_style.lower_zoom_style.outline_width;
+                lowp float thickness_higher = layer_style.higher_zoom_style.outline_width;
+                lowp float thickness = mix(thickness_lower, thickness_higher, fract(float_zoom));
 
 
                 d = sd_Line_Triangle(uv, v0, v1, v2, geometry_data.is_polygon) - thickness;

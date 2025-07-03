@@ -68,6 +68,7 @@ constexpr int all_bits = 32; // per output channel
 constexpr int coordinate_bits_polygons = 8;
 constexpr int coordinate_bits_lines = 12;
 constexpr int aa_border = 2;
+constexpr int aa_lines = 0;
 
 // array helper constants
 constexpr int array_helper_all_bits = 16;

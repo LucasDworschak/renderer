@@ -528,9 +528,9 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                 float line_width = 0;
                 if ((data[i].style_layer.first & 1u) == 1u) {
                     // if we blend -> use the line width of the previous style
-                    line_width = float(m_style_buffer[(data[i].style_layer.first >> 1) - 1u].z) / float(constants::style_precision);
+                    line_width = float(m_style_buffer[(data[i].style_layer.first >> 1) - 1u].z) / float(constants::style_precision) + constants::aa_lines;
                 } else {
-                    line_width = float(m_style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision);
+                    line_width = float(m_style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision) + constants::aa_lines;
                 }
 
                 std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
