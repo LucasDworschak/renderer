@@ -295,12 +295,13 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
         lowp int zoom_offset_lower = 0;
         if(geometry_data.should_blend)
         {
-            zoom_offset_lower = clamp(int(floor(float_zoom_offset-1.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for lower style and clamp
+            // zoom_offset_lower = clamp(int(floor(float_zoom_offset-1.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for lower style and clamp
+            zoom_offset_lower = max(int(floor(float_zoom_offset-1.0)), -mipmap_levels+1); // calculate an integer zoom offset for lower style and clamp
         }
 
         // get and store new style info
         layer_style.last_style = geometry_data.style_index;
-        layer_style.lower_zoom_style = parse_style(uint(int(geometry_data.style_index) + zoom_offset_lower));
+        layer_style.lower_zoom_style = parse_style(uint(int(geometry_data.style_index) + min(zoom_offset_lower,0)));
 
         // the outline_width is saved as tile_extent dependent
         // by dividing by tile_extent we get the width we want to draw
@@ -312,9 +313,10 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
 
         if(geometry_data.should_blend)
         {
-            lowp int zoom_offset_higher = clamp(int(floor(float_zoom_offset-0.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for higher style and clamp
+            // lowp int zoom_offset_higher = clamp(int(floor(float_zoom_offset-0.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for higher style and clamp
+            lowp int zoom_offset_higher = max(int(floor(float_zoom_offset-0.0)), -mipmap_levels+1); // calculate an integer zoom offset for higher style and clamp
 
-            layer_style.higher_zoom_style = parse_style(uint(int(geometry_data.style_index)+zoom_offset_higher));
+            layer_style.higher_zoom_style = parse_style(uint(int(geometry_data.style_index)+min(zoom_offset_higher,0)));
 
             mediump float zoomed_tile_extent_higher = float(tile_extent) * pow(2.0, float(zoom_offset_higher+1.0));
             layer_style.higher_zoom_style.outline_width /= zoomed_tile_extent_higher;
