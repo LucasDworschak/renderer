@@ -757,7 +757,7 @@ uint16_t Style::parse_line_width(const QJsonValue& value)
         float thickness = value.toDouble() * constants::line_width_multiplier;
         if (thickness > constants::max_line_width)
             thickness = constants::max_line_width;
-        return uint16_t(thickness * constants::style_precision);
+        return uint16_t(round(thickness * constants::style_precision));
     }
 
     qDebug() << "unhandled line width value" << value;
