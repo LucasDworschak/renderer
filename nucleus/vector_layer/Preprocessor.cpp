@@ -129,7 +129,7 @@ std::vector<std::pair<uint32_t, uint32_t>> Preprocessor::simplify_styles(
     float width = 0.0;
 
     for (const auto& indices : *style_and_layer_indices) {
-        const auto style_data = style_buffer[indices.first >> 1];
+        const auto style_data = style_buffer[indices.first];
         const float current_width = float(style_data.z) / float(constants::style_precision);
         const int current_opacity = style_data.x & 255;
 
@@ -217,8 +217,30 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
 
 glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index) { return pack_triangle_data({ a, b, b, style_index, false }); }
 
+/*
+ * in order to minimize the divergence between lines and polygons, we pack the data as follows:
+ *
+ * triangle packing:
+ * data:
+ * x0 | y0 | x1 | y1
+ * x2 | y2 | free | is_polygon | style_index
+ * bits:
+ * 8 | 8 | 8 | 8
+ * 8 | 8 | 3 | 1 | 12
+ *
+ * line packing:
+ * data:
+ * x0_0 | y0_0 | x1_0 | y1_0
+ * x0_1 | y0_1 | x1_1 | y1_1 | free | is_polygon | style_index
+ * bits:
+ * 8 | 8 | 8 | 8
+ * 4 | 4 | 4 | 4 | 3 | 1 | 12
+ * NOTE: a line stores the data in two separate locations x0_0 x0_1
+ *       coordinate "_0" are the 8 least significant bits, and "_1" are the more significant bits of the coordinate
+ */
 glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
 {
+
     glm::u32vec2 packed_data;
 
     if (data.is_polygon) {
@@ -250,6 +272,7 @@ glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
     //     || data.c.y < 0 || data.c.y > max_cell_width_polygons)
     //     qDebug() << geometry_offset_polygons << data.a.x << data.a.y << data.b.x << data.b.y << data.c.x << data.c.y;
 
+    // style_bits + 1 since one bit is used to determine if it is a line or a polygon
     assert(constants::style_bits + 1 <= available_style_bits); // make sure that the stylebits we need are available here
 
     packed_data.x = uint(data.a.x) << coordinate_shift1;
@@ -268,9 +291,7 @@ glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
         packed_data.y = packed_data.y | ((uint(data.b.y) >> constants::coordinate_bits_polygons) << coordinate_shift4_lines);
     }
 
-    packed_data.y = packed_data.y | ((data.style_index << 1) | ((data.is_polygon) ? 1u : 0u));
-    // alternative only for neceesary for shader testing
-    // packed_data.y = packed_data.y | ((data.style_index << 2) | (((data.should_blend) ? 1u : 0u) << 1) | ((data.is_polygon) ? 1u : 0u));
+    packed_data.y = packed_data.y | (((data.is_polygon ? 1u : 0u) << constants::style_bits) | data.style_index);
 
     return packed_data;
 }
@@ -288,12 +309,9 @@ VectorLayerData Preprocessor::unpack_data(glm::uvec2 packed_data)
     c.x = (packed_data.y & (coordinate_bitmask_shift1)) >> coordinate_shift1;
     c.y = (packed_data.y & (coordinate_bitmask_shift2)) >> coordinate_shift2;
 
-    const uint style_and_blend = (packed_data.y & ((1u << available_style_bits) - 1u)) >> 1;
-    // NOTE: the should_blend bit is only necessary for the shader -> on cpu side we do not need to separate them
-    unpacked_data.style_index = style_and_blend; // >> 1;
-    // unpacked_data.should_blend = (style_and_blend & 1u) == 1u;
+    unpacked_data.style_index = packed_data.y & ((1u << constants::style_bits) - 1u);
 
-    unpacked_data.is_polygon = (packed_data.y & 1u) == 1u;
+    unpacked_data.is_polygon = (packed_data.y & is_polygon_bitmask) != 0u;
 
     if (unpacked_data.is_polygon) {
         unpacked_data.a -= geometry_offset_polygons;
@@ -526,12 +544,8 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                 constexpr auto scale = float(constants::grid_size) / (float(constants::tile_extent) * constants::scale_lines);
 
                 float line_width = 0;
-                if ((data[i].style_layer.first & 1u) == 1u) {
-                    // if we blend -> use the line width of the previous style
-                    line_width = float(m_style_buffer[(data[i].style_layer.first >> 1) - 1u].z) / float(constants::style_precision) + constants::aa_lines;
-                } else {
-                    line_width = float(m_style_buffer[data[i].style_layer.first >> 1].z) / float(constants::style_precision) + constants::aa_lines;
-                }
+                // use the line width of the previous style
+                line_width = float(m_style_buffer[(data[i].style_layer.first) - 1u].z) / float(constants::style_precision) + constants::aa_lines;
 
                 std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
 

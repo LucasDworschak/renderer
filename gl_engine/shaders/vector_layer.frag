@@ -73,7 +73,6 @@ struct Layer_Style
     lowp float layer_alpha;
     Style_Data lower_zoom_style;
     Style_Data higher_zoom_style;
-    bool should_blend;
 };
 
 
@@ -255,18 +254,12 @@ void draw_layer(inout Layer_Style layer_style, inout lowp vec4 pixel_color, high
         return; // we currently have an invalid style -> do not draw anything
 
     // mix the previous layer color information with output
-    if(layer_style.should_blend)
-    {
-        // calculate color of current layer by blending the styles of lower and higher zoom step (depending on zoom_blend factor)
-        lowp vec4 col = mix(layer_style.lower_zoom_style.fill_color, layer_style.higher_zoom_style.fill_color, zoom_blend);
+    // calculate color of current layer by blending the styles of lower and higher zoom step (depending on zoom_blend factor)
+    lowp vec4 col = mix(layer_style.lower_zoom_style.fill_color, layer_style.higher_zoom_style.fill_color, zoom_blend);
 
-        // merge current layer color with previous pixel color
-        pixel_color = pixel_color + ((1.0-pixel_color.a)*col) * layer_style.layer_alpha;
-    }
-    else
-    {
-         pixel_color = pixel_color + ((1.0-pixel_color.a)*layer_style.lower_zoom_style.fill_color) * layer_style.layer_alpha;
-    }
+    // merge current layer color with previous pixel color
+    pixel_color = pixel_color + ((1.0-pixel_color.a)*col) * layer_style.layer_alpha;
+
 }
 
 bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, inout lowp vec4 pixel_color, highp float float_zoom_offset)
@@ -292,12 +285,7 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
             draw_layer(layer_style, pixel_color, fract(float_zoom_offset));
         }
 
-        lowp int zoom_offset_lower = 0;
-        if(geometry_data.should_blend)
-        {
-            // zoom_offset_lower = clamp(int(floor(float_zoom_offset-1.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for lower style and clamp
-            zoom_offset_lower = max(int(floor(float_zoom_offset-1.0)), -mipmap_levels+1); // calculate an integer zoom offset for lower style and clamp
-        }
+        lowp int zoom_offset_lower = max(int(floor(float_zoom_offset-1.0)), -mipmap_levels+1); // calculate an integer zoom offset for lower style and clamp
 
         // get and store new style info
         layer_style.last_style = geometry_data.style_index;
@@ -311,22 +299,17 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
 
         layer_style.lower_zoom_style.outline_width /= zoomed_tile_extent;
 
-        if(geometry_data.should_blend)
-        {
-            // lowp int zoom_offset_higher = clamp(int(floor(float_zoom_offset-0.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for higher style and clamp
-            lowp int zoom_offset_higher = max(int(floor(float_zoom_offset-0.0)), -mipmap_levels+1); // calculate an integer zoom offset for higher style and clamp
 
-            layer_style.higher_zoom_style = parse_style(uint(int(geometry_data.style_index)+min(zoom_offset_higher,0)));
+        // lowp int zoom_offset_higher = clamp(int(floor(float_zoom_offset-0.0)), -mipmap_levels+1, 0); // calculate an integer zoom offset for higher style and clamp
+        lowp int zoom_offset_higher = max(int(floor(float_zoom_offset-0.0)), -mipmap_levels+1); // calculate an integer zoom offset for higher style and clamp
 
-            mediump float zoomed_tile_extent_higher = float(tile_extent) * pow(2.0, float(zoom_offset_higher+1.0));
-            layer_style.higher_zoom_style.outline_width /= zoomed_tile_extent_higher;
-        }
-        else
-        {
-            layer_style.higher_zoom_style = layer_style.lower_zoom_style;
-        }
+        layer_style.higher_zoom_style = parse_style(uint(int(geometry_data.style_index)+min(zoom_offset_higher,0)));
 
-        layer_style.should_blend = geometry_data.should_blend;
+        mediump float zoomed_tile_extent_higher = float(tile_extent) * pow(2.0, float(zoom_offset_higher+1.0));
+        layer_style.higher_zoom_style.outline_width /= zoomed_tile_extent_higher;
+
+
+
         // how much alpha per layer we accumulate
         layer_style.layer_alpha = 0.0;
     }

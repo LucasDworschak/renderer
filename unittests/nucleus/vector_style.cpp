@@ -93,7 +93,7 @@ std::map<std::string, uint32_t> parse_tile(
             int index = 0;
 
             for (const auto& style : style_indices) {
-                uint32_t style_index = style.first >> 1; // we do not need blending flag
+                const uint32_t style_index = style.first;
                 std::string indexed_key = key + "_" + std::to_string(index);
                 if (feature_to_style.contains(indexed_key)) // make sure that all features with the same key share the style (if not we have to expand how we generate the key)
                 {
@@ -180,9 +180,9 @@ TEST_CASE("nucleus/vector_style")
         // the layer_index order is however preserved (just not tested in this testcase)
 
         // "opacity outside of zoom range"
-        CHECK(style_buffer[0].x == 0); // z 13-3
-        CHECK(style_buffer[1].x == 0); // z 13-2
-        CHECK(style_buffer[2].x == 0); // z 13-1
+        CHECK(style_buffer[0].x == 0xbbbbbbff); // z 13-3
+        CHECK(style_buffer[1].x == 0xbbbbbbff); // z 13-2
+        CHECK(style_buffer[2].x == 0xbbbbbbff); // z 13-1
         CHECK(style_buffer[3].x == 0xbbbbbbff); // z 13
         CHECK(style_buffer[4].x == 0xbbbbbbff); // z 14
         CHECK(style_buffer[5].x == 0xbbbbbbff); // z 15
@@ -191,11 +191,11 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[8].x == 0xbbbbbbff); // z 18
 
         // reuse style if no blending
-        CHECK(style_buffer[9].x == 0); // make sure that we are in the right style instruction here (not using other style)
+        CHECK(style_buffer[9].x == 0xaaaaaaff); // make sure that we are in the right style instruction here (not using other style)
         CHECK(style_buffer[9].z == 8 * line_multipliers); // z 11-3
         CHECK(style_buffer[10].z == 8 * line_multipliers); // z 11-2
         CHECK(style_buffer[11].z == 8 * line_multipliers); // z 11-1
-        CHECK(style_buffer[11].x == 0); // z 11-1 // color
+        CHECK(style_buffer[11].x == 0xaaaaaaff); // z 11-1 // color
         CHECK(style_buffer[12].x == 0xaaaaaaff); // z 11 // color
         CHECK(style_buffer[12].z == 8 * line_multipliers); // z 11
         CHECK(style_buffer[13].z == 8 * line_multipliers); // z 12

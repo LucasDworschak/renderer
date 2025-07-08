@@ -712,31 +712,31 @@ TEST_CASE("nucleus/vector_preprocess")
         {
             // only draw second style
             std::vector<glm::u32vec4> style_buffer { { 200, 0, 0, 0 }, { 255, 0, 0, 0 } };
-            std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1 << 1, 1 << 1 } };
+            std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1, 1 } };
             const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, style_buffer);
 
             CHECK(simplified.size() == 1);
-            CHECK(simplified[0].first == 1 << 1);
+            CHECK(simplified[0].first == 1);
         }
         {
             // draw both styles
             std::vector<glm::u32vec4> style_buffer { { 200, 0, 0, 0 }, { 200, 0, 0, 0 } };
-            std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1 << 1, 1 << 1 } };
+            std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1, 1 } };
             const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, style_buffer);
 
             CHECK(simplified.size() == 2);
-            CHECK(simplified[0].first == 1 << 1); // but layer 1 first
+            CHECK(simplified[0].first == 1); // but layer 1 first
         }
 
         {
             // width changed -> draw 3 than 1
             std::vector<glm::u32vec4> style_buffer { { 200, 0, 10, 0 }, { 255, 0, 0, 0 }, { 255, 0, 0, 0 } };
-            std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1 << 1, 1 << 1 }, { 2 << 1, 2 << 1 } };
+            std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1, 1 }, { 2, 2 } };
             const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, style_buffer);
 
             CHECK(simplified.size() == 2);
-            CHECK(simplified[0].first == 2 << 1);
-            CHECK(simplified[1].first == 0 << 1);
+            CHECK(simplified[0].first == 2);
+            CHECK(simplified[1].first == 0);
         }
     }
 

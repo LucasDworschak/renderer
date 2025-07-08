@@ -41,8 +41,7 @@ constexpr auto scale_lines = 1.0;
 constexpr auto mipmap_levels = 4;
 
 // if you change one of the following setting you also need to change the other (that they match is asserted in style.cpp)
-// one bit is used to signal if it should blend with next style or not
-constexpr auto style_bits = 13;
+constexpr auto style_bits = 12;
 constexpr auto style_buffer_size = 64;
 
 // number is used to multiply float numbers in style to get int values for storage ( e.g. style_precision:100 means 1.253 -> 125 -> 1.250)

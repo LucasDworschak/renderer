@@ -40,7 +40,7 @@ Style::Style(const QString& filename)
 {
     // make sure that style_bits and style_buffer_size are correctly matched -> changing one means you also need to change the other
     // -1 because one bit is used to signal if it should blend with next style or not
-    assert(((constants::style_buffer_size * constants::style_buffer_size) >> (constants::style_bits - 1)) == 1);
+    assert(((constants::style_buffer_size * constants::style_buffer_size) >> (constants::style_bits)) == 1);
     StyleExpression::initialize();
 }
 
@@ -74,11 +74,13 @@ void Style::load()
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonArray layers = style_expander::expand(doc.object().value("layers").toArray());
 
-    // pair is <layer_id, filter>
+    // key pair is <layer_id, filter>
     // layerid: source_layer+_+type (e.g. transportation_line)
+    // example: transportation_line + filter(bridge, class:secondary) -> vector<(zoom_to_style indices)>
     auto layerid_filter_to_layer_indices
         = std::map<std::pair<std::pair<std::string, int>, std::shared_ptr<StyleExpressionBase>>, std::vector<uint32_t>, StyleHasher>();
     // each entry in this vector is a different layer_index
+    // vector<map<zoom, style>>
     auto zoom_to_style = std::vector<std::map<uint8_t, LayerStyle>>();
 
     auto current_style_map = std::map<uint8_t, LayerStyle>();
@@ -130,9 +132,11 @@ void Style::load()
             // only increase layer_index if filter and or name is different
             // by doing this we prevent edge cases like https://github.com/AlpineMapsOrg/renderer/issues/151#issuecomment-2723695519 from overriding styles
             if (current_layer_filter != previous_layer_filter) {
-                // add the previous values to the data structures
-                layerid_filter_to_layer_indices[previous_layer_filter].push_back(zoom_to_style.size());
-                zoom_to_style.push_back(std::move(current_style_map));
+                if (!current_style_map.empty()) {
+                    // add the previous values to the data structures
+                    layerid_filter_to_layer_indices[previous_layer_filter].push_back(zoom_to_style.size());
+                    zoom_to_style.push_back(std::move(current_style_map));
+                }
                 // renew the current style map
                 current_style_map = std::map<uint8_t, LayerStyle>();
                 previous_layer_filter = current_layer_filter;
@@ -327,59 +331,37 @@ void Style::load()
         for (const auto& layer_index : layer_indices) {
 
             const auto style_map = zoom_to_style[layer_index];
-            LayerStyle current_style {};
-            bool all_styles_same = true;
-            // first loop only checks if all styles are the same -> if so, we do not need any blending and only one style is sufficient
-            for (const auto& [zoom, style] : style_map) {
-                if (current_style.fill_color == 0) // fill current_style in first iteration
-                    current_style = LayerStyle(style);
-
-                // check if any style looks different than first style
-                if (current_style != style) {
-                    all_styles_same = false;
-                    break;
-                }
-            }
 
             // create styles below min zoom and fade out
-            if (!all_styles_same) {
-                // we might need to fill from styles from style.json range to style_zoom_range
-                // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
-                // -> according to style.json there is no style for those values, we only need to add them for blending purposes
+            // we might need to fill from styles from style.json range to style_zoom_range start
+            // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
+            // -> according to style.json there is no style for those values, we only need to add them for blending purposes
+            const uint first_zoom = style_map.begin()->first;
+            const auto first_style = style_map.at(first_zoom);
 
-                uint8_t first_zoom = style_map.begin()->first;
-                const auto first_style = style_map.at(first_zoom);
-
-                for (uint8_t zoom = first_zoom - constants::mipmap_levels + 1; zoom < first_zoom; zoom++) {
-                    style_values.push_back({ 0, first_style.outline_color, first_style.outline_width, first_style.outline_dash });
-                }
+            for (uint zoom = first_zoom - constants::mipmap_levels + 1; zoom < first_zoom; zoom++) {
+                // style_values.push_back({ 0, first_style.outline_color, first_style.outline_width, first_style.outline_dash });
+                style_values.push_back({ first_style.fill_color, first_style.outline_color, first_style.outline_width, first_style.outline_dash });
             }
 
-            bool first = true;
             for (const auto& [zoom, style] : style_map) {
-                if (!all_styles_same || first) {
 
-                    // add a new style every loop iteration if styles are different
-                    // or if styles are the same only add it at first iteration
-                    first = false;
-                    style_values.push_back({ style.fill_color, style.outline_color, style.outline_width, style.outline_dash });
-                }
+                // add a new style every loop iteration
+                style_values.push_back({ style.fill_color, style.outline_color, style.outline_width, style.outline_dash });
+                const uint32_t style_index = style_values.size() - 1;
+
                 // add the styles to the data structure where we later can find the relevant style_index
-                uint32_t style_index = (style_values.size() - 1u) << 1; // move style index by 1 for the "blend" flag
-                m_layer_to_style[key.first].add_filter({ style_index | ((all_styles_same) ? 0u : 1u), layer_index, key.second }, zoom);
+                m_layer_to_style[key.first].add_filter({ style_index, layer_index, key.second }, zoom);
             }
 
-            if (!all_styles_same) {
-                // we might need to fill from styles from style.json range to style_zoom_range
-                // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
-                // -> according to style.json there is no style for those values, we only need to add them for blending purposes
+            // we might need to fill from styles from style.json range to style_zoom_range end
+            // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
+            // -> according to style.json there is no style for those values, we only need to add them for blending purposes
+            const uint last_zoom = style_map.rbegin()->first;
+            const auto last_style = style_values[style_values.size() - 1];
 
-                const auto last_style = style_values[style_values.size() - 1];
-                uint8_t last_zoom = style_map.rbegin()->first;
-
-                for (uint8_t zoom = last_zoom; zoom < constants::style_zoom_range.y; zoom++) {
-                    style_values.push_back({ last_style.x, last_style.y, last_style.z, last_style.w });
-                }
+            for (uint zoom = last_zoom; zoom < constants::style_zoom_range.y; zoom++) {
+                style_values.push_back({ last_style.x, last_style.y, last_style.z, last_style.w });
             }
 
             // make sure that layer_index also fits into style_bits (we use this in preprocess)

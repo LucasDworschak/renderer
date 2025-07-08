@@ -24,7 +24,6 @@ struct VectorLayerData{
     highp ivec2 c;
 
     highp uint style_index;
-    bool should_blend;
     bool is_polygon;
 };
 
@@ -36,12 +35,11 @@ struct VectorLayerData{
 // const lowp int coordinate_bits = 8;
 // const highp int aa_border = 2;
 
-const lowp int available_style_bits = all_bits - (2 * coordinate_bits_polygons);
-
 const highp uint coordinate_bitmask = (1u << coordinate_bits_polygons) - 1u;
 const highp uint coordinate_bitmask_lines = (1u << coordinate_bits_lines) - 1u;
 const lowp int remaining_coordinate_bits_lines = coordinate_bits_lines - coordinate_bits_polygons;
 const highp uint remaining_coordinate_bitmask_lines = (1u << remaining_coordinate_bits_lines) - 1u;
+const highp uint is_polygon_bitmask = (1u << style_bits);
 
 const lowp int coordinate_shift1 = all_bits - coordinate_bits_polygons;
 const lowp int coordinate_shift2 = all_bits - (2 * coordinate_bits_polygons);
@@ -102,9 +100,7 @@ highp uvec2 pack_vectorlayer_data(VectorLayerData data)
         packed_data.y = packed_data.y | ((uint(data.b.y) >> coordinate_bits_polygons) << coordinate_shift4_lines);
     }
 
-    // packed_data.y = packed_data.y | ((data.style_index << 1) | ((data.is_polygon) ? 1u : 0u));
-    // alternative only for neceesary for shader testing
-    packed_data.y = packed_data.y | ((data.style_index << 2) | (((data.should_blend) ? 1u : 0u) << 1) | ((data.is_polygon) ? 1u : 0u));
+    packed_data.y = packed_data.y | (((data.is_polygon ? 1u : 0u) << style_bits) | data.style_index);
 
     return packed_data;
 }
@@ -122,12 +118,9 @@ VectorLayerData unpack_data(highp uvec2 packed_data)
     c.x = (packed_data.y & (coordinate_bitmask_shift1)) >> coordinate_shift1;
     c.y = (packed_data.y & (coordinate_bitmask_shift2)) >> coordinate_shift2;
 
-    highp uint style_and_blend = (packed_data.y & ((1u << available_style_bits) - 1u)) >> 1;
-    // NOTE: the should_blend bit is only necessary for the shader -> on cpu side we do not need to separate them
-    unpacked_data.style_index = style_and_blend >> 1;
-    unpacked_data.should_blend = (style_and_blend & 1u) == 1u;
+    unpacked_data.style_index = packed_data.y & ((1u << style_bits) - 1u);
 
-    unpacked_data.is_polygon = (packed_data.y & 1u) == 1u;
+    unpacked_data.is_polygon = (packed_data.y & is_polygon_bitmask) != 0u;
 
     if (unpacked_data.is_polygon) {
         unpacked_data.a -= geometry_offset_polygons;
