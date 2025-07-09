@@ -295,7 +295,7 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
         // by dividing by tile_extent we get the width we want to draw
         // by further dividing the tile_extent by 2^zoom_offset, we reduce the tile_extent and increase the line width.
         // we have to increase the zoom_offset by one in order to use the same size as in the preprocessor
-        mediump float zoomed_tile_extent = float(tile_extent) * pow(2.0, float(zoom_offset_lower+1.0));
+        mediump float zoomed_tile_extent = float(tile_extent) * pow(2.0, float(zoom_offset_lower+1));
 
         layer_style.lower_zoom_style.outline_width /= zoomed_tile_extent;
 
@@ -305,7 +305,7 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
 
         layer_style.higher_zoom_style = parse_style(uint(int(geometry_data.style_index)+min(zoom_offset_higher,0)));
 
-        mediump float zoomed_tile_extent_higher = float(tile_extent) * pow(2.0, float(zoom_offset_higher+1.0));
+        mediump float zoomed_tile_extent_higher = float(tile_extent) * pow(2.0, float(zoom_offset_higher+1));
         layer_style.higher_zoom_style.outline_width /= zoomed_tile_extent_higher;
 
 
@@ -375,7 +375,8 @@ void main() {
 
     // ORTHO color -> note we wrap tile_id in uvec3 and use ortho_uv, to not change those variables for the vector color
     highp vec2 ortho_uv = uv;
-    decrease_zoom_level_until(uvec3(tile_id), ortho_uv, texelFetch(instanced_texture_zoom_sampler, ivec2(instance_id, 0), 0).x);
+    highp uvec3 temp_tile_id = uvec3(tile_id);
+    decrease_zoom_level_until(temp_tile_id, ortho_uv, texelFetch(instanced_texture_zoom_sampler, ivec2(instance_id, 0), 0).x);
     highp float texture_layer_f = float(texelFetch(instanced_texture_array_index_sampler, ivec2(instance_id, 0), 0).x);
     lowp vec3 ortho_color = texture(texture_sampler, vec3(ortho_uv, texture_layer_f)).rgb;
     ortho_color = mix(ortho_color, conf.material_color.rgb, conf.material_color.a);
@@ -476,12 +477,12 @@ void main() {
 
                 highp float d = 0.0;
 
-                lowp float tile_scale = scale_lines * (1.0-float(geometry_data.is_polygon)) + scale_polygons * float(geometry_data.is_polygon);
+                lowp float tile_scale = float(scale_lines) * (1.0-float(geometry_data.is_polygon)) + float(scale_polygons) * float(geometry_data.is_polygon);
                 highp vec2 cell_offset = vec2(grid_cell) * cell_size * tile_scale;
 
-                highp vec2 v0 = (vec2(geometry_data.a) + cell_offset) / vec2(tile_extent * tile_scale);
-                highp vec2 v1 = (vec2(geometry_data.b) + cell_offset) / vec2(tile_extent * tile_scale);
-                highp vec2 v2 = (vec2(geometry_data.c) + cell_offset) / vec2(tile_extent * tile_scale);
+                highp vec2 v0 = (vec2(geometry_data.a) + cell_offset) / vec2(float(tile_extent) * tile_scale);
+                highp vec2 v1 = (vec2(geometry_data.b) + cell_offset) / vec2(float(tile_extent) * tile_scale);
+                highp vec2 v2 = (vec2(geometry_data.c) + cell_offset) / vec2(float(tile_extent) * tile_scale);
 
 
                 lowp float thickness_lower = layer_style.lower_zoom_style.outline_width;
@@ -540,7 +541,7 @@ void main() {
     }
 
     // mix polygon color with background
-    float vector_surface_mix = 0.0;
+    lowp float vector_surface_mix = 0.0;
     if(display_mode == 0)
     {
         // mixed surface/vectortile
@@ -554,7 +555,8 @@ void main() {
     // else // -> only surface/ortho
 
     highp vec3 vector_color = vec3(pixel_color.rgb + ((1.0-pixel_color.a)*background_color));
-    texout_albedo = mix(ortho_color, vector_color, vector_surface_mix);
+    // texout_albedo = mix(ortho_color, vector_color, vector_surface_mix);
+    texout_albedo = mix(ortho_color * vector_color, vector_color, min(1.0, line_influence));
 
     if (conf.overlay_mode > 199u && conf.overlay_mode < 300u) {
         lowp vec3 zoom_debug_color =  color_from_id_hash(uint(float_zoom));

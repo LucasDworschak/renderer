@@ -53,13 +53,13 @@ const highp uint coordinate_bitmask_shift4 = coordinate_bitmask << coordinate_sh
 const highp uint remaining_coordinates_bitmask_shift = remaining_coordinate_bitmask_lines << remaining_coordinate_bits_lines;
 
 // for packed.y -> we need to divide coordinate_bits_polygons by 2
-const lowp int coordinate_shift1_lines = all_bits - int(0.5 * coordinate_bits_polygons);
-const lowp int coordinate_shift2_lines = all_bits - int(1.0 * coordinate_bits_polygons);
-const lowp int coordinate_shift3_lines = all_bits - int(1.5 * coordinate_bits_polygons);
-const lowp int coordinate_shift4_lines = all_bits - int(2.0 * coordinate_bits_polygons);
+const lowp int coordinate_shift1_lines = all_bits - int(0.5 * float(coordinate_bits_polygons));
+const lowp int coordinate_shift2_lines = all_bits - int(1.0 * float(coordinate_bits_polygons));
+const lowp int coordinate_shift3_lines = all_bits - int(1.5 * float(coordinate_bits_polygons));
+const lowp int coordinate_shift4_lines = all_bits - int(2.0 * float(coordinate_bits_polygons));
 
-const highp int cell_width_polygons = int((tile_extent * scale_polygons) / grid_size);
-const highp int cell_width_lines = int((tile_extent * scale_lines) / grid_size);
+const highp int cell_width_polygons = int(float(tile_extent * scale_polygons) / grid_size.x);
+const highp int cell_width_lines = int(float(tile_extent * scale_lines) / grid_size.x);
 
 const highp int max_cell_width_polygons = (1 << (coordinate_bits_polygons));
 const highp int geometry_offset_polygons = (max_cell_width_polygons - cell_width_polygons) / 2;
