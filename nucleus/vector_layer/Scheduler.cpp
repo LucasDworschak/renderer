@@ -50,6 +50,10 @@ void Scheduler::transform_and_emit(const std::vector<tile::DataQuad>& new_quads,
         }
     }
 
+    if (m_preprocessor.update_visible_styles()) {
+        emit style_updated(m_preprocessor.style());
+    }
+
     emit gpu_tiles_updated(deleted_quads, new_gpu_tiles);
 }
 

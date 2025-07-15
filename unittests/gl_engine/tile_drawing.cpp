@@ -183,6 +183,8 @@ std::shared_ptr<gl_engine::UniformBuffer<gl_engine::uboSharedConfig>> bind_share
 
     gl_engine::uboSharedConfig* config = &shared_config_ubo->data;
 
+    config->m_material_color = QVector4D(1.0, 1.0, 1.0, 1.0); // ignores texture color and only uses a plain white material
+
     switch (mode) {
     case CellSize:
         config->m_overlay_mode = 202u;
@@ -309,20 +311,10 @@ std::shared_ptr<gl_engine::TextureLayer> load_texture_layer(
     ortho_texture.scheduler->send_quad_requests();
 
     auto load_func = [&texture_layer](QList<QVariant> arguments) {
-        std::vector<nucleus::tile::Id> deleted_tiles = arguments.at(0).value<std::vector<nucleus::tile::Id>>();
-        std::vector<GpuTextureTile> actual_new_tiles = arguments.at(1).value<std::vector<GpuTextureTile>>();
+        std::vector<nucleus::tile::Id> deleted_quads = arguments.at(0).value<std::vector<nucleus::tile::Id>>();
+        std::vector<GpuTextureTile> actual_new_quads = arguments.at(1).value<std::vector<GpuTextureTile>>();
 
-        // if (real_ortho) {
-        texture_layer->update_gpu_tiles(deleted_tiles, actual_new_tiles);
-        // } else {
-        //     std::vector<GpuTextureTile> new_tiles;
-        //     for (const auto& tile : actual_new_tiles) {
-        //         // replace tile with 0 height tiles
-        //         new_tiles.push_back({ tile.id, std::make_shared<const nucleus::Raster<uint16_t>>(glm::uvec2(256), uint16_t(0)) });
-        //     }
-
-        //     texture_layer->update_gpu_tiles(deleted_tiles, new_tiles);
-        // }
+        texture_layer->update_gpu_tiles(deleted_quads, actual_new_quads);
     };
 
     loading(load_func, spy_stats, spy);

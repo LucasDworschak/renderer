@@ -1,0 +1,69 @@
+{
+    "layers":
+    [
+        {
+            "comment": "landcover1",
+            "id": "landcover1",
+            "type": "fill",
+            "source-layer": "landcover",
+            "minzoom": 13,
+            "maxzoom": 15,
+            "paint":
+            {
+                "fill-color": "#bbbbbb"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "subclass",
+                    "forest"
+                ]
+            ]
+        },
+
+        {
+            "comment": "random style",
+            "id": "random_style",
+            "type": "fill",
+            "source-layer": "landcover",
+            "minzoom": 13,
+            "maxzoom": 18,
+            "paint":
+            {
+                "fill-color": "#cccccc"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "subclass",
+                    "random"
+                ]
+            ]
+        },
+        {
+            "comment": "landcover2",
+            "id": "landcover2",
+            "type": "fill",
+            "source-layer": "landcover",
+            "minzoom": 14,
+            "maxzoom": 18,
+            "paint":
+            {
+                "fill-color": "#aaaaaa"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "subclass",
+                    "forest"
+                ]
+            ]
+        }
+    ]
+}

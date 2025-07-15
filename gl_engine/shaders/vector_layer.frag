@@ -281,7 +281,8 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
 
         if(layer_style.layer_alpha < full_threshold)
         {
-            // we havent drawn this layer yet
+            // we havent drawn the previous layer yet, but encountered a new layer
+            // draw the previous layer
             draw_layer(layer_style, pixel_color, fract(float_zoom_offset));
         }
 
@@ -532,7 +533,7 @@ void main() {
             }
 
 
-            if(layer_style.layer_alpha < full_threshold)
+            if(pixel_color.a < 1.0  && layer_style.layer_alpha < full_threshold)
             {
                 // mix the last layer we parsed
                 draw_layer(layer_style, pixel_color, fract(float_zoom));

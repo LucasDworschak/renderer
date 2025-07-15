@@ -46,7 +46,10 @@ Style::Style(const QString& filename)
 
 Style::Style(Style&& other)
     : m_styles(std::move(other.m_styles))
+    , m_visible_styles(std::move(other.m_visible_styles))
     , m_layer_to_style(std::move(other.m_layer_to_style))
+    , m_lowest_encountered_zoom(std::move(other.m_lowest_encountered_zoom))
+    , m_styles_to_update(std::move(other.m_styles_to_update))
     , m_filename(std::move(other.m_filename))
 {
 }
@@ -282,10 +285,10 @@ void Style::load()
             if (opacity != 255u) {
                 // if opacity is set it overrides any opacity from the color
 
-                fill_color &= 4294967040u; // bit mask that zeros out the opacity bits
+                fill_color &= remove_alpha_mask; // bit mask that zeros out the opacity bits
                 fill_color |= opacity;
 
-                outline_color &= 4294967040u; // bit mask that zeros out the opacity bits
+                outline_color &= remove_alpha_mask; // bit mask that zeros out the opacity bits
                 outline_color |= opacity;
             }
 
@@ -319,8 +322,10 @@ void Style::load()
     }
 
     // at the end add the last filled style map
-    layerid_filter_to_layer_indices[previous_layer_filter].push_back(uint32_t(zoom_to_style.size()));
-    zoom_to_style.push_back(current_style_map);
+    if (current_style_map.size() > 0) {
+        layerid_filter_to_layer_indices[previous_layer_filter].push_back(uint32_t(zoom_to_style.size()));
+        zoom_to_style.push_back(current_style_map);
+    }
 
     for (const auto& [key, layer_indices] : layerid_filter_to_layer_indices) {
 
@@ -339,19 +344,18 @@ void Style::load()
             const uint first_zoom = style_map.begin()->first;
             const auto first_style = style_map.at(first_zoom);
 
-            for (uint zoom = first_zoom - constants::mipmap_levels + 1; zoom < first_zoom; zoom++) {
-                // style_values.push_back({ 0, first_style.outline_color, first_style.outline_width, first_style.outline_dash });
-                style_values.push_back({ first_style.fill_color, first_style.outline_color, first_style.outline_width, first_style.outline_dash });
-            }
+            // duplicate first style with alpha 0
+            // since we premultiply alpha -> alpha: 0 = color: 0,0,0
+            style_values.push_back({ 0, 0, first_style.outline_width, first_style.outline_dash });
 
             for (const auto& [zoom, style] : style_map) {
 
                 // add a new style every loop iteration
+                const uint32_t style_index = style_values.size();
                 style_values.push_back({ style.fill_color, style.outline_color, style.outline_width, style.outline_dash });
-                const uint32_t style_index = style_values.size() - 1;
 
                 // add the styles to the data structure where we later can find the relevant style_index
-                m_layer_to_style[key.first].add_filter({ style_index, layer_index, key.second }, zoom);
+                m_layer_to_style[key.first].add_filter({ { style_index, layer_index }, key.second }, zoom);
             }
 
             // we might need to fill from styles from style.json range to style_zoom_range end
@@ -360,31 +364,48 @@ void Style::load()
             const uint last_zoom = style_map.rbegin()->first;
             const auto last_style = style_values[style_values.size() - 1];
 
-            for (uint zoom = last_zoom; zoom < constants::style_zoom_range.y; zoom++) {
-                style_values.push_back({ last_style.x, last_style.y, last_style.z, last_style.w });
+            // duplicate last style with alpha 0 (if we are not yet at maxzoom)
+            // since we premultiply alpha -> alpha: 0 = color: 0,0,0
+            if (last_zoom < constants::style_zoom_range.y) {
+                const uint32_t style_index = style_values.size();
+                style_values.push_back({ 0, 0, last_style.z, last_style.w });
+                m_layer_to_style[key.first].add_filter({ { style_index, layer_index }, key.second }, last_zoom + 1);
             }
+            // set it to the highest value
+            m_lowest_encountered_zoom[layer_index] = { constants::style_zoom_range.y + 1, last_zoom };
 
             // make sure that layer_index also fits into style_bits (we use this in preprocess)
-            assert(layer_index < ((1u << constants::style_bits) - 1u));
+            assert(layer_index < ((1u << constants::style_bits) - 1u)); // TODO why layer_index???
         }
+    }
+
+    auto visible_style_values = std::vector<glm::u32vec4>(style_values);
+    for (auto& v : visible_style_values) {
+        // set color alpha to 0 for fadeout
+        // since we premultiply alpha -> alpha: 0 = color: 0,0,0
+        v.x = 0;
+        v.y = 0;
     }
 
     // qDebug() << "style_values: " << style_values.size();
 
     // make sure that the style values are within the buffer size; resize them to this size and create the raster images
     assert(style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
+    visible_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec4(-1u));
     style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec4(-1u));
 
+    m_visible_styles
+        = std::make_shared<nucleus::Raster<glm::u32vec4>>(nucleus::Raster<glm::u32vec4>(constants::style_buffer_size, std::move(visible_style_values)));
     m_styles = std::make_shared<const nucleus::Raster<glm::u32vec4>>(nucleus::Raster<glm::u32vec4>(constants::style_buffer_size, std::move(style_values)));
 
-    qDebug() << "vectorlayer style loaded";
+    // qDebug() << "vectorlayer style loaded";
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> Style::indices(std::string layer_name,
+std::vector<StyleLayerIndex> Style::indices(std::string layer_name,
     int type,
     unsigned zoom,
     const mapbox::vector_tile::feature& feature,
-    std::array<int, constants::max_style_expression_keys>* temp_values) const
+    std::array<int, constants::max_style_expression_keys>* temp_values)
 {
     const auto layer = std::make_pair(layer_name, type);
 
@@ -393,10 +414,43 @@ std::vector<std::pair<uint32_t, uint32_t>> Style::indices(std::string layer_name
         return {};
     }
 
-    return m_layer_to_style.at(layer).indices(zoom, feature, temp_values);
+    const auto indices = m_layer_to_style.at(layer).indices(zoom, feature, temp_values);
+
+    for (const auto& indices : indices) {
+
+        if (zoom < m_lowest_encountered_zoom[indices.layer_index].lowest_zoom) {
+            m_lowest_encountered_zoom[indices.layer_index].lowest_zoom = zoom;
+            m_styles_to_update.push_back(indices);
+        }
+    }
+
+    return indices;
 }
 
 std::shared_ptr<const nucleus::Raster<glm::u32vec4>> Style::styles() const { return m_styles; }
+std::shared_ptr<const nucleus::Raster<glm::u32vec4>> Style::visible_styles() const { return m_visible_styles; }
+
+bool Style::update_visible_styles()
+{
+    if (m_styles_to_update.size() == 0)
+        return false; // no update needed
+
+    const auto& style_buffer = m_styles->buffer();
+    auto& visible_style_buffer = m_visible_styles->buffer();
+    for (const auto& indices : m_styles_to_update) {
+
+        const auto encountered_zoom = m_lowest_encountered_zoom[indices.layer_index];
+
+        const auto zooms_to_max = std::min(constants::style_zoom_range.y, (encountered_zoom.max_zoom + 1)) - encountered_zoom.lowest_zoom;
+
+        for (auto i = indices.style_index - 1; i <= indices.style_index + zooms_to_max; i++) {
+            visible_style_buffer[i] = style_buffer[i];
+        }
+    }
+    m_styles_to_update.clear();
+
+    return true;
+}
 
 // NOTE std::stof uses the locale to convert strings
 // locale might be german and it expects a "," decimal

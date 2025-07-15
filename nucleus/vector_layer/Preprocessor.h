@@ -127,8 +127,9 @@ struct GeometryData {
     std::vector<ClipperRect> bounds;
 
     radix::geometry::Aabb2i aabb;
-    std::pair<uint32_t, uint32_t> style_layer;
+    StyleLayerIndex style_layer;
     bool is_polygon;
+    bool full_opaque;
 };
 
 using VectorLayers = std::map<uint32_t, std::vector<GeometryData>>;
@@ -161,20 +162,20 @@ public:
 
     static GpuVectorLayerTile create_default_gpu_tile();
 
-    static std::vector<std::pair<uint32_t, uint32_t>> simplify_styles(
-        std::vector<std::pair<uint32_t, uint32_t>>* styles, const std::vector<glm::u32vec4>& style_buffer);
+    static std::vector<StyleLayerIndex> simplify_styles(std::vector<StyleLayerIndex>* styles, const std::vector<glm::u32vec4>& style_buffer);
 
     const std::shared_ptr<const nucleus::Raster<glm::u32vec4>> style();
+    bool update_visible_styles();
     size_t processed_amount();
 
 private:
     std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes);
 
-    size_t triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const std::pair<uint32_t, uint32_t>& style_layer);
+    size_t triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const StyleLayerIndex& style_layer);
 
     void generate_preprocess_grid();
 
-    const Style m_style;
+    Style m_style;
     const std::vector<glm::u32vec4> m_style_buffer;
 
     nucleus::Raster<PreprocessCell> m_preprocess_grid;

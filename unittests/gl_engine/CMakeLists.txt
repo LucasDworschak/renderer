@@ -39,6 +39,8 @@ qt_add_resources(unittests_gl_engine "gl_test_data"
     data/vectortile_openmaptile_18_140276_92195_kals.pbf
     data/vectortile_mountain_14_8781_5760.pbf
     data/vectortile_skilift_18_140269_92190.pbf
+    data/vectortile_highway.png
+    data/vectortile_landstrasse_view.png
     data/vectortile_grossglockner_view.png
     data/vectortile_straight_polygon.png
     data/vectortile_straight_thin_line.png

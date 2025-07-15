@@ -70,7 +70,9 @@ Preprocessor::Preprocessor(Style&& style)
     generate_preprocess_grid();
 }
 
-const std::shared_ptr<const nucleus::Raster<glm::u32vec4>> Preprocessor::style() { return m_style.styles(); }
+const std::shared_ptr<const nucleus::Raster<glm::u32vec4>> Preprocessor::style() { return m_style.visible_styles(); }
+bool Preprocessor::update_visible_styles() { return m_style.update_visible_styles(); }
+
 size_t Preprocessor::processed_amount() { return m_processed_amount; }
 
 GpuVectorLayerTile Preprocessor::create_default_gpu_tile()
@@ -111,8 +113,7 @@ GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vecto
     return tile;
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> Preprocessor::simplify_styles(
-    std::vector<std::pair<uint32_t, uint32_t>>* style_and_layer_indices, const std::vector<glm::u32vec4>& style_buffer)
+std::vector<StyleLayerIndex> Preprocessor::simplify_styles(std::vector<StyleLayerIndex>* style_and_layer_indices, const std::vector<glm::u32vec4>& style_buffer)
 {
     // we get multiple styles that may have full opacity and the same width
     // creating render calls for both does not make sense -> we only want to draw the top layer
@@ -120,18 +121,26 @@ std::vector<std::pair<uint32_t, uint32_t>> Preprocessor::simplify_styles(
 
     // TODO this sort should happen at creation of the vector not here
     // order the styles so that we look at layer in descending order
-    std::sort(style_and_layer_indices->begin(), style_and_layer_indices->end(), [](std::pair<uint32_t, uint32_t> a, std::pair<uint32_t, uint32_t> b) {
-        return a.second > b.second;
-    });
-
-    std::vector<std::pair<uint32_t, uint32_t>> out_styles;
+    std::sort(
+        style_and_layer_indices->begin(), style_and_layer_indices->end(), [](StyleLayerIndex a, StyleLayerIndex b) { return a.layer_index > b.layer_index; });
+    std::vector<StyleLayerIndex> out_styles;
     int accummulative_opacity = 0;
     float width = 0.0;
 
     for (const auto& indices : *style_and_layer_indices) {
-        const auto style_data = style_buffer[indices.first];
-        const float current_width = float(style_data.z) / float(constants::style_precision);
-        const int current_opacity = style_data.x & 255;
+        const auto style_data_lower = style_buffer[indices.style_index - 1];
+        const auto style_data_higher = style_buffer[indices.style_index];
+        const float lower_width = float(style_data_lower.z) / float(constants::style_precision);
+        const float lower_opacity = style_data_lower.x & 255;
+        const float higher_width = float(style_data_higher.z) / float(constants::style_precision);
+        const float higher_opacity = style_data_higher.x & 255;
+
+        // by mixing the lower and higher style -> we get a value that better represents a real world example
+        // this is neccessary for e.g. 1 landcover style that stops at z12 and another that starts at z13
+        // -> we need to render both, because rendering only one at z13 would falsely represent a fade to alpha 0 between z12 and z13
+        // by using z12.5 for the current opacity and width, we can make sure that any can be countered by the fading in the opposite direction
+        const float current_width = (lower_width + higher_width) / 2.0;
+        const int current_opacity = (lower_opacity + higher_opacity) / 2.0;
 
         if (current_opacity == 0)
             continue; // we dont care about 0 opacity geometry
@@ -207,7 +216,11 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
             }
 
             for (const auto& style_layer : style_and_layer_indices) {
-                data[style_layer.second].emplace_back(ClipperPaths(geom.begin(), geom.end()), bounds, aabb, style_layer, is_polygon);
+                const auto opacity_lower = m_style_buffer[style_layer.style_index - 1].x & 255;
+                const auto opacity_higher = m_style_buffer[style_layer.style_index].x & 255;
+                const auto full_opaque = opacity_lower + opacity_higher == (255 + 255);
+
+                data[style_layer.layer_index].emplace_back(ClipperPaths(geom.begin(), geom.end()), bounds, aabb, style_layer, is_polygon, full_opaque);
             }
         }
     }
@@ -350,7 +363,7 @@ std::pair<uint32_t, uint32_t> Preprocessor::get_split_index(uint32_t index, cons
 }
 
 // returns how many triangles have been generated;
-size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const std::pair<uint32_t, uint32_t>& style_layer)
+size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const StyleLayerIndex& style_layer)
 {
     const auto& indices = mapbox::earcut<uint32_t>(polygon_points);
 
@@ -374,7 +387,8 @@ size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, Vect
         const auto& p1 = polygon_points[ind1.first][ind1.second];
         const auto& p2 = polygon_points[ind2.first][ind2.second];
 
-        const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.first, true });
+        const auto& data
+            = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.style_index, true });
 
         (*temp_cell).emplace_back(data);
     }
@@ -502,8 +516,9 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                 const auto& style_layer = data[i].style_layer;
                 const auto& vertices = data[i].vertices;
                 const auto& bounds = data[i].bounds;
+                const auto& check_fully_covers = data[i].full_opaque;
 
-                m_preprocess_grid.visit(data[i].aabb, [this, &vertices, &bounds, &style_layer](glm::uvec2, PreprocessCell& cell) {
+                m_preprocess_grid.visit(data[i].aabb, [this, &vertices, &bounds, &style_layer, &check_fully_covers](glm::uvec2, PreprocessCell& cell) {
                     if (cell.is_done) {
                         // qDebug() << "cell_done";
                         return;
@@ -514,7 +529,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                     if (m_clipper_result.empty())
                         return;
 
-                    if (fully_covers(m_clipper_result, cell.rect_polygons)) {
+                    if (check_fully_covers && fully_covers(m_clipper_result, cell.rect_polygons)) {
                         cell.is_done = true;
 
                         // we only need one triangle that covers the whole cell
@@ -524,7 +539,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                             { { -constants::aa_border * constants::scale_polygons, -constants::aa_border * constants::scale_polygons },
                                 { -constants::aa_border * constants::scale_polygons, max_cell_width_polygons - geometry_offset_polygons - 1 },
                                 { max_cell_width_polygons - geometry_offset_polygons - 1, -constants::aa_border * constants::scale_polygons },
-                                style_layer.first,
+                                style_layer.style_index,
                                 true });
 
                         cell.cell_data.push_back(data);
@@ -545,7 +560,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 
                 float line_width = 0;
                 // use the line width of the previous style
-                line_width = float(m_style_buffer[(data[i].style_layer.first) - 1u].z) / float(constants::style_precision) + constants::aa_lines;
+                line_width = float(m_style_buffer[(data[i].style_layer.style_index) - 1u].z) / float(constants::style_precision) + constants::aa_lines;
 
                 std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
 
@@ -603,7 +618,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                     for (const auto& line : shapes) {
 
                         const auto packed_data
-                            = nucleus::vector_layer::Preprocessor::pack_line_data({ line[0].x, line[0].y }, { line[1].x, line[1].y }, style_layer.first);
+                            = nucleus::vector_layer::Preprocessor::pack_line_data({ line[0].x, line[0].y }, { line[1].x, line[1].y }, style_layer.style_index);
                         cell.cell_data.push_back(packed_data);
                     }
                     m_processed_amount += shapes.size();

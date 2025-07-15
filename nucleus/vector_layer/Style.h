@@ -37,6 +37,11 @@ struct LayerStyle {
     bool operator==(const LayerStyle& other) const = default;
 };
 
+struct LowestEncounteredZoom {
+    unsigned lowest_zoom;
+    unsigned max_zoom;
+};
+
 struct StyleHasher {
     size_t operator()(const LayerStyle& style) const
     {
@@ -109,13 +114,16 @@ public:
 
     static uint32_t premultiply_alpha(uint32_t color);
 
-    std::vector<std::pair<uint32_t, uint32_t>> indices(std::string layer_name,
+    std::vector<StyleLayerIndex> indices(std::string layer_name,
         int type,
         unsigned zoom,
         const mapbox::vector_tile::feature& feature,
-        std::array<int, constants::max_style_expression_keys>* temp_values) const;
+        std::array<int, constants::max_style_expression_keys>* temp_values);
 
     std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles() const;
+    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> visible_styles() const;
+
+    bool update_visible_styles();
 
 public slots:
     void load();
@@ -124,7 +132,8 @@ signals:
     void load_finished(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles);
 
 private:
-    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> m_styles;
+    // sets alpha to 0 on a 32 bit color
+    static constexpr uint remove_alpha_mask = 4294967040u;
 
     float interpolation_factor(uint8_t zoom, float base, uint8_t zoom1, uint8_t zoom2);
     uint32_t interpolate_color(float t, uint32_t color1, uint32_t color2);
@@ -133,7 +142,20 @@ private:
     float rgb2linear(uint8_t channel);
     uint8_t linear2rgb(float linear);
 
+    // contains the style info that was parsed from the stylesheet
+    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> m_styles;
+    // only contains that were encountered by the call of the indices function
+    std::shared_ptr<nucleus::Raster<glm::u32vec4>> m_visible_styles;
+
     std::unordered_map<std::pair<std::string, int>, StyleFilter, StyleHasher> m_layer_to_style;
+
+    // styles on the server and in the stylesheet might be a bit different
+    // we want to ensure that we fade to alpha 0 if the next lower tile zoom does not contain a blendable style
+    // we ensure that a feature that uses style blending (!all_styles_same) has a style at constants::style_zoom_range.y-1
+    // key: style_index of highest style
+    // value: lowest zoom_level of current style
+    std::unordered_map<uint32_t, LowestEncounteredZoom> m_lowest_encountered_zoom;
+    std::vector<StyleLayerIndex> m_styles_to_update;
 
     QString m_filename;
 };

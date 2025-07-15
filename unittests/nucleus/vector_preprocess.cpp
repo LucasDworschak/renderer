@@ -710,33 +710,37 @@ TEST_CASE("nucleus/vector_preprocess")
     SECTION("Simplify styles")
     {
         {
-            // only draw second style
-            std::vector<glm::u32vec4> style_buffer { { 200, 0, 0, 0 }, { 255, 0, 0, 0 } };
-            std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1, 1 } };
+            // only draw second style (passed by style_indices)
+            // style width index 0 and 2 in style buffer are here for blending between zoom steps
+            std::vector<glm::u32vec4> style_buffer { { 200, 0, 0, 0 }, { 200, 0, 0, 0 }, { 255, 0, 0, 0 }, { 255, 0, 0, 0 } };
+            std::vector<StyleLayerIndex> style_indices { { 1, 1 }, { 3, 3 } };
             const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, style_buffer);
 
             CHECK(simplified.size() == 1);
-            CHECK(simplified[0].first == 1);
+            CHECK(simplified[0].style_index == 3);
         }
         {
             // draw both styles
-            std::vector<glm::u32vec4> style_buffer { { 200, 0, 0, 0 }, { 200, 0, 0, 0 } };
-            std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1, 1 } };
+            // style width index 0 in style buffer is here for blending between zoom steps
+            std::vector<glm::u32vec4> style_buffer { { 200, 0, 0, 0 }, { 200, 0, 0, 0 }, { 200, 0, 0, 0 } };
+            std::vector<StyleLayerIndex> style_indices { { 1, 1 }, { 2, 2 } };
             const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, style_buffer);
 
             CHECK(simplified.size() == 2);
-            CHECK(simplified[0].first == 1); // but layer 1 first
+            CHECK(simplified[0].style_index == 2); // but layer 1 first
         }
 
         {
             // width changed -> draw 3 than 1
-            std::vector<glm::u32vec4> style_buffer { { 200, 0, 10, 0 }, { 255, 0, 0, 0 }, { 255, 0, 0, 0 } };
-            std::vector<std::pair<uint32_t, uint32_t>> style_indices { { 0, 0 }, { 1, 1 }, { 2, 2 } };
+            // styles width index 0 and 2 in style buffer are here for blending between zoom steps
+            std::vector<glm::u32vec4> style_buffer { { 255, 0, 10, 0 }, { 255, 0, 10, 0 }, { 255, 0, 0, 0 }, { 255, 0, 0, 0 }, { 255, 0, 0, 0 } };
+            std::vector<StyleLayerIndex> style_indices { { 1, 1 }, { 3, 3 }, { 4, 4 } };
             const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, style_buffer);
 
             CHECK(simplified.size() == 2);
-            CHECK(simplified[0].first == 2);
-            CHECK(simplified[1].first == 0);
+            CHECK(simplified[0].style_index == 4);
+            // style with index 3 is not used as style with index 4 fully covered it
+            CHECK(simplified[1].style_index == 1);
         }
     }
 
