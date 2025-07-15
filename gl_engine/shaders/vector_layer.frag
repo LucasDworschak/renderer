@@ -69,7 +69,7 @@ struct Style_Data
 
 struct Layer_Style
 {
-    highp uint last_style;
+    highp uint style_index;
     lowp float layer_alpha;
     Style_Data lower_zoom_style;
     Style_Data higher_zoom_style;
@@ -250,7 +250,7 @@ Style_Data parse_style(highp uint style_index) {
   */
 void draw_layer(inout Layer_Style layer_style, inout lowp vec4 pixel_color, highp float zoom_blend)
 {
-    if(layer_style.last_style == -1u)
+    if(layer_style.style_index == -1u)
         return; // we currently have an invalid style -> do not draw anything
 
     // mix the previous layer color information with output
@@ -259,7 +259,6 @@ void draw_layer(inout Layer_Style layer_style, inout lowp vec4 pixel_color, high
 
     // merge current layer color with previous pixel color
     pixel_color = pixel_color + ((1.0-pixel_color.a)*col) * layer_style.layer_alpha;
-
 }
 
 bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, inout lowp vec4 pixel_color, highp float float_zoom_offset)
@@ -267,7 +266,7 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
     // we need to make sure that a layer with < 1 opacity does only fill the correct amount of opacity
     // we therefore fill colors per layerstyle
 
-    if(layer_style.last_style == geometry_data.style_index)
+    if(layer_style.style_index == geometry_data.style_index)
     { // new geometry is on same layer as previous one
 
         if(layer_style.layer_alpha >= full_threshold)
@@ -289,7 +288,7 @@ bool check_layer(VectorLayerData geometry_data, inout Layer_Style layer_style, i
         lowp int zoom_offset_lower = max(int(floor(float_zoom_offset-1.0)), -mipmap_levels+1); // calculate an integer zoom offset for lower style and clamp
 
         // get and store new style info
-        layer_style.last_style = geometry_data.style_index;
+        layer_style.style_index = geometry_data.style_index;
         layer_style.lower_zoom_style = parse_style(uint(int(geometry_data.style_index) + min(zoom_offset_lower,0)));
 
         // the outline_width is saved as tile_extent dependent
@@ -454,7 +453,7 @@ void main() {
             } // DEBUG END
 
             Layer_Style layer_style;
-            layer_style.last_style = -1u;
+            layer_style.style_index = -1u;
             layer_style.lower_zoom_style = Style_Data(vec4(0.0), vec4(0.0), 0.0, vec2(0.0));
             layer_style.higher_zoom_style = layer_style.lower_zoom_style;
             layer_style.layer_alpha = 0.0;
