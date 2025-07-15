@@ -75,6 +75,7 @@ public slots:
     void shared_config_changed(gl_engine::uboSharedConfig ubo);
     void reload_shader();
     void pick_value(const glm::dvec2& screen_space_coordinates) override;
+    void update_max_zoom(unsigned int new_max_zoom);
 
 signals:
     void timer_measurements_ready(QList<nucleus::timing::TimerReport> values);
@@ -108,6 +109,8 @@ private:
     float m_permissible_screen_space_error = 2.f;
     QString m_debug_text;
     QString m_debug_scheduler_stats;
+
+    unsigned int m_max_zoom = 19u;
 
     std::unique_ptr<nucleus::timing::TimerManager> m_timer;
 

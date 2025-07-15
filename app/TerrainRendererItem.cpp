@@ -150,6 +150,7 @@ QQuickFramebufferObject::Renderer* TerrainRendererItem::createRenderer() const
 
     // connect glWindow to forward key events.
     connect(this, &TerrainRendererItem::shared_config_changed, r->glWindow(), &gl_engine::Window::shared_config_changed);
+    connect(this, &TerrainRendererItem::max_zoom_changed, r->glWindow(), &gl_engine::Window::update_max_zoom);
 
     // connect glWindow for shader hotreload by frontend button
     connect(this, &TerrainRendererItem::reload_shader, r->glWindow(), &gl_engine::Window::reload_shader);
@@ -282,6 +283,16 @@ void TerrainRendererItem::set_redraw_delay(int new_delay)
     m_update_timer->setInterval(m_redraw_delay);
     emit redraw_delay_changed();
 }
+
+unsigned int TerrainRendererItem::max_zoom() const { return m_max_zoom; };
+void TerrainRendererItem::set_max_zoom(unsigned int new_max_zoom)
+{
+    new_max_zoom = std::clamp(new_max_zoom, 0u, 20u);
+    if (m_max_zoom == new_max_zoom)
+        return;
+    m_max_zoom = new_max_zoom;
+    emit max_zoom_changed(m_max_zoom);
+};
 
 nucleus::camera::Definition TerrainRendererItem::camera() const
 {

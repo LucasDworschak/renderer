@@ -92,6 +92,12 @@ SettingsPanel {
             from: 0.1; to: 2.0; stepSize: 0.1;
             ModelBinding on value { target: map.settings; property: "render_quality"; }
         }
+
+        Label { text: qsTr("Max zoom:") }
+        LabledSlider {
+            from: 0; to: 20; stepSize: 1;
+            ModelBinding on value { target: map; property: "max_zoom"; }
+        }
     }
 
     CheckGroup {

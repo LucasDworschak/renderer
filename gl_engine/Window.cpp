@@ -304,8 +304,8 @@ void Window::paint(QOpenGLFramebufferObject* framebuffer)
         tile_stats["n_label_tiles_drawn"] = unsigned(label_tile_set.size());
     }
 
-    const auto draw_list
-        = drawing::compute_bounds(drawing::limit(drawing::generate_list(m_camera, m_context->aabb_decorator(), 19), 1024u), m_context->aabb_decorator());
+    const auto draw_list = drawing::compute_bounds(
+        drawing::limit(drawing::generate_list(m_camera, m_context->aabb_decorator(), m_max_zoom), 1024u), m_context->aabb_decorator());
     const auto culled_draw_list = drawing::sort(drawing::cull(draw_list, m_camera), m_camera.position());
 
     tile_stats["n_geometry_tiles_gpu"] = m_context->tile_geometry()->tile_count();
@@ -504,6 +504,8 @@ void Window::update_debug_scheduler_stats(const QString& stats)
     m_debug_scheduler_stats = stats;
     emit update_requested();
 }
+
+void Window::update_max_zoom(unsigned int new_max_zoom) { m_max_zoom = new_max_zoom; }
 
 float Window::depth(const glm::dvec2& normalised_device_coordinates)
 {
