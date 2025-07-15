@@ -53,7 +53,7 @@ public:
      */
     virtual bool matches(const std::array<int, constants::max_style_expression_keys>& values) = 0;
 
-    static std::unique_ptr<StyleExpressionBase> create_filter_expression(QJsonArray data);
+    static std::shared_ptr<StyleExpressionBase> create_filter_expression(QJsonArray data);
     QJsonValue extract_literal(QJsonValue expression);
 };
 
@@ -125,7 +125,7 @@ private:
     bool m_all;
     bool m_negate;
 
-    std::vector<std::unique_ptr<StyleExpressionBase>> m_subFilters;
+    std::vector<std::shared_ptr<StyleExpressionBase>> m_subFilters;
 };
 
 } // namespace nucleus::vector_layer

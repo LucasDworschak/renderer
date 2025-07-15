@@ -34,8 +34,7 @@ QJsonValue StyleExpressionBase::extract_literal(QJsonValue expression)
     return expression.toArray()[1];
 }
 
-// TODO why is this a unique_ptr and not shared???
-std::unique_ptr<StyleExpressionBase> StyleExpressionBase::create_filter_expression(QJsonArray data)
+std::shared_ptr<StyleExpressionBase> StyleExpressionBase::create_filter_expression(QJsonArray data)
 {
     if (data.isEmpty())
         return {}; // no filter was supplied
@@ -359,7 +358,7 @@ StyleExpressionCollection::StyleExpressionCollection(QJsonArray data)
     m_all = data[0] == "all";
     m_negate = data[0] == "!";
 
-    m_subFilters = std::vector<std::unique_ptr<StyleExpressionBase>>();
+    m_subFilters = std::vector<std::shared_ptr<StyleExpressionBase>>();
 
     for (qsizetype i = 1; i < data.size(); ++i) {
         if (data[i].isArray()) {
