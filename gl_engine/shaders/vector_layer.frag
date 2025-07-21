@@ -132,7 +132,8 @@ highp float sd_Line_Triangle( in highp vec2 p, in highp vec2 p0, in highp vec2 p
         highp vec2 d1 = vec2(dot(pq1,pq1), s*(v1.x*e1.y-v1.y*e1.x));
         highp vec2 d2 = vec2(dot(pq2,pq2), s*(v2.x*e2.y-v2.y*e2.x));
         highp vec2 d = min(min(d0,d1),d2);
-        return -sqrt(d.x)*sign(d.y);
+
+        return -sqrt(d.x)*sign(d.y); // TODO sqrt and length is basically the same instruction -> get them out of the if
     }
     else{
         return length( pq0 );
