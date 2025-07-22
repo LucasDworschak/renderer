@@ -85,6 +85,13 @@ inline nucleus::camera::Definition wien()
     const auto coords = srs::lat_long_alt_to_world({48.20851144787232, 16.373082444395656, 171.28});
     return {{coords.x + 10'000, coords.y + 2'000, coords.z + 1'000}, coords};
 }
+
+inline nucleus::camera::Definition wien_top_overview()
+{
+    const auto coords_position = srs::lat_long_alt_to_world({ 48.173318, 16.377735, 4000.0 });
+    const auto coords_lookat = srs::lat_long_alt_to_world({ 48.20851144787232, 16.373082444395656, 171.28 }); // stephansplatz
+    return { coords_position, coords_lookat };
+}
 inline nucleus::camera::Definition nockspitze()
 {
     const auto coords_lookat = srs::lat_long_alt_to_world({47.19205856323242, 11.32470417022705, 2406});
@@ -108,6 +115,7 @@ private:
         m_positions.insert({ "schneeberg", nucleus::camera::stored_positions::schneeberg() });
         m_positions.insert({ "karwendel", nucleus::camera::stored_positions::karwendel() });
         m_positions.insert({ "wien", nucleus::camera::stored_positions::wien() });
+        m_positions.insert({ "wien_top_overview", nucleus::camera::stored_positions::wien_top_overview() });
         m_positions.insert({ "grossglockner_shadow", nucleus::camera::stored_positions::grossglockner_shadow() });
         m_positions.insert({ "weichtalhaus", nucleus::camera::stored_positions::weichtalhaus() });
     }

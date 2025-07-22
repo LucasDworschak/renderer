@@ -103,9 +103,9 @@ RenderingContext::RenderingContext(QObject* parent)
         m->geometry = nucleus::tile::setup::geometry_scheduler(std::move(geometry_service), m->aabb_decorator, m->scheduler_thread.get());
         m->scheduler_director->check_in("geometry", m->geometry.scheduler);
         m->data_querier = std::make_shared<DataQuerier>(&m->geometry.scheduler->ram_cache());
-        // auto ortho_service = std::make_unique<TileLoadService>("https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/", TilePattern::ZYX_yPointingSouth, ".jpeg");
+        auto ortho_service = std::make_unique<TileLoadService>("https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/", TilePattern::ZYX_yPointingSouth, ".jpeg");
         // auto ortho_service = std::make_unique<TileLoadService>("https://mapsneu.wien.gv.at/basemap/bmaporthofoto30cm/normal/google3857/", TilePattern::ZYX_yPointingSouth, ".jpeg");
-        auto ortho_service = std::make_unique<TileLoadService>("https://mapsneu.wien.gv.at/basemap/bmapoberflaeche/grau/google3857/", TilePattern::ZYX_yPointingSouth, ".jpeg");
+        // auto ortho_service = std::make_unique<TileLoadService>("https://mapsneu.wien.gv.at/basemap/bmapoberflaeche/grau/google3857/", TilePattern::ZYX_yPointingSouth, ".jpeg");
         m->ortho_texture = nucleus::tile::setup::texture_scheduler(std::move(ortho_service), m->aabb_decorator, m->scheduler_thread.get());
         m->scheduler_director->check_in("ortho", m->ortho_texture.scheduler);
         auto map_label_service = std::make_unique<TileLoadService>("https://osm.cg.tuwien.ac.at/vector_tiles/poi_v1/", TilePattern::ZXY_yPointingSouth, "");
@@ -113,7 +113,6 @@ RenderingContext::RenderingContext(QObject* parent)
         m->scheduler_director->check_in("map_label", m->map_label.scheduler);
 
         // auto vector_layer_service = std::make_unique<TileLoadService>("http://localhost:3000/tiles/", TilePattern::ZXY_yPointingSouth, "");
-        // auto vector_layer_service = std::make_unique<TileLoadService>("http://localhost:3000/tiles_v3/", TilePattern::ZXY_yPointingSouth, "");
         auto vector_layer_service = std::make_unique<TileLoadService>("https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/", TilePattern::ZXY_yPointingSouth, "");
         m->vector_layer = nucleus::vector_layer::setup::scheduler(std::move(vector_layer_service), m->aabb_decorator, m->scheduler_thread.get());
         m->scheduler_director->check_in("vector", m->vector_layer.scheduler);
@@ -159,7 +158,8 @@ RenderingContext::RenderingContext(QObject* parent)
 
 #ifdef ALP_ENABLE_DEV_TOOLS
     // benchmarks
-    m->benchmarks.push_back(std::make_shared<nucleus::utils::Benchmark>("vector_layer", 1u, std::vector<std::string> { "wien", "weichtalhaus", "karwendel" }));
+    m->benchmarks.push_back(
+        std::make_shared<nucleus::utils::Benchmark>("vector_layer", 1u, std::vector<std::string> { "wien", "wien_top_overview", "weichtalhaus", "karwendel" }));
 
     for (const auto& benchmark : m->benchmarks) {
         m->scheduler_director->visit([&benchmark](nucleus::tile::Scheduler* sch) {
