@@ -70,6 +70,18 @@ struct LayerStyle {
 const lowp int n_aa_samples = 1;
 const mediump float division_by_n_samples = 1.0 / n_aa_samples;
 const lowp float style_precision_mult = 1.0 / float(style_precision);
+const mediump float inv_tile_extent = 1.0 / float(tile_extent);
+
+const lowp vec2 aa_sample_multipliers[9] = vec2[9](
+    vec2(0.0, 0.0),
+
+    vec2(-1.0, 0.0),vec2(1.0, 0.0),
+    vec2(0.0, -1.0),vec2(0.0, 1.0),
+
+    vec2(0.7071, 0.7071),vec2(0.7071, -0.7071),
+    vec2(-0.7071, 0.7071),vec2(-0.7071, -0.7071)
+);
+
 
 
 
@@ -90,7 +102,8 @@ const highp vec2 cell_size = vec2(float(tile_extent)) / vec2(grid_size);
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 const highp uint bit_mask_ones = -1u;
 
-const highp float full_threshold = 0.999;
+const highp float full_threshold = 0.99;
+
 
 
 highp float calculate_falloff(highp float dist, highp float from, highp float to) {
@@ -104,7 +117,7 @@ highp vec3 normal_by_fragment_position_interpolation() {
 }
 
 // https://iquilezles.org/articles/distfunctions2d/
-highp float sd_Line_Triangle( in highp vec2 p, in highp vec2 p0, in highp vec2 p1, in highp vec2 p2, bool triangle )
+mediump float sd_Line_Triangle( in highp vec2 p, in highp vec2 p0, in highp vec2 p1, in highp vec2 p2, bool triangle )
 {
 
     highp vec2 e0 = p1-p0;
@@ -125,12 +138,12 @@ highp float sd_Line_Triangle( in highp vec2 p, in highp vec2 p0, in highp vec2 p
         highp vec2 d2 = vec2(dot(pq2,pq2), s*(v2.x*e2.y-v2.y*e2.x));
         highp vec2 d = min(min(d0,d1),d2);
 
-        return -sqrt(d.x)*sign(d.y); // TODO sqrt and length is basically the same instruction -> get them out of the if
+        return -sqrt(d.x)*sign(d.y);
     }
     else{
-        return length( pq0 );
-    }
 
+        return length(pq0);
+    }
 }
 
 
@@ -247,7 +260,7 @@ highp uvec3 u32_2_to_u16_u24_u24(highp uvec2 data){
 }
 
 
-void parse_style(out LayerStyle style, highp uint style_index, highp float zoom_offset, lowp float zoom_blend, lowp vec4 ortho_color, bool is_polygon)
+void parse_style(out LayerStyle style, highp uint style_index, mediump float zoom_offset, mediump float zoom_blend, lowp vec4 ortho_color, bool is_polygon)
 {
     // calculate an integer zoom offset for lower and higher style indices and clamp
     lowp int zoom_offset_lower = max(int(floor(zoom_offset-1.0)), -mipmap_levels+1);
@@ -271,11 +284,12 @@ void parse_style(out LayerStyle style, highp uint style_index, highp float zoom_
     // by dividing by tile_extent we get the width we want to draw
     // by further dividing the tile_extent by 2^zoom_offset, we reduce the tile_extent and increase the line width.
     // we have to increase the zoom_offset by one in order to use the same size as in the preprocessor
-    mediump float zoomed_tile_extent_lower = float(tile_extent) * pow(2.0, float(zoom_offset_lower+1));
-    mediump float zoomed_tile_extent_higher = float(tile_extent) * pow(2.0, float(zoom_offset_higher+1));
+    // by using inv_tile_extent and 0.5 as base for pow, we essentially convert a division to a multiplication operation
+    mediump float zoomed_tile_extent_lower = inv_tile_extent * pow(0.5, float(zoom_offset_lower+1));
+    mediump float zoomed_tile_extent_higher = inv_tile_extent * pow(0.5, float(zoom_offset_higher+1));
 
-    lowp float outline_width_lower = float(style_data_lower.b) * style_precision_mult / zoomed_tile_extent_lower;// TODO is there a way to make "/ zoomed_tile_extent_lower" a multiplication instead?
-    lowp float outline_width_higher = float(style_data_higher.b) * style_precision_mult / zoomed_tile_extent_higher;
+    lowp float outline_width_lower = float(style_data_lower.b) * style_precision_mult * zoomed_tile_extent_lower;
+    lowp float outline_width_higher = float(style_data_higher.b) * style_precision_mult * zoomed_tile_extent_higher;
 
     ///////////////////////////////////////
     // actual mix lower and higher style and store info in layerstyle
@@ -294,29 +308,28 @@ void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, lowp float inter
 }
 
 
-lowp float unpack_geometry_and_intersect_with_aa(highp vec2 uv, highp uvec2 raw_geom_data, LayerStyle style, lowp vec2 aa_sample_position, lowp ivec2 grid_cell, highp float aa_half_radius)
+mediump float unpack_geometry_and_intersect_with_aa(highp vec2 uv, highp uvec2 raw_geom_data, LayerStyle style, lowp vec2 aa_sample_position, lowp ivec2 grid_cell, highp float aa_half_radius)
 {
     // unpack data
     VectorLayerData geom_data = unpack_data(raw_geom_data);
 
-    lowp float tile_scale = float(scale_lines) * (1.0-float(geom_data.is_polygon)) + float(scale_polygons) * float(geom_data.is_polygon);
+    highp float tile_scale = float(scale_lines) * (1.0-float(geom_data.is_polygon)) + float(scale_polygons) * float(geom_data.is_polygon);
     highp vec2 cell_offset = vec2(grid_cell) * cell_size * tile_scale;
 
-    lowp float division_extent = 1.0 / (float(tile_extent) * tile_scale);
+    highp float division_extent = 1.0 / (float(tile_extent) * tile_scale);
     highp vec2 v0 = (vec2(geom_data.a) + cell_offset) * division_extent;
     highp vec2 v1 = (vec2(geom_data.b) + cell_offset) * division_extent;
     highp vec2 v2 = (vec2(geom_data.c) + cell_offset) * division_extent;
 
-    // TODO is lowp sufficient?
-    highp float d = sd_Line_Triangle(uv, v0, v1, v2, geom_data.is_polygon) - style.line_width;
-
+    mediump float d = sd_Line_Triangle(uv+aa_sample_position, v0, v1, v2, geom_data.is_polygon) - style.line_width;
     return 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
 }
 
-void merge_intersection(inout lowp float accumulated, lowp float current_sample)
+void merge_intersection(inout mediump float accumulated, mediump float current_sample)
 {
     // TODO try max(accumulated, current_sample) instead of min(1, sum(accumulated + current_sample))
     accumulated = min(1.0, accumulated + current_sample);
+    // accumulated = max(accumulated, current_sample); // -> worsens performance -> not sure if more accurated though
 }
 
 
@@ -386,14 +399,14 @@ void main() {
     decrease_zoom_level_until(tile_id, uv, texelFetch(instanced_texture_zoom_sampler_vector, ivec2(instance_id, 0), 0).x);
 
 
-    highp float float_zoom = float_zoom_interpolation();
+    mediump float float_zoom = float_zoom_interpolation();
     // float_zoom = tile_id.z;     // DEBUG
     lowp uint mipmap_level = uint(clamp(int(ceil(float(tile_id.z)-float_zoom)), 0,mipmap_levels-1));
 
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, mipmap_level), 0).xy;
 
     decrease_zoom_level_until(tile_id, uv, tile_id.z - mipmap_level);
-    highp float zoom_offset = float_zoom-float(tile_id.z);
+    mediump float zoom_offset = float_zoom-float(tile_id.z);
 
 
 
@@ -404,7 +417,7 @@ void main() {
 
         lowp vec2 aa_sample_positions[n_aa_samples]; // uv space
         for (int i = 0; i < n_aa_samples; ++i) {
-            aa_sample_positions[i] = vec2(0.0); // TODO
+            aa_sample_positions[i] = aa_sample_multipliers[i] * aa_half_radius;
         }
 
 
@@ -466,9 +479,9 @@ void main() {
             style.dash_info = vec2(1.0, 0.0);
             style.line_caps = 0;
 
-            lowp float per_sample_intersection_percentage[n_aa_samples];
-            lowp float intersection_percentage = 0.0;
-            lowp float zoom_blend = fract(zoom_offset);
+            mediump float per_sample_intersection_percentage[n_aa_samples];
+            mediump float intersection_percentage = 0.0;
+            mediump float zoom_blend = fract(zoom_offset);
 
 
             // for(highp uint i = offset_size.x; i < offset_size.x + min(6u,offset_size.y); i++) // show only x layers
@@ -484,28 +497,22 @@ void main() {
                     // we changed style -> blend previous style, reset layer infos and parse the new style
                     alpha_blend(pixel_color, style, intersection_percentage);
                     intersection_percentage = 0.0;
-                    for (lowp int i = 0; i < n_aa_samples; ++i) {
-                        per_sample_intersection_percentage[i] = 0.0;
+                    for (lowp int j = 0; j < n_aa_samples; ++j) {
+                        per_sample_intersection_percentage[j] = 0.0;
                     }
-                    if (pixel_color.a > 0.99) {
+                    if (pixel_color.a > full_threshold) {
                         break;
                     }
 
                     parse_style(style, style_index, zoom_offset, zoom_blend, ortho_color, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
                 }
 
-                // is current layer already fully filled?
-                if (intersection_percentage >= 0.99) // TODO test if this improves performance
-                    continue;
-
-
-
                 intersection_percentage = 0.0; // set to 0 and accumulate over the for loop
 
-                for (lowp int i = 0; i < n_aa_samples; ++i) {
-                    lowp float percentage = unpack_geometry_and_intersect_with_aa(uv, raw_geom_data, style, aa_sample_positions[i], grid_cell, aa_half_radius);
-                    merge_intersection(per_sample_intersection_percentage[i], percentage); // try current min(1, sum(geometries)) and alternative max(geometries)
-                    intersection_percentage += per_sample_intersection_percentage[i];
+                for (lowp int j = 0; j < n_aa_samples; ++j) {
+                    mediump float percentage = unpack_geometry_and_intersect_with_aa(uv, raw_geom_data, style, aa_sample_positions[j], grid_cell, aa_half_radius);
+                    merge_intersection(per_sample_intersection_percentage[j], percentage); // try current min(1, sum(geometries)) and alternative max(geometries)
+                    intersection_percentage += per_sample_intersection_percentage[j];
                 }
 
                 intersection_percentage *= division_by_n_samples;  // TODO unsure, maybe try doing everything per pixel_color[n_aa_samples] first.
