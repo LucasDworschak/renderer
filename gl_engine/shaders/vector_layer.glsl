@@ -68,6 +68,10 @@ const highp int geometry_offset_line = (max_cell_width_line - cell_width_lines) 
 
 
 
+const highp uint style_bitmask = ((1u << style_bits) - 1u);
+
+
+
 // end constants for data packing/unpacking
 /////////////////////////////////////////////
 
@@ -105,6 +109,16 @@ highp uvec2 pack_vectorlayer_data(VectorLayerData data)
     return packed_data;
 }
 
+highp uint unpack_style_index(highp uvec2 packed_data)
+{
+    return packed_data.y & style_bitmask;
+}
+
+bool is_polygon(highp uvec2 packed_data)
+{
+    return (packed_data.y & is_polygon_bitmask) != 0u;
+}
+
 VectorLayerData unpack_data(highp uvec2 packed_data)
 {
     VectorLayerData unpacked_data;
@@ -118,9 +132,9 @@ VectorLayerData unpack_data(highp uvec2 packed_data)
     c.x = (packed_data.y & (coordinate_bitmask_shift1)) >> coordinate_shift1;
     c.y = (packed_data.y & (coordinate_bitmask_shift2)) >> coordinate_shift2;
 
-    unpacked_data.style_index = packed_data.y & ((1u << style_bits) - 1u);
+    unpacked_data.style_index = unpack_style_index(packed_data);
 
-    unpacked_data.is_polygon = (packed_data.y & is_polygon_bitmask) != 0u;
+    unpacked_data.is_polygon = is_polygon(packed_data);
 
     if (unpacked_data.is_polygon) {
         unpacked_data.a -= geometry_offset_polygons;
@@ -139,4 +153,6 @@ VectorLayerData unpack_data(highp uvec2 packed_data)
 
     return unpacked_data;
 }
+
+
 

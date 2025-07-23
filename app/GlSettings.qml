@@ -48,7 +48,6 @@ SettingsPanel {
                 { text: "UV",                   value: 200  }, // (only in vector_layer.frag)
                 { text: "Cascade Level",        value: 201  }, // (only in vector_layer.frag)
                 { text: "Triangles per Cell",   value: 202  }, // (only in vector_layer.frag)
-                { text: "Triangle Outlines",    value: 203  }, // (only in vector_layer.frag)
                 { text: "Index Buffer Start",   value: 204  }, // (only in vector_layer.frag)
                 { text: "Index Buffer Size",    value: 205  }, // (only in vector_layer.frag)
                 { text: "Index Texture Layer",  value: 206  }, // (only in vector_layer.frag)
@@ -56,7 +55,6 @@ SettingsPanel {
                 { text: "Draw Calls",           value: 208  }, // (only in vector_layer.frag)
                 { text: "Float Zoomlevel",      value: 209  }, // (only in vector_layer.frag)
                 { text: "Float vs tile zoom",   value: 210  }, // (only in vector_layer.frag)
-                { text: "Polygon over Line",    value: 211  }, // (only in vector_layer.frag)
             ]
             onActivated:  map.shared_config.overlay_mode = currentValue;
         }
