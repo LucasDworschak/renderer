@@ -16,9 +16,9 @@
         {
             "type": "vector",
             "comment": "local dev server. maputnik does not allow // comments so we use key/value pairs. In order to use this remove dev- from the key and add it to tiles",
-            "dev-url": "http://localhost:8090",
+            "url": "http://localhost:8090",
             "comment2": "production server. if we use z/x/y tile server we need to use the tiles key with an array value",
-            "tiles": [ "https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/{z}/{x}/{y}"]
+            "asdf-tiles": [ "https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/{z}/{x}/{y}"]
         }
     },
     "glyphs": "{fontstack}/{range}.pbf",

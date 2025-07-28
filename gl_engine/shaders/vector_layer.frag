@@ -67,7 +67,7 @@ struct LayerStyle {
     lowp int line_caps;
 };
 
-const lowp int n_aa_samples = 1;
+const lowp int n_aa_samples = 9;
 const mediump float division_by_n_samples = 1.0 / n_aa_samples;
 const lowp float style_precision_mult = 1.0 / float(style_precision);
 const mediump float inv_tile_extent = 1.0 / float(tile_extent);
@@ -75,11 +75,11 @@ const mediump float inv_tile_extent = 1.0 / float(tile_extent);
 const lowp vec2 aa_sample_multipliers[9] = vec2[9](
     vec2(0.0, 0.0),
 
-    vec2(-1.0, 0.0),vec2(1.0, 0.0),
-    vec2(0.0, -1.0),vec2(0.0, 1.0),
+    vec2(-0.5, 0.0),vec2(0.5, 0.0),
+    vec2(0.0, -0.5),vec2(0.0, 0.5),
 
-    vec2(0.7071, 0.7071),vec2(0.7071, -0.7071),
-    vec2(-0.7071, 0.7071),vec2(-0.7071, -0.7071)
+    vec2(0.5, 0.5),vec2(0.5, -0.5),
+    vec2(-0.5, 0.5),vec2(-0.5, -0.5)
 );
 
 
@@ -117,7 +117,7 @@ highp vec3 normal_by_fragment_position_interpolation() {
 }
 
 // https://iquilezles.org/articles/distfunctions2d/
-mediump float sd_Line_Triangle( in highp vec2 p, in highp vec2 p0, in highp vec2 p1, in highp vec2 p2, bool triangle )
+mediump float sd_Line_Triangle2( in highp vec2 p, in highp vec2 p0, in highp vec2 p1, in highp vec2 p2, bool triangle )
 {
 
     highp vec2 e0 = p1-p0;
@@ -144,6 +144,84 @@ mediump float sd_Line_Triangle( in highp vec2 p, in highp vec2 p0, in highp vec2
 
         return length(pq0);
     }
+}
+
+struct SDFData
+{
+    highp vec2 p0;
+    highp vec2 p1;
+    highp vec2 p2;
+
+    highp vec2 e0;
+    highp vec2 e1;
+    highp vec2 e2;
+
+    highp float dot_e0;
+    highp float dot_e1;
+    highp float dot_e2;
+};
+
+SDFData sd_Line_Triangle(VectorLayerData geom_data, lowp ivec2 grid_cell)
+{
+    SDFData data;
+
+    highp float tile_scale = float(scale_lines) * (1.0-float(geom_data.is_polygon)) + float(scale_polygons) * float(geom_data.is_polygon);
+    highp vec2 cell_offset = vec2(grid_cell) * cell_size * tile_scale;
+
+    highp float division_extent = 1.0 / (float(tile_extent) * tile_scale);
+
+    data.p0 = (vec2(geom_data.a) + cell_offset) * division_extent;
+    data.p1 = (vec2(geom_data.b) + cell_offset) * division_extent;
+    data.p2 = (vec2(geom_data.c) + cell_offset) * division_extent;
+
+    data.e0 = data.p1-data.p0;
+    data.dot_e0 = dot(data.e0,data.e0);
+
+    if(geom_data.is_polygon)
+    {
+        data.e1 = data.p2-data.p1;
+        data.e2 = data.p0-data.p2;
+        data.dot_e1 = dot(data.e1,data.e1);
+        data.dot_e2 = dot(data.e2,data.e2);
+    }
+
+    return data;
+}
+
+highp float sd_Line_Triangle( in highp vec2 p, SDFData data, bool triangle )
+{
+    highp vec2 v0 = p-data.p0;
+    highp vec2 pq0 = v0 - data.e0*clamp( dot(v0,data.e0)/data.dot_e0, 0.0, 1.0 );
+
+    highp float poly_sign = 1.0;
+    highp float result = 1.0;
+
+    if(triangle)
+    {
+        highp vec2 v1 = p  - data.p1;
+        highp vec2 v2 = p  - data.p2;
+        highp vec2 pq1 = v1 - data.e1*clamp( dot(v1,data.e1)/data.dot_e1, 0.0, 1.0 );
+        highp vec2 pq2 = v2 - data.e2*clamp( dot(v2,data.e2)/data.dot_e2, 0.0, 1.0 );
+        highp float s = sign( data.e0.x*data.e2.y - data.e0.y*data.e2.x );
+        highp vec2 d0 = vec2(dot(pq0,pq0), s*(v0.x*data.e0.y-v0.y*data.e0.x));
+        highp vec2 d1 = vec2(dot(pq1,pq1), s*(v1.x*data.e1.y-v1.y*data.e1.x));
+        highp vec2 d2 = vec2(dot(pq2,pq2), s*(v2.x*data.e2.y-v2.y*data.e2.x));
+        highp vec2 d = min(min(d0,d1),d2);
+
+        poly_sign = -sign(d.y);
+        result = d.x;
+
+        // return -sqrt(d.x)*sign(d.y); // TODO sqrt and length is basically the same instruction -> get them out of the if
+    }
+    else{
+        poly_sign = 1.0;
+        result = dot(pq0,pq0);
+
+        // return sqrt(dot(pq0,pq0));
+    }
+
+    return sqrt(result)*poly_sign;
+
 }
 
 
@@ -199,10 +277,7 @@ highp uvec2 fetch_raw_geometry_data(lowp uint sampler_index, highp uint index, h
 
 VectorLayerData vertex_sample(lowp uint sampler_index, highp uint index, highp uint texture_layer)
 {
-
     mediump ivec3 dict_px = ivec3(int(index & ((64u<<sampler_index)-1u)), int(index >> (6u+sampler_index)), texture_layer);
-
-    // return unpack_data(texelFetch(geometry_buffer_sampler[sampler_index], dict_px, 0).rg);
 
     highp uvec2 data;
 
@@ -308,23 +383,6 @@ void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, lowp float inter
 }
 
 
-mediump float unpack_geometry_and_intersect_with_aa(highp vec2 uv, highp uvec2 raw_geom_data, LayerStyle style, lowp vec2 aa_sample_position, lowp ivec2 grid_cell, highp float aa_half_radius)
-{
-    // unpack data
-    VectorLayerData geom_data = unpack_data(raw_geom_data);
-
-    highp float tile_scale = float(scale_lines) * (1.0-float(geom_data.is_polygon)) + float(scale_polygons) * float(geom_data.is_polygon);
-    highp vec2 cell_offset = vec2(grid_cell) * cell_size * tile_scale;
-
-    highp float division_extent = 1.0 / (float(tile_extent) * tile_scale);
-    highp vec2 v0 = (vec2(geom_data.a) + cell_offset) * division_extent;
-    highp vec2 v1 = (vec2(geom_data.b) + cell_offset) * division_extent;
-    highp vec2 v2 = (vec2(geom_data.c) + cell_offset) * division_extent;
-
-    mediump float d = sd_Line_Triangle(uv+aa_sample_position, v0, v1, v2, geom_data.is_polygon) - style.line_width;
-    return 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
-}
-
 void merge_intersection(inout mediump float accumulated, mediump float current_sample)
 {
     // TODO try max(accumulated, current_sample) instead of min(1, sum(accumulated + current_sample))
@@ -417,6 +475,7 @@ void main() {
 
         lowp vec2 aa_sample_positions[n_aa_samples]; // uv space
         for (int i = 0; i < n_aa_samples; ++i) {
+            // TODO use dFdx(uv), dFdy(uv)
             aa_sample_positions[i] = aa_sample_multipliers[i] * aa_half_radius;
         }
 
@@ -479,7 +538,6 @@ void main() {
             style.dash_info = vec2(1.0, 0.0);
             style.line_caps = 0;
 
-            mediump float per_sample_intersection_percentage[n_aa_samples];
             mediump float intersection_percentage = 0.0;
             mediump float zoom_blend = fract(zoom_offset);
 
@@ -497,9 +555,6 @@ void main() {
                     // we changed style -> blend previous style, reset layer infos and parse the new style
                     alpha_blend(pixel_color, style, intersection_percentage);
                     intersection_percentage = 0.0;
-                    for (lowp int j = 0; j < n_aa_samples; ++j) {
-                        per_sample_intersection_percentage[j] = 0.0;
-                    }
                     if (pixel_color.a > full_threshold) {
                         break;
                     }
@@ -507,15 +562,41 @@ void main() {
                     parse_style(style, style_index, zoom_offset, zoom_blend, ortho_color, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
                 }
 
-                intersection_percentage = 0.0; // set to 0 and accumulate over the for loop
 
+
+
+
+
+                VectorLayerData geom_data = unpack_data(raw_geom_data); // TODO move below code inside unpack_data
+
+                SDFData prepared_sdf_data = sd_Line_Triangle(geom_data, grid_cell);
+
+
+
+
+                highp float dist = sd_Line_Triangle(uv, prepared_sdf_data, geom_data.is_polygon);
+                // 0 - distance
+                // -line_width - 0 - distance
+
+                highp float dDistDx = dFdx(dist);
+                highp float dDistDy = dFdy(dist);
+
+
+                highp float accumulated = 0.0;
                 for (lowp int j = 0; j < n_aa_samples; ++j) {
-                    mediump float percentage = unpack_geometry_and_intersect_with_aa(uv, raw_geom_data, style, aa_sample_positions[j], grid_cell, aa_half_radius);
-                    merge_intersection(per_sample_intersection_percentage[j], percentage); // try current min(1, sum(geometries)) and alternative max(geometries)
-                    intersection_percentage += per_sample_intersection_percentage[j];
-                }
 
-                intersection_percentage *= division_by_n_samples;  // TODO unsure, maybe try doing everything per pixel_color[n_aa_samples] first.
+                    highp float d = dist + aa_sample_multipliers[j].x * dDistDx + aa_sample_multipliers[j].y * dDistDy  - style.line_width;
+                    // highp float d = dist;// + aa_sample_multipliers[j].x * dDistDx + aa_sample_multipliers[j].y * dDistDy;
+
+                    // mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
+                    highp float percentage = 1.0 - step(0.0, d);
+
+
+                    accumulated += percentage;
+                }
+                merge_intersection(intersection_percentage, accumulated * division_by_n_samples); // try current min(1, sum(geometries)) and alternative max(geometries)
+
+
             }
 
             // blend the last layer (this only does something if we did not break out of the loop early)

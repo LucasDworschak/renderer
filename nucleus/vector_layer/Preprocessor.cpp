@@ -151,6 +151,8 @@ std::vector<StyleLayerIndex> Preprocessor::simplify_styles(std::vector<StyleLaye
             width = current_width;
         }
 
+        // TODO dashes
+
         if (accummulative_opacity < 255) {
             accummulative_opacity += current_opacity;
             out_styles.push_back(indices);
