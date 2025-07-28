@@ -379,8 +379,8 @@ void parse_style(out LayerStyle style, highp uint style_index, mediump float zoo
     lowp int zoom_offset_lower = max(int(floor(zoom_offset-1.0)), -mipmap_levels+1);
     lowp int zoom_offset_higher = max(int(floor(zoom_offset-0.0)), -mipmap_levels+1);
 
-    highp uint style_index_lower = uint(int(style_index) + min(zoom_offset_lower,0));
-    highp uint style_index_higher = uint(int(style_index) + min(zoom_offset_higher,0));
+    highp uint style_index_lower = uint(int(style_index) + zoom_offset_lower);
+    highp uint style_index_higher = uint(int(style_index) + zoom_offset_higher);
 
     // get the actual data
     highp uvec4 style_data_lower = texelFetch(styles_sampler, ivec2(to_dict_pixel_64(style_index_lower)), 0);
