@@ -67,20 +67,13 @@ struct LayerStyle {
     lowp int line_caps;
 };
 
-const lowp int n_aa_samples = 9;
-const mediump float division_by_n_samples = 1.0 / n_aa_samples;
+const lowp int n_aa_samples_row_cols = 2;
+const lowp int n_aa_samples = n_aa_samples_row_cols*n_aa_samples_row_cols;
+const lowp float aa_sample_dist = 0.5; // 0.5 goes from -0.25 to +0.25 of the current uv coordinate
+
+const mediump float division_by_n_samples = 1.0 / float(n_aa_samples);
 const lowp float style_precision_mult = 1.0 / float(style_precision);
 const mediump float inv_tile_extent = 1.0 / float(tile_extent);
-
-const lowp vec2 aa_sample_multipliers[9] = vec2[9](
-    vec2(0.0, 0.0),
-
-    vec2(-0.5, 0.0),vec2(0.5, 0.0),
-    vec2(0.0, -0.5),vec2(0.0, 0.5),
-
-    vec2(0.5, 0.5),vec2(0.5, -0.5),
-    vec2(-0.5, 0.5),vec2(-0.5, -0.5)
-);
 
 
 
@@ -99,6 +92,7 @@ const lowp vec2 aa_sample_multipliers[9] = vec2[9](
 ///////////////////////////////////////////////
 
 const highp vec2 cell_size = vec2(float(tile_extent)) / vec2(grid_size);
+const highp vec2 cell_size_uv = vec2(1.0) / vec2(grid_size);
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 const highp uint bit_mask_ones = -1u;
 
@@ -114,6 +108,50 @@ highp vec3 normal_by_fragment_position_interpolation() {
     highp vec3 dFdxPos = dFdx(var_pos_cws);
     highp vec3 dFdyPos = dFdy(var_pos_cws);
     return normalize(cross(dFdxPos, dFdyPos));
+}
+
+void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples], highp vec2 uv, highp ivec2 grid_lookup)
+{
+
+    if(n_aa_samples == 1)
+    {
+        aa_sample_positions[0] = uv;
+        return;
+    }
+
+    highp vec2 min_cell = vec2(grid_lookup) * cell_size_uv;
+    highp vec2 max_cell = min_cell + cell_size_uv;
+
+
+    highp vec2 grad_u = vec2(dFdx(uv.x), dFdy(uv.x));
+    highp vec2 grad_v = vec2(dFdx(uv.y), dFdy(uv.y));
+
+    highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols-1.0);
+
+    for (int x = 0; x < n_aa_samples_row_cols; ++x) {
+        for (int y = 0; y < n_aa_samples_row_cols; ++y) {
+            lowp int index = x*n_aa_samples_row_cols + y;
+
+            highp vec2 aa_sample_multiplier = vec2(-aa_sample_dist / 2.0) + vec2(x,y) * vec2(aa_sample_dist_increments);
+
+            aa_sample_positions[index].x = uv.x + dot(grad_u, aa_sample_multiplier);
+            aa_sample_positions[index].y = uv.y + dot(grad_v, aa_sample_multiplier);
+
+            // clip to current cell
+            aa_sample_positions[index] = min(max_cell, max(min_cell, aa_sample_positions[index]));
+
+        }
+    }
+
+    // for (int i = 0; i < n_aa_samples; ++i) {
+    //     // highp vec2 sample_pos_multiplier =
+    //     aa_sample_positions[i].x = uv.x + dot(grad_u, aa_sample_multipliers[i]);
+    //     aa_sample_positions[i].y = uv.y + dot(grad_v, aa_sample_multipliers[i]);
+
+    //     aa_sample_positions[i] = min(max_cell, max(min_cell, aa_sample_positions[i]));
+
+    // }
+
 }
 
 // https://iquilezles.org/articles/distfunctions2d/
@@ -161,7 +199,7 @@ struct SDFData
     highp float dot_e2;
 };
 
-SDFData sd_Line_Triangle(VectorLayerData geom_data, lowp ivec2 grid_cell)
+SDFData prepare_sd_Line_Triangle(VectorLayerData geom_data, lowp ivec2 grid_cell)
 {
     SDFData data;
 
@@ -473,23 +511,23 @@ void main() {
     if(texture_layer.x != bit_mask_ones && texture_layer.y != bit_mask_ones) // check for valid data
     {
 
-        lowp vec2 aa_sample_positions[n_aa_samples]; // uv space
-        for (int i = 0; i < n_aa_samples; ++i) {
-            // TODO use dFdx(uv), dFdy(uv)
-            aa_sample_positions[i] = aa_sample_multipliers[i] * aa_half_radius;
-        }
-
-
         // acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
-        highp vec2 grid_lookup = grid_size*uv;
-        offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(int(grid_lookup.x), int(grid_lookup.y), texture_layer.x & layer_mask),0).r);
+        highp ivec2 grid_lookup = ivec2(grid_size*uv);
+        offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(grid_lookup.x, grid_lookup.y, texture_layer.x & layer_mask),0).r);
+
+
+        highp vec2 aa_sample_positions[n_aa_samples]; // uv space
+        calculate_sample_positions(aa_sample_positions, uv, grid_lookup);
+
+
+
 
         // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
         if(offset_size.y != uint(0)) // only if we have data here
         {
             // lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
             lowp vec3 raw_grid = vec3(1,0,0);// DEBUG
-            lowp ivec2 grid_cell = ivec2(int(grid_lookup.x), int(grid_lookup.y));
+            lowp ivec2 grid_cell = ivec2(grid_lookup.x, grid_lookup.y);
             lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
 
 
@@ -569,27 +607,32 @@ void main() {
 
                 VectorLayerData geom_data = unpack_data(raw_geom_data); // TODO move below code inside unpack_data
 
-                SDFData prepared_sdf_data = sd_Line_Triangle(geom_data, grid_cell);
+                SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data, grid_cell);
 
 
 
 
-                highp float dist = sd_Line_Triangle(uv, prepared_sdf_data, geom_data.is_polygon);
+                // highp float dist = sd_Line_Triangle(uv, prepared_sdf_data, geom_data.is_polygon);
                 // 0 - distance
                 // -line_width - 0 - distance
 
-                highp float dDistDx = dFdx(dist);
-                highp float dDistDy = dFdy(dist);
+                // highp float dDistDx = dFdx(dist);
+                // highp float dDistDy = dFdy(dist);
 
 
                 highp float accumulated = 0.0;
                 for (lowp int j = 0; j < n_aa_samples; ++j) {
 
-                    highp float d = dist + aa_sample_multipliers[j].x * dDistDx + aa_sample_multipliers[j].y * dDistDy  - style.line_width;
+                    highp float d = sd_Line_Triangle(aa_sample_positions[j], prepared_sdf_data, geom_data.is_polygon) - style.line_width;
+                    // highp float d = sd_Line_Triangle(uv, prepared_sdf_data, geom_data.is_polygon) - style.line_width;
+
+                    // highp float d = dist + aa_sample_multipliers[j].x * dDistDx + aa_sample_multipliers[j].y * dDistDy  - style.line_width;
                     // highp float d = dist;// + aa_sample_multipliers[j].x * dDistDx + aa_sample_multipliers[j].y * dDistDy;
 
-                    // mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
-                    highp float percentage = 1.0 - step(0.0, d);
+
+                    mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
+                    // mediump float percentage = 1.0 - smoothstep(-0.02, 0.02, d);
+                    // highp float percentage = 1.0 - step(0.0, d);
 
 
                     accumulated += percentage;
