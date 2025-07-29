@@ -25,6 +25,7 @@ struct VectorLayerData{
 
     highp uint style_index;
     bool is_polygon;
+    bool is_full;
 };
 
 /////////////////////////////////////////////
@@ -33,13 +34,13 @@ struct VectorLayerData{
 // defined in c++ code
 // const lowp int all_bits = 32; // per output channel
 // const lowp int coordinate_bits = 8;
-// const highp int aa_border = 2;
 
 const highp uint coordinate_bitmask = (1u << coordinate_bits_polygons) - 1u;
 const highp uint coordinate_bitmask_lines = (1u << coordinate_bits_lines) - 1u;
 const lowp int remaining_coordinate_bits_lines = coordinate_bits_lines - coordinate_bits_polygons;
 const highp uint remaining_coordinate_bitmask_lines = (1u << remaining_coordinate_bits_lines) - 1u;
 const highp uint is_polygon_bitmask = (1u << style_bits);
+const highp uint is_full_bitmask = (1u << (style_bits+1));
 
 const lowp int coordinate_shift1 = all_bits - coordinate_bits_polygons;
 const lowp int coordinate_shift2 = all_bits - (2 * coordinate_bits_polygons);
@@ -104,7 +105,10 @@ highp uvec2 pack_vectorlayer_data(VectorLayerData data)
         packed_data.y = packed_data.y | ((uint(data.b.y) >> coordinate_bits_polygons) << coordinate_shift4_lines);
     }
 
-    packed_data.y = packed_data.y | (((data.is_polygon ? 1u : 0u) << style_bits) | data.style_index);
+    highp uint is_full = (data.is_full ? 1u : 0u) << (style_bits + 1);
+    highp uint is_polygon = (data.is_polygon ? 1u : 0u) << style_bits;
+
+    packed_data.y = packed_data.y | is_full | is_polygon | data.style_index;
 
     return packed_data;
 }
@@ -135,6 +139,7 @@ VectorLayerData unpack_data(highp uvec2 packed_data)
     unpacked_data.style_index = unpack_style_index(packed_data);
 
     unpacked_data.is_polygon = is_polygon(packed_data);
+    unpacked_data.is_full = (packed_data.y & is_full_bitmask) != 0u;
 
     if (unpacked_data.is_polygon) {
         unpacked_data.a -= geometry_offset_polygons;

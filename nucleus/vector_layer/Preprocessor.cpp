@@ -230,7 +230,10 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
     return data;
 }
 
-glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index) { return pack_triangle_data({ a, b, b, style_index, false }); }
+glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index)
+{
+    return pack_triangle_data({ a, b, b, style_index, false, false });
+}
 
 /*
  * in order to minimize the divergence between lines and polygons, we pack the data as follows:
@@ -238,10 +241,10 @@ glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16
  * triangle packing:
  * data:
  * x0 | y0 | x1 | y1
- * x2 | y2 | free | is_polygon | style_index
+ * x2 | y2 | free | is_full | is_polygon | style_index
  * bits:
  * 8 | 8 | 8 | 8
- * 8 | 8 | 3 | 1 | 12
+ * 8 | 8 | 2 | 1 | 1 | 12
  *
  * line packing:
  * data:
@@ -306,7 +309,10 @@ glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
         packed_data.y = packed_data.y | ((uint(data.b.y) >> constants::coordinate_bits_polygons) << coordinate_shift4_lines);
     }
 
-    packed_data.y = packed_data.y | (((data.is_polygon ? 1u : 0u) << constants::style_bits) | data.style_index);
+    const uint is_full = (data.is_full ? 1u : 0u) << (constants::style_bits + 1);
+    const uint is_polygon = (data.is_polygon ? 1u : 0u) << constants::style_bits;
+
+    packed_data.y = packed_data.y | is_full | is_polygon | data.style_index;
 
     return packed_data;
 }
@@ -390,7 +396,7 @@ size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, Vect
         const auto& p2 = polygon_points[ind2.first][ind2.second];
 
         const auto& data
-            = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.style_index, true });
+            = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.style_index, true, false });
 
         (*temp_cell).emplace_back(data);
     }
@@ -408,14 +414,14 @@ void Preprocessor::generate_preprocess_grid()
     std::vector<PreprocessCell> grid;
     for (int y = 0; y < constants::grid_size; y++) {
         for (int x = 0; x < constants::grid_size; x++) {
-            const auto rect = ClipperRect(x * cell_width_polygons - constants::aa_border * constants::scale_polygons,
-                y * cell_width_polygons - constants::aa_border * constants::scale_polygons,
-                (x + 1) * cell_width_polygons + constants::aa_border * constants::scale_polygons,
-                (y + 1) * cell_width_polygons + constants::aa_border * constants::scale_polygons);
-            const auto rect_lines = ClipperRect(x * cell_width_lines - constants::aa_border * constants::scale_lines,
-                y * cell_width_lines - constants::aa_border * constants::scale_lines,
-                (x + 1) * cell_width_lines + constants::aa_border * constants::scale_lines,
-                (y + 1) * cell_width_lines + constants::aa_border * constants::scale_lines);
+            const auto rect = ClipperRect(x * cell_width_polygons - cell_width_polygons * constants::aa_border,
+                y * cell_width_polygons - cell_width_polygons * constants::aa_border,
+                (x + 1) * cell_width_polygons + cell_width_polygons * constants::aa_border,
+                (y + 1) * cell_width_polygons + cell_width_polygons * constants::aa_border);
+            const auto rect_lines = ClipperRect(x * cell_width_lines - cell_width_lines * constants::aa_border,
+                y * cell_width_lines - cell_width_lines * constants::aa_border,
+                (x + 1) * cell_width_lines + cell_width_lines * constants::aa_border,
+                (y + 1) * cell_width_lines + cell_width_lines * constants::aa_border);
 
             grid.emplace_back(PreprocessCell { RectClip(rect), rect, rect_lines, VectorLayerCell(), false });
 
@@ -537,12 +543,12 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                         // we only need one triangle that covers the whole cell
                         // this triangle is a bit larger to cover the whole cell even with antialiasing
 
-                        const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data(
-                            { { -constants::aa_border * constants::scale_polygons, -constants::aa_border * constants::scale_polygons },
-                                { -constants::aa_border * constants::scale_polygons, max_cell_width_polygons - geometry_offset_polygons - 1 },
-                                { max_cell_width_polygons - geometry_offset_polygons - 1, -constants::aa_border * constants::scale_polygons },
-                                style_layer.style_index,
-                                true });
+                        const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { -4, -4 },
+                            { -4, max_cell_width_polygons - geometry_offset_polygons - 1 },
+                            { max_cell_width_polygons - geometry_offset_polygons - 1, -4 },
+                            style_layer.style_index,
+                            true,
+                            true });
 
                         cell.cell_data.push_back(data);
                         m_processed_amount++;
@@ -550,8 +556,8 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                     } else {
                         // anchor clipped paths to cell origin
                         Clipper2Lib::TranslatePathsInPlace(&m_clipper_result,
-                            -cell.rect_polygons.left - constants::aa_border * constants::scale_polygons,
-                            -cell.rect_polygons.top - constants::aa_border * constants::scale_polygons);
+                            -cell.rect_polygons.left - cell_width_polygons * constants::aa_border,
+                            -cell.rect_polygons.top - cell_width_polygons * constants::aa_border);
 
                         m_processed_amount += triangulize_earcut(m_clipper_result, &cell.cell_data, style_layer);
                     }
@@ -614,8 +620,8 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                     // TODO move translate before clipping and only clip with one single cell
                     // anchor clipped paths to cell origin
                     Clipper2Lib::TranslatePathsInPlace(&shapes,
-                        -cell.rect_lines.left - constants::aa_border * constants::scale_lines,
-                        -cell.rect_lines.top - constants::aa_border * constants::scale_lines);
+                        -cell.rect_lines.left - cell_width_lines * constants::aa_border,
+                        -cell.rect_lines.top - cell_width_lines * constants::aa_border);
 
                     for (const auto& line : shapes) {
 

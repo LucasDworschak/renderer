@@ -67,9 +67,9 @@ struct LayerStyle {
     lowp int line_caps;
 };
 
-const lowp int n_aa_samples_row_cols = 2;
+const lowp int n_aa_samples_row_cols = 4;
 const lowp int n_aa_samples = n_aa_samples_row_cols*n_aa_samples_row_cols;
-const lowp float aa_sample_dist = 0.5; // 0.5 goes from -0.25 to +0.25 of the current uv coordinate
+const lowp float aa_sample_dist = 1.0; // 0.5 goes from -0.25 to +0.25 of the current uv coordinate
 
 const mediump float division_by_n_samples = 1.0 / float(n_aa_samples);
 const lowp float style_precision_mult = 1.0 / float(style_precision);
@@ -93,6 +93,7 @@ const mediump float inv_tile_extent = 1.0 / float(tile_extent);
 
 const highp vec2 cell_size = vec2(float(tile_extent)) / vec2(grid_size);
 const highp vec2 cell_size_uv = vec2(1.0) / vec2(grid_size);
+const highp vec2 aa_cell_overalp_uv = vec2(aa_border) * vec2(cell_size_uv);
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 const highp uint bit_mask_ones = -1u;
 
@@ -121,6 +122,8 @@ void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples]
 
     highp vec2 min_cell = vec2(grid_lookup) * cell_size_uv;
     highp vec2 max_cell = min_cell + cell_size_uv;
+    min_cell -= vec2(aa_cell_overalp_uv);
+    max_cell += vec2(aa_cell_overalp_uv);
 
 
     highp vec2 grad_u = vec2(dFdx(uv.x), dFdy(uv.x));
@@ -204,6 +207,9 @@ SDFData prepare_sd_Line_Triangle(VectorLayerData geom_data, lowp ivec2 grid_cell
     SDFData data;
 
     highp float tile_scale = float(scale_lines) * (1.0-float(geom_data.is_polygon)) + float(scale_polygons) * float(geom_data.is_polygon);
+    // cell is fully covered -> use different scaling since polygon scaling causes white spots with multisample antialiasing at certain angles
+    tile_scale = tile_scale * (1.0-float(geom_data.is_full)) + 0.025 * float(geom_data.is_full);
+
     highp vec2 cell_offset = vec2(grid_cell) * cell_size * tile_scale;
 
     highp float division_extent = 1.0 / (float(tile_extent) * tile_scale);
@@ -293,6 +299,11 @@ lowp ivec2 to_dict_pixel(mediump uint hash) {
 
 highp uvec2 fetch_raw_geometry_data(lowp uint sampler_index, highp uint index, highp uint texture_layer)
 {
+
+    // for constants::data_size: 128u, 256u, 512u, 1024u
+    // mediump ivec3 dict_px = ivec3(int(index & ((128u<<sampler_index)-1u)), int(index >> (7u+sampler_index)), texture_layer);
+
+     // for constants::data_size: 64u, 128u, 256u, 512u
     mediump ivec3 dict_px = ivec3(int(index & ((64u<<sampler_index)-1u)), int(index >> (6u+sampler_index)), texture_layer);
 
     switch (sampler_index) {
@@ -310,30 +321,6 @@ highp uvec2 fetch_raw_geometry_data(lowp uint sampler_index, highp uint index, h
     }
 
     return uvec2(0u);
-}
-
-
-VectorLayerData vertex_sample(lowp uint sampler_index, highp uint index, highp uint texture_layer)
-{
-    mediump ivec3 dict_px = ivec3(int(index & ((64u<<sampler_index)-1u)), int(index >> (6u+sampler_index)), texture_layer);
-
-    highp uvec2 data;
-
-    switch (sampler_index) {
-        case 0u:
-            data = texelFetch(geometry_buffer_sampler_0, dict_px, 0).rg;
-            break;
-        case 1u:
-            data = texelFetch(geometry_buffer_sampler_1, dict_px, 0).rg;
-            break;
-        case 2u:
-            data = texelFetch(geometry_buffer_sampler_2, dict_px, 0).rg;
-            break;
-        default:
-            data = texelFetch(geometry_buffer_sampler_3, dict_px, 0).rg;
-    }
-
-    return unpack_data(data);
 }
 
 mediump float float_zoom_interpolation()

@@ -30,11 +30,12 @@ namespace nucleus::vector_layer::constants {
 constexpr auto grid_size = 64;
 // constexpr auto grid_size = 128;
 constexpr auto data_size = std::array<uint32_t, 4> { 64u, 128u, 256u, 512u }; // needs to be in ascending order
-// constexpr auto data_size = std::array<uint32_t, 4> { 128u, 64u, 512u, 1024u }; // needs to be in ascending order
+// constexpr auto data_size = std::array<uint32_t, 4> { 128u, 256u, 512u, 1024u }; // needs to be in ascending order
 // how many array layers tiles per data size
 // NOTE: -1u is used to say that we should use the upper limit determined by renderingcontext, if renderingcontext gives us a lower value than set, it is
 // automatically lowered IMPORTANT: only set -1u for the first values since those values will be combined to only one array_helper
 constexpr auto array_layer_tile_amount = std::array<uint32_t, 4> { -1u, -1u, 1524u, 256u };
+// constexpr auto array_layer_tile_amount = std::array<uint32_t, 4> { -1u, -1u, 1024u, 128u };
 constexpr auto tile_extent = 1024;
 constexpr auto scale_polygons = 4.0;
 constexpr auto scale_lines = 1.0;
@@ -66,7 +67,10 @@ constexpr auto max_style_expression_keys = 14;
 constexpr int all_bits = 32; // per output channel
 constexpr int coordinate_bits_polygons = 8;
 constexpr int coordinate_bits_lines = 12;
-constexpr int aa_border = 2;
+// how much percentage of a neighbour cell is stored for antialiasing
+// 0.5 -> a cell additionally stores half of the right and half of the left cell (up/down and diagonals similar)
+// 0.25 -> a cell additionally stores a quarter of the right and a quarter of the left cell
+constexpr float aa_border = 0.5;
 constexpr int aa_lines = 0;
 
 // array helper constants
