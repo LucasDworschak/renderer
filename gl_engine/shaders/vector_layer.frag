@@ -71,6 +71,8 @@ const lowp int n_aa_samples_row_cols = 4;
 const lowp int n_aa_samples = n_aa_samples_row_cols*n_aa_samples_row_cols;
 const lowp float aa_sample_dist = 1.0; // 0.5 goes from -0.25 to +0.25 of the current uv coordinate
 
+const bool derivative_aa = true;
+
 const mediump float division_by_n_samples = 1.0 / float(n_aa_samples);
 const lowp float style_precision_mult = 1.0 / float(style_precision);
 const mediump float inv_tile_extent = 1.0 / float(tile_extent);
@@ -154,6 +156,25 @@ void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples]
     //     aa_sample_positions[i] = min(max_cell, max(min_cell, aa_sample_positions[i]));
 
     // }
+
+}
+
+void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samples])
+{
+    if(n_aa_samples == 1)
+    {
+        aa_sample_multipliers[0] = vec2(0.0);
+        return;
+    }
+
+    highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols-1.0);
+
+    for (int x = 0; x < n_aa_samples_row_cols; ++x) {
+        for (int y = 0; y < n_aa_samples_row_cols; ++y) {
+            lowp int index = x*n_aa_samples_row_cols + y;
+            aa_sample_multipliers[index] = vec2(-aa_sample_dist / 2.0) + vec2(x,y) * vec2(aa_sample_dist_increments);
+        }
+    }
 
 }
 
@@ -266,6 +287,116 @@ highp float sd_Line_Triangle( in highp vec2 p, SDFData data, bool triangle )
 
     return sqrt(result)*poly_sign;
 
+}
+
+struct GeomData{
+    highp vec2 p0;
+    highp vec2 p1;
+    highp vec2 p2;
+
+    bool is_polygon;
+};
+
+highp float grad_clamp_fun(float v, float min, float max, float incoming_grad)
+{
+    if (v > min && v < max)
+        return incoming_grad;
+    return 0.0;
+}
+
+highp vec3 sdf_with_grad(GeomData data, highp vec2 uv, highp float incoming_grad)
+{
+    highp vec2 e0 = data.p1 - data.p0;
+    highp vec2 v0 = uv - data.p0;
+    highp float dot0 = dot(v0, e0);
+    highp float one_over_dot0 = 1.0 / dot(e0, e0);
+    highp float div0 = dot0 * one_over_dot0;
+    highp vec2 pq0 = v0 - e0 * clamp(div0, 0.0, 1.0);
+    highp float dot_pq0_pq0 = dot(pq0, pq0);
+
+    highp float poly_sign = 1.0;
+    highp float distance_sq = 1.0;
+
+    highp vec2 grad_uv = vec2(0.0);
+    highp vec2 grad_pq0 = vec2(0.0);
+    if (data.is_polygon) {
+        highp vec2 e1 = data.p2 - data.p1;
+        highp vec2 e2 = data.p0 - data.p2;
+        highp vec2 v1 = uv - data.p1;
+        highp vec2 v2 = uv - data.p2;
+        highp float dot1 = dot(v1, e1);
+        highp float dot2 = dot(v2, e2);
+        highp float one_over_dot1 = 1.0 / dot(e1, e1);
+        highp float one_over_dot2 = 1.0 / dot(e2, e2);
+        highp float div1 = dot1 * one_over_dot1;
+        highp float div2 = dot2 * one_over_dot2;
+        highp float clamp1 = clamp(div1, 0.0, 1.0);
+        highp float clamp2 = clamp(div2, 0.0, 1.0);
+        highp vec2 pq1 = v1 - e1 * clamp1;
+        highp vec2 pq2 = v2 - e2 * clamp2;
+        highp float s = sign(e0.x * e2.y - e0.y * e2.x);
+        highp vec2 d0 = vec2(dot_pq0_pq0, s * (v0.x * e0.y - v0.y * e0.x));
+        highp vec2 d1 = vec2(dot(pq1, pq1), s * (v1.x * e1.y - v1.y * e1.x));
+        highp vec2 d2 = vec2(dot(pq2, pq2), s * (v2.x * e2.y - v2.y * e2.x));
+        highp vec2 d = min(min(d0, d1), d2);
+
+        poly_sign = -sign(d.y);
+        distance_sq = d.x;
+
+        // gradient computation
+        highp float grad_d0_x = 0;
+        highp float grad_d1_x = 0;
+        highp float grad_d2_x = 0;
+
+        if (d0.x <= d1.x && d0.x <= d2.x) {
+            grad_d0_x = incoming_grad;
+        } else if (d1.x < d0.x && d1.x <= d2.x) {
+            grad_d1_x = incoming_grad;
+        } else {
+            grad_d2_x = incoming_grad;
+        }
+        grad_pq0 = 2.0 * pq0 * grad_d0_x;
+        highp vec2 grad_pq1 = 2.0 * pq1 * grad_d1_x;
+        highp vec2 grad_pq2 = 2.0 * pq2 * grad_d2_x;
+
+        highp vec2 grad_v1 = grad_pq1;
+        highp vec2 grad_e1 = -grad_pq1 * clamp1;
+        highp float grad_clamp1 = -dot(e1, grad_pq1);
+
+        highp vec2 grad_v2 = grad_pq2;
+        highp vec2 grad_e2 = -grad_pq2 * clamp2;
+        highp float grad_clamp2 = -dot(e2, grad_pq2);
+
+        highp float grad_div1 = grad_clamp_fun(div1, 0.0, 1.0, grad_clamp1);
+
+        highp float grad_div2 = grad_clamp_fun(div2, 0.0, 1.0, grad_clamp2);
+
+        highp float grad_dot1 = grad_div1 * one_over_dot1;
+
+        highp float grad_dot2 = grad_div2 * one_over_dot2;
+
+        grad_v1 += e1 * grad_dot1;
+        grad_e1 += v1 * grad_dot1;
+
+        grad_v2 += e2 * grad_dot2;
+        grad_e2 += v2 * grad_dot2;
+
+        grad_uv += grad_v1 + grad_v2;
+
+    } else {
+        grad_pq0 += 2.0 * pq0 * incoming_grad;
+        distance_sq = dot_pq0_pq0;
+    }
+
+    highp vec2 grad_v0 = grad_pq0;
+    highp float grad_clamp = -dot(grad_pq0, e0);
+    highp float grad_div0 = grad_clamp_fun(div0, 0.0, 1.0, grad_clamp);
+    highp float grad_dot0 = grad_div0 * one_over_dot0;
+    grad_v0 += e0 * grad_dot0;
+    grad_uv += grad_v0;
+    highp float sdf_val = sqrt(distance_sq) * poly_sign;
+
+    return vec3(sdf_val, grad_uv / (2 * sdf_val));
 }
 
 
@@ -506,6 +637,11 @@ void main() {
         highp vec2 aa_sample_positions[n_aa_samples]; // uv space
         calculate_sample_positions(aa_sample_positions, uv, grid_lookup);
 
+        highp vec2 aa_sample_multipliers[n_aa_samples]; // uv space
+        calculate_sample_multipliers(aa_sample_multipliers);
+        highp vec2 duvdx = dFdx(uv);
+        highp vec2 duvdy = dFdy(uv);
+
 
 
 
@@ -589,42 +725,49 @@ void main() {
 
 
 
+                if(derivative_aa)
+                {
+                    VectorLayerData geom_data = unpack_data(raw_geom_data); // TODO move below code inside unpack_data
+
+                    SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data, grid_cell);
+
+                    GeomData data = GeomData(prepared_sdf_data.p0,prepared_sdf_data.p1,prepared_sdf_data.p2, geom_data.is_polygon);
+
+                    highp vec3 dist_and_grad = sdf_with_grad(data, uv, 1.0);
 
 
-
-                VectorLayerData geom_data = unpack_data(raw_geom_data); // TODO move below code inside unpack_data
-
-                SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data, grid_cell);
+                    highp float accumulated = 0.0;
 
 
+                    for (lowp int j = 0; j < n_aa_samples; ++j)
+                    {
+                        float dDist_dx = dot(dist_and_grad.yz, duvdx);
+                        float dDist_dy = dot(dist_and_grad.yz, duvdy);
 
+                        highp float d = dist_and_grad.x + aa_sample_multipliers[j].x * dDist_dx + aa_sample_multipliers[j].y * dDist_dy  - style.line_width;
 
-                // highp float dist = sd_Line_Triangle(uv, prepared_sdf_data, geom_data.is_polygon);
-                // 0 - distance
-                // -line_width - 0 - distance
+                        mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
+                        accumulated += percentage;
+                    }
+                    merge_intersection(intersection_percentage, accumulated * division_by_n_samples);
 
-                // highp float dDistDx = dFdx(dist);
-                // highp float dDistDy = dFdy(dist);
-
-
-                highp float accumulated = 0.0;
-                for (lowp int j = 0; j < n_aa_samples; ++j) {
-
-                    highp float d = sd_Line_Triangle(aa_sample_positions[j], prepared_sdf_data, geom_data.is_polygon) - style.line_width;
-                    // highp float d = sd_Line_Triangle(uv, prepared_sdf_data, geom_data.is_polygon) - style.line_width;
-
-                    // highp float d = dist + aa_sample_multipliers[j].x * dDistDx + aa_sample_multipliers[j].y * dDistDy  - style.line_width;
-                    // highp float d = dist;// + aa_sample_multipliers[j].x * dDistDx + aa_sample_multipliers[j].y * dDistDy;
-
-
-                    mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
-                    // mediump float percentage = 1.0 - smoothstep(-0.02, 0.02, d);
-                    // highp float percentage = 1.0 - step(0.0, d);
-
-
-                    accumulated += percentage;
                 }
-                merge_intersection(intersection_percentage, accumulated * division_by_n_samples); // try current min(1, sum(geometries)) and alternative max(geometries)
+                else
+                {
+                    VectorLayerData geom_data = unpack_data(raw_geom_data); // TODO move below code inside unpack_data
+                    SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data, grid_cell);
+
+                    highp float accumulated = 0.0;
+                    for (lowp int j = 0; j < n_aa_samples; ++j)
+                    {
+                        highp float d = sd_Line_Triangle(aa_sample_positions[j], prepared_sdf_data, geom_data.is_polygon) - style.line_width;
+                        mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
+                        accumulated += percentage;
+                    }
+                    merge_intersection(intersection_percentage, accumulated * division_by_n_samples); // try current min(1, sum(geometries)) and alternative max(geometries)
+                }
+
+
 
 
             }
