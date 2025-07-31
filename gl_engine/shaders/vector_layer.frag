@@ -71,11 +71,13 @@ const lowp int n_aa_samples_row_cols = 4;
 const lowp int n_aa_samples = n_aa_samples_row_cols*n_aa_samples_row_cols;
 const lowp float aa_sample_dist = 1.0; // 0.5 goes from -0.25 to +0.25 of the current uv coordinate
 
-const bool derivative_aa = true;
+// SDF_MODE 0: naive multisample antialiasing (golden -> but worse performnace)
+// SDF_MODE 1: derivative multisample antialiasing
+#define SDF_MODE 1
 
 const mediump float division_by_n_samples = 1.0 / float(n_aa_samples);
 const lowp float style_precision_mult = 1.0 / float(style_precision);
-const mediump float inv_tile_extent = 1.0 / float(tile_extent);
+const mediump float inv_tile_extent = 1.0 / tile_extent;
 
 
 
@@ -93,9 +95,9 @@ const mediump float inv_tile_extent = 1.0 / float(tile_extent);
 
 ///////////////////////////////////////////////
 
-const highp vec2 cell_size = vec2(float(tile_extent)) / vec2(grid_size);
 const highp vec2 cell_size_uv = vec2(1.0) / vec2(grid_size);
-const highp vec2 aa_cell_overalp_uv = vec2(aa_border) * vec2(cell_size_uv);
+const highp vec2 aa_cell_overlap_uv = vec2(aa_border) * vec2(cell_size_uv);
+
 const highp uint layer_mask = ((1u << sampler_offset) - 1u);
 const highp uint bit_mask_ones = -1u;
 
@@ -113,9 +115,9 @@ highp vec3 normal_by_fragment_position_interpolation() {
     return normalize(cross(dFdxPos, dFdyPos));
 }
 
+#if SDF_MODE == 0
 void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples], highp vec2 uv, highp ivec2 grid_lookup)
 {
-
     if(n_aa_samples == 1)
     {
         aa_sample_positions[0] = uv;
@@ -124,8 +126,8 @@ void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples]
 
     highp vec2 min_cell = vec2(grid_lookup) * cell_size_uv;
     highp vec2 max_cell = min_cell + cell_size_uv;
-    min_cell -= vec2(aa_cell_overalp_uv);
-    max_cell += vec2(aa_cell_overalp_uv);
+    min_cell -= vec2(aa_cell_overlap_uv);
+    max_cell += vec2(aa_cell_overlap_uv);
 
 
     highp vec2 grad_u = vec2(dFdx(uv.x), dFdy(uv.x));
@@ -148,17 +150,9 @@ void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples]
         }
     }
 
-    // for (int i = 0; i < n_aa_samples; ++i) {
-    //     // highp vec2 sample_pos_multiplier =
-    //     aa_sample_positions[i].x = uv.x + dot(grad_u, aa_sample_multipliers[i]);
-    //     aa_sample_positions[i].y = uv.y + dot(grad_v, aa_sample_multipliers[i]);
-
-    //     aa_sample_positions[i] = min(max_cell, max(min_cell, aa_sample_positions[i]));
-
-    // }
-
 }
-
+#endif
+#if SDF_MODE == 1
 void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samples])
 {
     if(n_aa_samples == 1)
@@ -177,42 +171,13 @@ void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samp
     }
 
 }
+#endif
 
-// https://iquilezles.org/articles/distfunctions2d/
-mediump float sd_Line_Triangle2( in highp vec2 p, in highp vec2 p0, in highp vec2 p1, in highp vec2 p2, bool triangle )
-{
 
-    highp vec2 e0 = p1-p0;
-    highp vec2 v0 = p-p0;
-    highp vec2 pq0 = v0 - e0*clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );
-
-    if(triangle)
-    {
-        highp vec2 e1 = p2 - p1;
-        highp vec2 e2 = p0 - p2;
-        highp vec2 v1 = p  - p1;
-        highp vec2 v2 = p  - p2;
-        highp vec2 pq1 = v1 - e1*clamp( dot(v1,e1)/dot(e1,e1), 0.0, 1.0 );
-        highp vec2 pq2 = v2 - e2*clamp( dot(v2,e2)/dot(e2,e2), 0.0, 1.0 );
-        highp float s = sign( e0.x*e2.y - e0.y*e2.x );
-        highp vec2 d0 = vec2(dot(pq0,pq0), s*(v0.x*e0.y-v0.y*e0.x));
-        highp vec2 d1 = vec2(dot(pq1,pq1), s*(v1.x*e1.y-v1.y*e1.x));
-        highp vec2 d2 = vec2(dot(pq2,pq2), s*(v2.x*e2.y-v2.y*e2.x));
-        highp vec2 d = min(min(d0,d1),d2);
-
-        return -sqrt(d.x)*sign(d.y);
-    }
-    else{
-
-        return length(pq0);
-    }
-}
-
+#if SDF_MODE == 0
 struct SDFData
 {
-    highp vec2 p0;
-    highp vec2 p1;
-    highp vec2 p2;
+    VectorLayerData vertices;
 
     highp vec2 e0;
     highp vec2 e1;
@@ -223,29 +188,19 @@ struct SDFData
     highp float dot_e2;
 };
 
-SDFData prepare_sd_Line_Triangle(VectorLayerData geom_data, lowp ivec2 grid_cell)
+SDFData prepare_sd_Line_Triangle(VectorLayerData geom_data)
 {
     SDFData data;
 
-    highp float tile_scale = float(scale_lines) * (1.0-float(geom_data.is_polygon)) + float(scale_polygons) * float(geom_data.is_polygon);
-    // cell is fully covered -> use different scaling since polygon scaling causes white spots with multisample antialiasing at certain angles
-    tile_scale = tile_scale * (1.0-float(geom_data.is_full)) + 0.025 * float(geom_data.is_full);
+    data.vertices = geom_data;
 
-    highp vec2 cell_offset = vec2(grid_cell) * cell_size * tile_scale;
-
-    highp float division_extent = 1.0 / (float(tile_extent) * tile_scale);
-
-    data.p0 = (vec2(geom_data.a) + cell_offset) * division_extent;
-    data.p1 = (vec2(geom_data.b) + cell_offset) * division_extent;
-    data.p2 = (vec2(geom_data.c) + cell_offset) * division_extent;
-
-    data.e0 = data.p1-data.p0;
+    data.e0 = data.vertices.b-data.vertices.a;
     data.dot_e0 = dot(data.e0,data.e0);
 
     if(geom_data.is_polygon)
     {
-        data.e1 = data.p2-data.p1;
-        data.e2 = data.p0-data.p2;
+        data.e1 = data.vertices.c-data.vertices.b;
+        data.e2 = data.vertices.a-data.vertices.c;
         data.dot_e1 = dot(data.e1,data.e1);
         data.dot_e2 = dot(data.e2,data.e2);
     }
@@ -253,9 +208,10 @@ SDFData prepare_sd_Line_Triangle(VectorLayerData geom_data, lowp ivec2 grid_cell
     return data;
 }
 
-highp float sd_Line_Triangle( in highp vec2 p, SDFData data, bool triangle )
+// https://iquilezles.org/articles/distfunctions2d/
+highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle )
 {
-    highp vec2 v0 = p-data.p0;
+    highp vec2 v0 = uv-data.vertices.a;
     highp vec2 pq0 = v0 - data.e0*clamp( dot(v0,data.e0)/data.dot_e0, 0.0, 1.0 );
 
     highp float poly_sign = 1.0;
@@ -263,15 +219,16 @@ highp float sd_Line_Triangle( in highp vec2 p, SDFData data, bool triangle )
 
     if(triangle)
     {
-        highp vec2 v1 = p  - data.p1;
-        highp vec2 v2 = p  - data.p2;
+        highp vec2 v1 = uv  - data.vertices.b;
+        highp vec2 v2 = uv  - data.vertices.c;
         highp vec2 pq1 = v1 - data.e1*clamp( dot(v1,data.e1)/data.dot_e1, 0.0, 1.0 );
         highp vec2 pq2 = v2 - data.e2*clamp( dot(v2,data.e2)/data.dot_e2, 0.0, 1.0 );
         highp float s = sign( data.e0.x*data.e2.y - data.e0.y*data.e2.x );
         highp vec2 d0 = vec2(dot(pq0,pq0), s*(v0.x*data.e0.y-v0.y*data.e0.x));
         highp vec2 d1 = vec2(dot(pq1,pq1), s*(v1.x*data.e1.y-v1.y*data.e1.x));
+        highp vec2 d = min(d0,d1);
         highp vec2 d2 = vec2(dot(pq2,pq2), s*(v2.x*data.e2.y-v2.y*data.e2.x));
-        highp vec2 d = min(min(d0,d1),d2);
+        d = min(d,d2);
 
         poly_sign = -sign(d.y);
         result = d.x;
@@ -288,26 +245,22 @@ highp float sd_Line_Triangle( in highp vec2 p, SDFData data, bool triangle )
     return sqrt(result)*poly_sign;
 
 }
-
-struct GeomData{
-    highp vec2 p0;
-    highp vec2 p1;
-    highp vec2 p2;
-
-    bool is_polygon;
-};
+#endif
+#if SDF_MODE == 1
 
 highp float grad_clamp_fun(float v, float min, float max, float incoming_grad)
 {
+    // return incoming_grad * // TODO convert to * instead of if
     if (v > min && v < max)
         return incoming_grad;
     return 0.0;
 }
 
-highp vec3 sdf_with_grad(GeomData data, highp vec2 uv, highp float incoming_grad)
+
+highp vec3 sdf_with_grad(VectorLayerData data, highp vec2 uv, highp float incoming_grad)
 {
-    highp vec2 e0 = data.p1 - data.p0;
-    highp vec2 v0 = uv - data.p0;
+    highp vec2 e0 = data.b - data.a;
+    highp vec2 v0 = uv - data.a;
     highp float dot0 = dot(v0, e0);
     highp float one_over_dot0 = 1.0 / dot(e0, e0);
     highp float div0 = dot0 * one_over_dot0;
@@ -320,10 +273,10 @@ highp vec3 sdf_with_grad(GeomData data, highp vec2 uv, highp float incoming_grad
     highp vec2 grad_uv = vec2(0.0);
     highp vec2 grad_pq0 = vec2(0.0);
     if (data.is_polygon) {
-        highp vec2 e1 = data.p2 - data.p1;
-        highp vec2 e2 = data.p0 - data.p2;
-        highp vec2 v1 = uv - data.p1;
-        highp vec2 v2 = uv - data.p2;
+        highp vec2 e1 = data.c - data.b;
+        highp vec2 e2 = data.a - data.c;
+        highp vec2 v1 = uv - data.b;
+        highp vec2 v2 = uv - data.c;
         highp float dot1 = dot(v1, e1);
         highp float dot2 = dot(v2, e2);
         highp float one_over_dot1 = 1.0 / dot(e1, e1);
@@ -398,34 +351,12 @@ highp vec3 sdf_with_grad(GeomData data, highp vec2 uv, highp float incoming_grad
 
     return vec3(sdf_val, grad_uv / (2 * sdf_val));
 }
+#endif
 
 
 highp uvec2 to_offset_size(highp uint combined) {
     // note: offset (x coord) is 24 bit -> we have to use highp
     return uvec2(uint(combined >> 8), uint(combined & 255u));
-}
-
-mediump ivec2 to_dict_pixel_64(mediump uint hash) {
-    return ivec2(int(hash & 63u), int(hash >> 6u));
-}
-mediump ivec2 to_dict_pixel_128(mediump uint hash) {
-    return ivec2(int(hash & 127u), int(hash >> 7u));
-}
-mediump ivec2 to_dict_pixel_256(mediump uint hash) {
-    return ivec2(int(hash & 255u), int(hash >> 8u));
-}
-mediump ivec2 to_dict_pixel_512(mediump uint hash) {
-    return ivec2(int(hash & 511u), int(hash >> 9u));
-}
-mediump ivec2 to_dict_pixel_1024(mediump uint hash) {
-    return ivec2(int(hash & 1023u), int(hash >> 10u));
-}
-mediump ivec2 to_dict_pixel_2048(mediump uint hash) {
-    return ivec2(int(hash & 2047u), int(hash >> 11u));
-}
-
-lowp ivec2 to_dict_pixel(mediump uint hash) {
-    return ivec2(int(hash & 255u), int(hash >> 8u));
 }
 
 highp uvec2 fetch_raw_geometry_data(lowp uint sampler_index, highp uint index, highp uint texture_layer)
@@ -457,7 +388,8 @@ highp uvec2 fetch_raw_geometry_data(lowp uint sampler_index, highp uint index, h
 mediump float float_zoom_interpolation()
 {
     // 3d
-    highp float dist_camera = length(var_pos_cws.xyz);
+    highp float dist_camera = length(var_pos_cws.xyz); // TODO divide by cosinus to view direction -> goal: stretched if viewed at steep angle
+    // cosinus should not be 0 -> abflachen
     // 2d
     // highp float dist_camera = length(var_pos_cws.xy);
 
@@ -490,6 +422,9 @@ highp uvec3 u32_2_to_u16_u24_u24(highp uvec2 data){
     return res;
 }
 
+mediump ivec2 to_dict_pixel_64(mediump uint hash) {
+    return ivec2(int(hash & 63u), int(hash >> 6u));
+}
 
 void parse_style(out LayerStyle style, highp uint style_index, mediump float zoom_offset, mediump float zoom_blend, lowp vec4 ortho_color, bool is_polygon)
 {
@@ -633,14 +568,16 @@ void main() {
         highp ivec2 grid_lookup = ivec2(grid_size*uv);
         offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(grid_lookup.x, grid_lookup.y, texture_layer.x & layer_mask),0).r);
 
-
+#if SDF_MODE == 0
         highp vec2 aa_sample_positions[n_aa_samples]; // uv space
         calculate_sample_positions(aa_sample_positions, uv, grid_lookup);
-
+#endif
+#if SDF_MODE == 1
         highp vec2 aa_sample_multipliers[n_aa_samples]; // uv space
         calculate_sample_multipliers(aa_sample_multipliers);
         highp vec2 duvdx = dFdx(uv);
         highp vec2 duvdy = dFdy(uv);
+#endif
 
 
 
@@ -724,16 +661,12 @@ void main() {
                 }
 
 
+#if SDF_MODE == 1
+                { // derivative aa
+                    VectorLayerData geom_data = unpack_data(raw_geom_data, grid_cell); // TODO move below code inside unpack_data
 
-                if(derivative_aa)
-                {
-                    VectorLayerData geom_data = unpack_data(raw_geom_data); // TODO move below code inside unpack_data
 
-                    SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data, grid_cell);
-
-                    GeomData data = GeomData(prepared_sdf_data.p0,prepared_sdf_data.p1,prepared_sdf_data.p2, geom_data.is_polygon);
-
-                    highp vec3 dist_and_grad = sdf_with_grad(data, uv, 1.0);
+                    highp vec3 dist_and_grad = sdf_with_grad(geom_data, uv, 1.0);
 
 
                     highp float accumulated = 0.0;
@@ -744,18 +677,26 @@ void main() {
                         float dDist_dx = dot(dist_and_grad.yz, duvdx);
                         float dDist_dy = dot(dist_and_grad.yz, duvdy);
 
-                        highp float d = dist_and_grad.x + aa_sample_multipliers[j].x * dDist_dx + aa_sample_multipliers[j].y * dDist_dy  - style.line_width;
+                        highp float d = dist_and_grad.x + aa_sample_multipliers[j].x * dDist_dx + aa_sample_multipliers[j].y * dDist_dy;
+                        if(!geom_data.is_polygon)
+                            d = abs(d);
+                        d = d - style.line_width;
 
-                        mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
+
+
+
+                        // mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
+                        mediump float percentage = 1.0 - step(0.0,d);
                         accumulated += percentage;
                     }
                     merge_intersection(intersection_percentage, accumulated * division_by_n_samples);
 
                 }
-                else
-                {
-                    VectorLayerData geom_data = unpack_data(raw_geom_data); // TODO move below code inside unpack_data
-                    SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data, grid_cell);
+#endif
+#if SDF_MODE == 0
+                { // naive aa
+                    VectorLayerData geom_data = unpack_data(raw_geom_data, grid_cell);
+                    SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data);
 
                     highp float accumulated = 0.0;
                     for (lowp int j = 0; j < n_aa_samples; ++j)
@@ -766,6 +707,7 @@ void main() {
                     }
                     merge_intersection(intersection_percentage, accumulated * division_by_n_samples); // try current min(1, sum(geometries)) and alternative max(geometries)
                 }
+#endif
 
 
 

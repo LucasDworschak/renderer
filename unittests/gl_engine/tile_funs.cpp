@@ -208,7 +208,6 @@ void packing_cpp_same_as_glsl(const Id& id)
 void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLayerData& data)
 {
     auto defines_map = gl_engine::VectorLayer::default_defines();
-    defines_map[QString("display_mode")] = QString::number(1);
     std::vector<QString> defines;
     for (const auto& define : defines_map) {
         defines.push_back("#define " + define.first + " " + define.second);
@@ -229,9 +228,11 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
 
             out lowp vec4 out_color;
             void main() {
+                lowp vec2 grid_cell = vec2(0.0,0.0);
+
                 highp uvec2 cpp_packed_data = uvec2(%1u, %2u);
-                VectorLayerData data = VectorLayerData(ivec2(%3, %4),ivec2(%5, %6),ivec2(%7, %8), %9u, bool(%10), bool(%11));
-                VectorLayerData unpacked_data = unpack_data(cpp_packed_data);
+                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), %9u, bool(%10), bool(%11));
+                VectorLayerData unpacked_data = normalize_unpack_for_unittest(unpack_data(cpp_packed_data,grid_cell),grid_cell);
 
                 bool unpack_ok = data == unpacked_data;
                 highp uvec2 packed_data = pack_vectorlayer_data(data);
@@ -283,9 +284,11 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
             out highp vec2 texcoords;
             flat out lowp vec2 ok;
             void main() {
+                lowp vec2 grid_cell = vec2(0.0,0.0);
+
                 highp uvec2 cpp_packed_data = uvec2(%1u, %2u);
-                VectorLayerData data = VectorLayerData(ivec2(%3, %4),ivec2(%5, %6),ivec2(%7, %8), %9u, bool(%10), bool(%11));
-                VectorLayerData unpacked_data = unpack_data(cpp_packed_data);
+                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), %9u, bool(%10), bool(%11));
+                VectorLayerData unpacked_data = normalize_unpack_for_unittest(unpack_data(cpp_packed_data, grid_cell), grid_cell);
 
                 bool unpack_ok = data == unpacked_data;
                 highp uvec2 packed_data = pack_vectorlayer_data(data);

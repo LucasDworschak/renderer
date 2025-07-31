@@ -49,9 +49,9 @@ std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
     defines[QString("style_bits")] = QString::number(constants::style_bits);
     defines[QString("style_precision")] = QString::number(constants::style_precision);
     defines[QString("max_zoom")] = QString::number(constants::style_zoom_range.y);
-    defines[QString("tile_extent")] = QString::number(constants::tile_extent);
-    defines[QString("scale_polygons")] = QString::number(constants::scale_polygons);
-    defines[QString("scale_lines")] = QString::number(constants::scale_lines);
+    defines[QString("tile_extent")] = QString("float(%1)").arg(constants::tile_extent);
+    defines[QString("scale_polygons")] = QString("float(%1)").arg(constants::scale_polygons);
+    defines[QString("scale_lines")] = QString("float(%1)").arg(constants::scale_lines);
     defines[QString("grid_size")] = QString("vec2(%1,%1)").arg(constants::grid_size);
     defines[QString("mipmap_levels")] = QString::number(constants::mipmap_levels);
 
@@ -59,7 +59,6 @@ std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
     defines[QString("coordinate_bits_polygons")] = QString::number(constants::coordinate_bits_polygons);
     defines[QString("coordinate_bits_lines")] = QString::number(constants::coordinate_bits_lines);
     defines[QString("aa_border")] = QString::number(constants::aa_border);
-    defines[QString("display_mode")] = QString::number(0);
 
     defines[QString("sampler_offset")] = QString::number(constants::array_helper_all_bits - constants::array_helper_buffer_info_bits);
 

@@ -330,7 +330,6 @@ std::shared_ptr<gl_engine::VectorLayer> create_vectorlayer(gl_engine::ShaderRegi
     auto vectorlayer = std::make_shared<gl_engine::VectorLayer>();
 
     auto defines_map = gl_engine::VectorLayer::default_defines();
-    defines_map[QString("display_mode")] = QString::number(1);
 
     vectorlayer->set_defines(defines_map);
 
