@@ -25,7 +25,6 @@ struct VectorLayerData{
 
     highp uint style_index;
     bool is_polygon;
-    bool is_full;
 };
 
 /////////////////////////////////////////////
@@ -43,7 +42,6 @@ const highp uint coordinate_bitmask_lines = (1u << coordinate_bits_lines) - 1u;
 const lowp int remaining_coordinate_bits_lines = coordinate_bits_lines - coordinate_bits_polygons;
 const highp uint remaining_coordinate_bitmask_lines = (1u << remaining_coordinate_bits_lines) - 1u;
 const highp uint is_polygon_bitmask = (1u << style_bits);
-const highp uint is_full_bitmask = (1u << (style_bits+1));
 
 const lowp int coordinate_shift1 = all_bits - coordinate_bits_polygons;
 const lowp int coordinate_shift2 = all_bits - (2 * coordinate_bits_polygons);
@@ -108,10 +106,9 @@ highp uvec2 pack_vectorlayer_data(VectorLayerData data)
         packed_data.y = packed_data.y | ((uint(b.y) >> coordinate_bits_polygons) << coordinate_shift4_lines);
     }
 
-    highp uint is_full = (data.is_full ? 1u : 0u) << (style_bits + 1);
     highp uint is_polygon = (data.is_polygon ? 1u : 0u) << style_bits;
 
-    packed_data.y = packed_data.y | is_full | is_polygon | data.style_index;
+    packed_data.y = packed_data.y | is_polygon | data.style_index;
 
     return packed_data;
 }
@@ -146,7 +143,6 @@ VectorLayerData unpack_data(highp uvec2 packed_data, lowp vec2 grid_cell)
     unpacked_data.style_index = unpack_style_index(packed_data);
 
     unpacked_data.is_polygon = is_polygon(packed_data);
-    unpacked_data.is_full = (packed_data.y & is_full_bitmask) != 0u;
 
     if (unpacked_data.is_polygon) {
         a -= geometry_offset_polygons;
@@ -164,9 +160,6 @@ VectorLayerData unpack_data(highp uvec2 packed_data, lowp vec2 grid_cell)
     }
 
     highp float tile_scale = float(scale_lines) * (1.0-float(unpacked_data.is_polygon)) + float(scale_polygons) * float(unpacked_data.is_polygon);
-    // cell is fully covered -> use different scaling since polygon scaling causes white spots with multisample antialiasing at certain angles
-    // TODO fully_covered wieder weg -> dafür 2 geometries
-    tile_scale = tile_scale * (1.0-float(unpacked_data.is_full)) + 0.025 * float(unpacked_data.is_full);
 
     highp vec2 cell_offset = grid_cell * cell_size * tile_scale;
     highp float division_extent = 1.0 / (tile_extent * tile_scale);
@@ -184,13 +177,9 @@ VectorLayerData unpack_data(highp uvec2 packed_data, lowp vec2 grid_cell)
 VectorLayerData normalize_unpack_for_unittest(VectorLayerData unpacked_data, lowp vec2 grid_cell)
 {
     highp float tile_scale = float(scale_lines) * (1.0-float(unpacked_data.is_polygon)) + float(scale_polygons) * float(unpacked_data.is_polygon);
-    // cell is fully covered -> use different scaling since polygon scaling causes white spots with multisample antialiasing at certain angles
-    // TODO fully_covered wieder weg -> dafür 2 geometries
-    tile_scale = tile_scale * (1.0-float(unpacked_data.is_full)) + 0.025 * float(unpacked_data.is_full);
 
     highp vec2 cell_offset = grid_cell * cell_size * tile_scale;
     highp float division_extent = 1.0 / (tile_extent * tile_scale);
-
 
     unpacked_data.a = (vec2(unpacked_data.a) / division_extent) - cell_offset;
     unpacked_data.b = (vec2(unpacked_data.b) / division_extent) - cell_offset;

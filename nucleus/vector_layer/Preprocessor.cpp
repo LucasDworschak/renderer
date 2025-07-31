@@ -230,10 +230,7 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
     return data;
 }
 
-glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index)
-{
-    return pack_triangle_data({ a, b, b, style_index, false, false });
-}
+glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index) { return pack_triangle_data({ a, b, b, style_index, false }); }
 
 /*
  * in order to minimize the divergence between lines and polygons, we pack the data as follows:
@@ -241,10 +238,10 @@ glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16
  * triangle packing:
  * data:
  * x0 | y0 | x1 | y1
- * x2 | y2 | free | is_full | is_polygon | style_index
+ * x2 | y2 | free | is_polygon | style_index
  * bits:
  * 8 | 8 | 8 | 8
- * 8 | 8 | 2 | 1 | 1 | 12
+ * 8 | 8 | 3 | 1 | 12
  *
  * line packing:
  * data:
@@ -309,10 +306,9 @@ glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
         packed_data.y = packed_data.y | ((uint(data.b.y) >> constants::coordinate_bits_polygons) << coordinate_shift4_lines);
     }
 
-    const uint is_full = (data.is_full ? 1u : 0u) << (constants::style_bits + 1);
     const uint is_polygon = (data.is_polygon ? 1u : 0u) << constants::style_bits;
 
-    packed_data.y = packed_data.y | is_full | is_polygon | data.style_index;
+    packed_data.y = packed_data.y | is_polygon | data.style_index;
 
     return packed_data;
 }
@@ -396,7 +392,7 @@ size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, Vect
         const auto& p2 = polygon_points[ind2.first][ind2.second];
 
         const auto& data
-            = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.style_index, true, false });
+            = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.style_index, true });
 
         (*temp_cell).emplace_back(data);
     }
@@ -540,18 +536,21 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
                     if (check_fully_covers && fully_covers(m_clipper_result, cell.rect_polygons)) {
                         cell.is_done = true;
 
-                        // we only need one triangle that covers the whole cell
-                        // this triangle is a bit larger to cover the whole cell even with antialiasing
+                        // we are packing two triangles -> packing only one triangle would result in problems with multisample antialiasing
+                        // we tried packing only one triangle but artificially scaling it up in the shader if a "is_full" flag was transmitted, but this causes
+                        // more performance problems
 
-                        const auto& data = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { -4, -4 },
-                            { -4, max_cell_width_polygons - geometry_offset_polygons - 1 },
-                            { max_cell_width_polygons - geometry_offset_polygons - 1, -4 },
-                            style_layer.style_index,
-                            true,
-                            true });
+                        const glm::ivec2 a = { -geometry_offset_polygons, -geometry_offset_polygons };
+                        const glm::ivec2 b = { max_cell_width_polygons - geometry_offset_polygons - 1, -geometry_offset_polygons };
+                        const glm::ivec2 c = { -geometry_offset_polygons, max_cell_width_polygons - geometry_offset_polygons - 1 };
+                        const glm::ivec2 d = { max_cell_width_polygons - geometry_offset_polygons - 1, max_cell_width_polygons - geometry_offset_polygons - 1 };
 
-                        cell.cell_data.push_back(data);
-                        m_processed_amount++;
+                        const auto& data1 = nucleus::vector_layer::Preprocessor::pack_triangle_data({ a, b, c, style_layer.style_index, true });
+                        const auto& data2 = nucleus::vector_layer::Preprocessor::pack_triangle_data({ d, b, c, style_layer.style_index, true });
+
+                        cell.cell_data.push_back(data1);
+                        cell.cell_data.push_back(data2);
+                        m_processed_amount += 2;
 
                     } else {
                         // anchor clipped paths to cell origin

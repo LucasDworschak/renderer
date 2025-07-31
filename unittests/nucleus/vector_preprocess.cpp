@@ -484,8 +484,7 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
     SECTION("clipping vector tile to cell")
     { // real example
-        // constexpr size_t expected_process_amount = 128006;
-        constexpr size_t expected_process_amount = 206577;
+        constexpr size_t expected_process_amount = 208219;
 
         Style style(":/vectorlayerstyles/openstreetmap.json"); // 13
         // Style style(":/vectorlayerstyles/qwant.json"); // 9
@@ -887,7 +886,7 @@ TEST_CASE("nucleus/vector_preprocess")
 
         uint16_t style = 343u;
 
-        auto packed = nucleus::vector_layer::Preprocessor::pack_triangle_data({ a, b, c, style, true, false });
+        auto packed = nucleus::vector_layer::Preprocessor::pack_triangle_data({ a, b, c, style, true });
         auto unpacked = nucleus::vector_layer::Preprocessor::unpack_data(packed);
 
         CHECK(a == glm::i64vec2(unpacked.a));

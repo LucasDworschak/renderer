@@ -79,7 +79,6 @@ struct VectorLayerData {
 
     uint32_t style_index;
     bool is_polygon;
-    bool is_full;
 };
 
 using ClipperResolution = int16_t;
