@@ -161,7 +161,7 @@ void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samp
         return;
     }
 
-    highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols-1.0);
+    highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols-1);
 
     for (int x = 0; x < n_aa_samples_row_cols; ++x) {
         for (int y = 0; y < n_aa_samples_row_cols; ++y) {
@@ -248,7 +248,7 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle )
 #endif
 #if SDF_MODE == 1
 
-highp float grad_clamp_fun(float v, float min, float max, float incoming_grad)
+highp float grad_clamp_fun(highp float v, highp float min, highp float max, highp float incoming_grad)
 {
     // return incoming_grad * // TODO convert to * instead of if
     if (v > min && v < max)
@@ -297,9 +297,9 @@ highp vec3 sdf_with_grad(VectorLayerData data, highp vec2 uv, highp float incomi
         distance_sq = d.x;
 
         // gradient computation
-        highp float grad_d0_x = 0;
-        highp float grad_d1_x = 0;
-        highp float grad_d2_x = 0;
+        highp float grad_d0_x = 0.0;
+        highp float grad_d1_x = 0.0;
+        highp float grad_d2_x = 0.0;
 
         if (d0.x <= d1.x && d0.x <= d2.x) {
             grad_d0_x = incoming_grad;
@@ -349,7 +349,7 @@ highp vec3 sdf_with_grad(VectorLayerData data, highp vec2 uv, highp float incomi
     grad_uv += grad_v0;
     highp float sdf_val = sqrt(distance_sq) * poly_sign;
 
-    return vec3(sdf_val, grad_uv / (2 * sdf_val));
+    return vec3(sdf_val, grad_uv / (2.0 * sdf_val));
 }
 #endif
 
@@ -589,6 +589,7 @@ void main() {
             lowp vec3 raw_grid = vec3(1,0,0);// DEBUG
             lowp ivec2 grid_cell = ivec2(grid_lookup.x, grid_lookup.y);
             lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
+            lowp vec2 grid_cell_float = vec2(grid_cell);
 
 
 
@@ -632,7 +633,7 @@ void main() {
             LayerStyle style;
             style.index = -1u;
             style.color = vec4(0.0);
-            style.line_width = 0;
+            style.line_width = 0.0;
             style.dash_info = vec2(1.0, 0.0);
             style.line_caps = 0;
 
@@ -663,7 +664,7 @@ void main() {
 
 #if SDF_MODE == 1
                 { // derivative aa
-                    VectorLayerData geom_data = unpack_data(raw_geom_data, grid_cell); // TODO move below code inside unpack_data
+                    VectorLayerData geom_data = unpack_data(raw_geom_data, grid_cell_float); // TODO move below code inside unpack_data
 
 
                     highp vec3 dist_and_grad = sdf_with_grad(geom_data, uv, 1.0);
@@ -674,8 +675,8 @@ void main() {
 
                     for (lowp int j = 0; j < n_aa_samples; ++j)
                     {
-                        float dDist_dx = dot(dist_and_grad.yz, duvdx);
-                        float dDist_dy = dot(dist_and_grad.yz, duvdy);
+                        highp float dDist_dx = dot(dist_and_grad.yz, duvdx);
+                        highp float dDist_dy = dot(dist_and_grad.yz, duvdy);
 
                         highp float d = dist_and_grad.x + aa_sample_multipliers[j].x * dDist_dx + aa_sample_multipliers[j].y * dDist_dy;
                         if(!geom_data.is_polygon)
@@ -695,7 +696,7 @@ void main() {
 #endif
 #if SDF_MODE == 0
                 { // naive aa
-                    VectorLayerData geom_data = unpack_data(raw_geom_data, grid_cell);
+                    VectorLayerData geom_data = unpack_data(raw_geom_data, grid_cell_float);
                     SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data);
 
                     highp float accumulated = 0.0;
