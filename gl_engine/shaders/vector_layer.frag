@@ -387,11 +387,14 @@ highp uvec2 fetch_raw_geometry_data(lowp uint sampler_index, highp uint index, h
 
 mediump float float_zoom_interpolation()
 {
-    // 3d
-    highp float dist_camera = length(var_pos_cws.xyz); // TODO divide by cosinus to view direction -> goal: stretched if viewed at steep angle
-    // cosinus should not be 0 -> abflachen
-    // 2d
-    // highp float dist_camera = length(var_pos_cws.xy);
+    highp float dist_camera = length(var_pos_cws.xyz);
+
+    float cosAngle = dot(normalize(var_pos_cws.xyz),vec3(0.,0.,1.));
+    // float sineAngle = sqrt(1.0 - cosAngle * cosAngle);
+    // dist_camera +=  dist_camera * sineAngle;
+
+    float angle_threshold = 0.2;
+    dist_camera /= angle_threshold + abs(cosAngle);
 
     // TODO move error_threshold_px to camera_config
     // const highp float error_threshold_px = 1.0 / 0.1;
