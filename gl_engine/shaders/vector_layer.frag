@@ -552,6 +552,13 @@ void main() {
     // float_zoom = tile_id.z;     // DEBUG
     lowp uint mipmap_level = uint(clamp(int(ceil(float(tile_id.z)-float_zoom)), 0,mipmap_levels-1));
 
+    // calculate uv derivatives before we apply mipmapping -> otherwise we have discontinous areas at border
+    highp vec2 duvdx = dFdx(uv);
+    highp vec2 duvdy = dFdy(uv);
+    // correct uv derivatives scaling with mipmaplevel
+    duvdx *= pow(0.5, mipmap_level);
+    duvdy *= pow(0.5, mipmap_level);
+
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, mipmap_level), 0).xy;
 
     decrease_zoom_level_until(tile_id, uv, tile_id.z - mipmap_level);
@@ -575,8 +582,6 @@ void main() {
 #if SDF_MODE == 1
         highp vec2 aa_sample_multipliers[n_aa_samples]; // uv space
         calculate_sample_multipliers(aa_sample_multipliers);
-        highp vec2 duvdx = dFdx(uv);
-        highp vec2 duvdy = dFdy(uv);
 #endif
 
 
