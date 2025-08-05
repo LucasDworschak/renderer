@@ -116,7 +116,7 @@ highp vec3 normal_by_fragment_position_interpolation() {
 }
 
 #if SDF_MODE == 0
-void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples], highp vec2 uv, highp ivec2 grid_lookup)
+void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples], highp vec2 uv, highp ivec2 grid_cell)
 {
     if(n_aa_samples == 1)
     {
@@ -124,7 +124,7 @@ void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples]
         return;
     }
 
-    highp vec2 min_cell = vec2(grid_lookup) * cell_size_uv;
+    highp vec2 min_cell = vec2(grid_cell) * cell_size_uv;
     highp vec2 max_cell = min_cell + cell_size_uv;
     min_cell -= vec2(aa_cell_overlap_uv);
     max_cell += vec2(aa_cell_overlap_uv);
@@ -153,7 +153,7 @@ void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples]
 }
 #endif
 #if SDF_MODE == 1
-void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samples])
+void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samples], highp vec2 uv, highp vec2 duvdx, highp vec2 duvdy, lowp vec2 grid_cell)
 {
     if(n_aa_samples == 1)
     {
@@ -161,12 +161,26 @@ void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samp
         return;
     }
 
+    highp vec2 min_cell = grid_cell * cell_size_uv;
+    highp vec2 max_cell = min_cell + cell_size_uv;
+    min_cell -= vec2(aa_cell_overlap_uv);
+    max_cell += vec2(aa_cell_overlap_uv);
+
+    highp vec2 grad_u = vec2(duvdx.x, duvdy.x);
+    highp vec2 grad_v = vec2(duvdx.y, duvdy.y);
+
     highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols-1);
 
     for (int x = 0; x < n_aa_samples_row_cols; ++x) {
         for (int y = 0; y < n_aa_samples_row_cols; ++y) {
             lowp int index = x*n_aa_samples_row_cols + y;
-            aa_sample_multipliers[index] = vec2(-aa_sample_dist / 2.0) + vec2(x,y) * vec2(aa_sample_dist_increments);
+            highp vec2 raw_mult = vec2(-aa_sample_dist / 2.0) + vec2(x,y) * vec2(aa_sample_dist_increments);
+
+            // we stretch the multiplier by the uv derivatives
+            highp vec2 stretched_mult = vec2(dot(grad_u, raw_mult), dot(grad_v, raw_mult));
+            highp vec2 stretch_factor = stretched_mult / raw_mult;
+
+            aa_sample_multipliers[index] = (clamp(uv + stretched_mult, min_cell, max_cell) - uv) / stretch_factor;
         }
     }
 
@@ -556,11 +570,9 @@ void main() {
     lowp uint mipmap_level = uint(clamp(int(ceil(float(tile_id.z)-float_zoom)), 0,mipmap_levels-1));
 
     // calculate uv derivatives before we apply mipmapping -> otherwise we have discontinous areas at border
-    highp vec2 duvdx = dFdx(uv);
-    highp vec2 duvdy = dFdy(uv);
-    // correct uv derivatives scaling with mipmaplevel
-    duvdx *= pow(0.5, mipmap_level);
-    duvdy *= pow(0.5, mipmap_level);
+    // and correct uv derivatives scaling with mipmaplevel
+    highp vec2 duvdx = dFdx(uv) * pow(0.5, mipmap_level);
+    highp vec2 duvdy = dFdy(uv) * pow(0.5, mipmap_level);
 
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, mipmap_level), 0).xy;
 
@@ -575,16 +587,17 @@ void main() {
     {
 
         // acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
-        highp ivec2 grid_lookup = ivec2(grid_size*uv);
-        offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(grid_lookup.x, grid_lookup.y, texture_layer.x & layer_mask),0).r);
+        lowp ivec2 grid_cell = ivec2(grid_size*uv);
+        lowp vec2 grid_cell_float = vec2(grid_cell);
+        offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(grid_cell.x, grid_cell.y, texture_layer.x & layer_mask),0).r);
 
 #if SDF_MODE == 0
         highp vec2 aa_sample_positions[n_aa_samples]; // uv space
-        calculate_sample_positions(aa_sample_positions, uv, grid_lookup);
+        calculate_sample_positions(aa_sample_positions, uv, grid_cell);
 #endif
 #if SDF_MODE == 1
-        highp vec2 aa_sample_multipliers[n_aa_samples]; // uv space
-        calculate_sample_multipliers(aa_sample_multipliers);
+        highp vec2 aa_sample_multipliers[n_aa_samples];
+        calculate_sample_multipliers(aa_sample_multipliers, uv, duvdx, duvdy, grid_cell_float);
 #endif
 
 
@@ -593,14 +606,6 @@ void main() {
         // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
         if(offset_size.y != uint(0)) // only if we have data here
         {
-            // lowp vec3 raw_grid = vec3(float(offset_size.y),0,0);// DEBUG
-            lowp vec3 raw_grid = vec3(1,0,0);// DEBUG
-            lowp ivec2 grid_cell = ivec2(grid_lookup.x, grid_lookup.y);
-            lowp vec3 cells = color_from_id_hash(uint(grid_cell.x ^ grid_cell.y)); // DEBUG
-            lowp vec2 grid_cell_float = vec2(grid_cell);
-
-
-
             // get the buffer index and extract the correct texture_layer.y
             lowp uint sampler_buffer_index = (texture_layer.y & ((bit_mask_ones << sampler_offset))) >> sampler_offset;
             texture_layer.y = texture_layer.y & layer_mask;
@@ -674,12 +679,8 @@ void main() {
                 { // derivative aa
                     VectorLayerData geom_data = unpack_data(raw_geom_data, grid_cell_float); // TODO move below code inside unpack_data
 
-
                     highp vec3 dist_and_grad = sdf_with_grad(geom_data, uv, 1.0);
-
-
                     highp float accumulated = 0.0;
-
 
                     for (lowp int j = 0; j < n_aa_samples; ++j)
                     {
@@ -690,8 +691,6 @@ void main() {
                         if(!geom_data.is_polygon)
                             d = abs(d);
                         d = d - style.line_width;
-
-
 
 
                         // mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
@@ -717,9 +716,6 @@ void main() {
                     merge_intersection(intersection_percentage, accumulated * division_by_n_samples); // try current min(1, sum(geometries)) and alternative max(geometries)
                 }
 #endif
-
-
-
 
             }
 
