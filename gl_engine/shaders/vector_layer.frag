@@ -403,11 +403,11 @@ mediump float float_zoom_interpolation()
 {
     highp float dist_camera = length(var_pos_cws.xyz);
 
-    float cosAngle = dot(normalize(var_pos_cws.xyz),vec3(0.,0.,1.));
+    highp float cosAngle = dot(normalize(var_pos_cws.xyz),vec3(0.,0.,1.));
     // float sineAngle = sqrt(1.0 - cosAngle * cosAngle);
     // dist_camera +=  dist_camera * sineAngle;
 
-    float angle_threshold = 0.2;
+    highp float angle_threshold = 0.2;
     dist_camera /= angle_threshold + abs(cosAngle);
 
     // TODO move error_threshold_px to camera_config
@@ -571,8 +571,8 @@ void main() {
 
     // calculate uv derivatives before we apply mipmapping -> otherwise we have discontinous areas at border
     // and correct uv derivatives scaling with mipmaplevel
-    highp vec2 duvdx = dFdx(uv) * pow(0.5, mipmap_level);
-    highp vec2 duvdy = dFdy(uv) * pow(0.5, mipmap_level);
+    highp vec2 duvdx = dFdx(uv) * pow(0.5, float(mipmap_level));
+    highp vec2 duvdy = dFdy(uv) * pow(0.5, float(mipmap_level));
 
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, mipmap_level), 0).xy;
 
