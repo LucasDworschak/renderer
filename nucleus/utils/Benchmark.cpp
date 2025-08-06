@@ -204,6 +204,7 @@ void Benchmark::create_report()
     const auto datetime = QDateTime::currentDateTime();
     QFile file(path / (m_name.toStdString() + "_" + nucleus::version() + "_" + datetime.toString("hh-mm-ss").toStdString() + ".csv"));
     const auto success = file.open(QIODeviceBase::WriteOnly);
+    Q_UNUSED(success);
     assert(success);
     QTextStream out_stream(&file);
 
@@ -251,6 +252,7 @@ void Benchmark::create_report()
         QFile file(path / (m_name.toStdString() + "_combined" + ".csv"));
         const auto is_new_file = !file.exists();
         const auto success = file.open(QIODeviceBase::WriteOnly | QIODevice::Append);
+        Q_UNUSED(success);
         assert(success);
         QTextStream out_stream(&file);
 
