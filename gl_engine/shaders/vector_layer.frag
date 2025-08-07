@@ -79,8 +79,16 @@ const mediump float division_by_n_samples = 1.0 / float(n_aa_samples);
 const lowp float style_precision_mult = 1.0 / float(style_precision);
 const mediump float inv_tile_extent = 1.0 / tile_extent;
 
+// for antialiasing we want to reduce the frequency of faraway tiles when viewing them at shallow angles
+// 0 smoothstep
+// 1 cos angle reduces opacity
+// 2 no smoothing
+#define shallow_angle_signal_frequency 1
 
-
+// 0 ortho only
+// 1 mixed
+// 2 vector only
+#define VIEW_MODE 1
 
 ///////////////////////////////////////////////
 // CPP CONFIG CONSTANTS
@@ -403,13 +411,6 @@ mediump float float_zoom_interpolation()
 {
     highp float dist_camera = length(var_pos_cws.xyz);
 
-    highp float cosAngle = dot(normalize(var_pos_cws.xyz),vec3(0.,0.,1.));
-    // float sineAngle = sqrt(1.0 - cosAngle * cosAngle);
-    // dist_camera +=  dist_camera * sineAngle;
-
-    highp float angle_threshold = 0.2;
-    dist_camera /= angle_threshold + abs(cosAngle);
-
     // TODO move error_threshold_px to camera_config
     // const highp float error_threshold_px = 1.0 / 0.1;
     const highp float error_threshold_px = 1.0 / 0.5;
@@ -443,7 +444,7 @@ mediump ivec2 to_dict_pixel_64(mediump uint hash) {
     return ivec2(int(hash & 63u), int(hash >> 6u));
 }
 
-void parse_style(out LayerStyle style, highp uint style_index, mediump float zoom_offset, mediump float zoom_blend, lowp vec4 ortho_color, bool is_polygon)
+void parse_style(out LayerStyle style, highp uint style_index, mediump float zoom_offset, mediump float zoom_blend, lowp vec4 ortho_color, mediump float cos_smoothing_factor, bool is_polygon)
 {
     // calculate an integer zoom offset for lower and higher style indices and clamp
     lowp int zoom_offset_lower = max(int(floor(zoom_offset-1.0)), -mipmap_levels+1);
@@ -477,9 +478,10 @@ void parse_style(out LayerStyle style, highp uint style_index, mediump float zoo
     ///////////////////////////////////////
     // actual mix lower and higher style and store info in layerstyle
     style.index = style_index; // setting index to index from geometry -> needed to only parse new styles
-    style.color = mix(color_lower, color_higher, zoom_blend);
-    if(is_polygon)
-        style.color *= ortho_color;
+    // calculate color by blending lower/higher
+    // and multiply orthocolor or a line smoothing factor from viewing angle depending if line or polygon
+    style.color = mix(color_lower, color_higher, zoom_blend) * mix(vec4(cos_smoothing_factor), ortho_color, float(is_polygon));
+
     style.line_width = mix(outline_width_lower, outline_width_higher, zoom_blend);
     // style.dash_info; // TODO
     // style.line_caps; // TODO
@@ -498,7 +500,16 @@ void merge_intersection(inout mediump float accumulated, mediump float current_s
     // accumulated = max(accumulated, current_sample); // -> worsens performance -> not sure if more accurated though
 }
 
-
+mediump float calculate_cos_smoothing()
+{
+#if shallow_angle_signal_frequency == 1
+    float cosAngle = dot(normalize(var_pos_cws.xyz),vec3(0.,0.,1.));
+    float dist = smoothstep(2000.0, 500.0, length(var_pos_cws.xy)); // between 0-500m -> no cos smoothing; between 2000m and inf use cos smoothing; inbetween transition
+    return sqrt(sqrt(abs(cosAngle))) * (1.0-dist) + dist;
+#else
+    return 1.0;
+#endif
+}
 
 highp float calculate_aa_half_radius(highp vec2 uv)
 {
@@ -561,6 +572,12 @@ void main() {
     lowp vec4 ortho_color = vec4(texture(texture_sampler, vec3(ortho_uv, texture_layer_f)).rgb, 1.0);
     ortho_color = mix(ortho_color, conf.material_color, conf.material_color.a);
 
+#if VIEW_MODE == 2
+    ortho_color = vec4(1.0);
+#endif
+
+
+
     // VECTOR color
     decrease_zoom_level_until(tile_id, uv, texelFetch(instanced_texture_zoom_sampler_vector, ivec2(instance_id, 0), 0).x);
 
@@ -579,6 +596,7 @@ void main() {
     decrease_zoom_level_until(tile_id, uv, tile_id.z - mipmap_level);
     mediump float zoom_offset = float_zoom-float(tile_id.z);
 
+    mediump float cos_smoothing_factor = calculate_cos_smoothing();
 
 
     highp float aa_half_radius = calculate_aa_half_radius(uv);
@@ -671,7 +689,7 @@ void main() {
                         break;
                     }
 
-                    parse_style(style, style_index, zoom_offset, zoom_blend, ortho_color, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
+                    parse_style(style, style_index, zoom_offset, zoom_blend, ortho_color, cos_smoothing_factor, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
                 }
 
 
@@ -694,7 +712,11 @@ void main() {
 
 
                         // mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
+#if shallow_angle_signal_frequency == 0
+                        mediump float percentage = 1.0 - smoothstep(-aa_half_radius*2.0,0.0, d);
+#else
                         mediump float percentage = 1.0 - step(0.0,d);
+#endif
                         accumulated += percentage;
                     }
                     merge_intersection(intersection_percentage, accumulated * division_by_n_samples);
@@ -726,8 +748,11 @@ void main() {
 
 
     // blend with background color and write pixel color to output
+#if VIEW_MODE == 0
+    texout_albedo = vec3(background_color * ortho_color.rgb);
+#else
     texout_albedo = vec3(pixel_color.rgb + ((1.0-pixel_color.a)*background_color * ortho_color.rgb));
-
+#endif
 
 
 
