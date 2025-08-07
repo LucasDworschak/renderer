@@ -70,7 +70,7 @@ constexpr int coordinate_bits_lines = 12;
 // how much percentage of a neighbour cell is stored for antialiasing
 // 0.5 -> a cell additionally stores half of the right and half of the left cell (up/down and diagonals similar)
 // 0.25 -> a cell additionally stores a quarter of the right and a quarter of the left cell
-constexpr float aa_border = 0.5;
+constexpr float aa_border = 0.125;
 
 constexpr int aa_lines = 0;
 
