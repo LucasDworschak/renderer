@@ -2610,86 +2610,7 @@
             ]
         },
         {
-            "id": "tunnel_footway",
-            "type": "line",
-            "source": "openmaptiles",
-            "source-layer": "transportation",
-            "minzoom": 14,
-            "paint":
-            {
-                "line-color": "#fa8072",
-                "line-width":
-                {
-                    "base": 1.2,
-                    "stops":
-                    [
-                        [
-                            13,
-                            0.8
-                        ],
-                        [
-                            14,
-                            1
-                        ],
-                        [
-                            15,
-                            1.3
-                        ],
-                        [
-                            17,
-                            1.3
-                        ],
-                        [
-                            18,
-                            1.6
-                        ]
-                    ]
-                },
-                "line-dasharray":
-                [
-                    2,
-                    2
-                ]
-            },
-            "metadata":
-            {},
-            "filter":
-            [
-                "all",
-                [
-                    "==",
-                    "$type",
-                    "LineString"
-                ],
-                [
-                    "==",
-                    "brunnel",
-                    "tunnel"
-                ],
-                [
-                    "in",
-                    "class",
-                    "path"
-                ],
-                [
-                    "in",
-                    "subclass",
-                    "footway"
-                ],
-                [
-                    "!=",
-                    "bicycle",
-                    "designated"
-                ],
-                [
-                    "!=",
-                    "horse",
-                    "designated"
-                ]
-            ]
-        },
-        {
-            "id": "tunnel_path",
+            "id": "tunnel_path_footway",
             "type": "line",
             "source": "openmaptiles",
             "source-layer": "transportation",
@@ -2753,6 +2674,7 @@
                 [
                     "in",
                     "subclass",
+                    "footway",
                     "path"
                 ],
                 [
@@ -5560,84 +5482,7 @@
             ]
         },
         {
-            "id": "road_footway_casing",
-            "type": "line",
-            "source": "openmaptiles",
-            "source-layer": "transportation",
-            "minzoom": 14,
-            "layout":
-            {
-                "line-join": "round",
-                "visibility": "visible"
-            },
-            "paint":
-            {
-                "line-color": "rgba(236, 236, 236, 1)",
-                "line-width":
-                {
-                    "base": 1.2,
-                    "stops":
-                    [
-                        [
-                            14,
-                            2.7
-                        ],
-                        [
-                            15,
-                            3
-                        ],
-                        [
-                            17,
-                            3.3
-                        ],
-                        [
-                            18,
-                            3.6
-                        ]
-                    ]
-                },
-                "line-opacity": 0.6
-            },
-            "metadata":
-            {},
-            "filter":
-            [
-                "all",
-                [
-                    "==",
-                    "$type",
-                    "LineString"
-                ],
-                [
-                    "!in",
-                    "brunnel",
-                    "bridge",
-                    "tunnel"
-                ],
-                [
-                    "in",
-                    "class",
-                    "path"
-                ],
-                [
-                    "in",
-                    "subclass",
-                    "footway"
-                ],
-                [
-                    "!=",
-                    "bicycle",
-                    "designated"
-                ],
-                [
-                    "!=",
-                    "horse",
-                    "designated"
-                ]
-            ]
-        },
-        {
-            "id": "road_path_casing",
+            "id": "road_path_footway_casing",
             "type": "line",
             "source": "openmaptiles",
             "source-layer": "transportation",
@@ -5699,6 +5544,7 @@
                 [
                     "in",
                     "subclass",
+                    "footway",
                     "path"
                 ],
                 [
@@ -5948,92 +5794,7 @@
             ]
         },
         {
-            "id": "road_footway",
-            "type": "line",
-            "source": "openmaptiles",
-            "source-layer": "transportation",
-            "minzoom": 14,
-            "layout":
-            {
-                "line-join": "round",
-                "visibility": "visible"
-            },
-            "paint":
-            {
-                "line-color": "#fa8072",
-                "line-width":
-                {
-                    "base": 1.2,
-                    "stops":
-                    [
-                        [
-                            13,
-                            0.6
-                        ],
-                        [
-                            14,
-                            1
-                        ],
-                        [
-                            15,
-                            1.3
-                        ],
-                        [
-                            17,
-                            1.3
-                        ],
-                        [
-                            18,
-                            1.6
-                        ]
-                    ]
-                },
-                "line-dasharray":
-                [
-                    2,
-                    1
-                ]
-            },
-            "metadata":
-            {},
-            "filter":
-            [
-                "all",
-                [
-                    "==",
-                    "$type",
-                    "LineString"
-                ],
-                [
-                    "!in",
-                    "brunnel",
-                    "bridge",
-                    "tunnel"
-                ],
-                [
-                    "in",
-                    "class",
-                    "path"
-                ],
-                [
-                    "in",
-                    "subclass",
-                    "footway"
-                ],
-                [
-                    "!=",
-                    "bicycle",
-                    "designated"
-                ],
-                [
-                    "!=",
-                    "horse",
-                    "designated"
-                ]
-            ]
-        },
-        {
-            "id": "road_path",
+            "id": "road_path_footway",
             "type": "line",
             "source": "openmaptiles",
             "source-layer": "transportation",
@@ -6103,6 +5864,7 @@
                 [
                     "in",
                     "subclass",
+                    "footway",
                     "path"
                 ],
                 [
@@ -8964,86 +8726,7 @@
             ]
         },
         {
-            "id": "bridge_footway",
-            "type": "line",
-            "source": "openmaptiles",
-            "source-layer": "transportation",
-            "minzoom": 14,
-            "paint":
-            {
-                "line-color": "#fa8072",
-                "line-width":
-                {
-                    "base": 1.2,
-                    "stops":
-                    [
-                        [
-                            13,
-                            0.8
-                        ],
-                        [
-                            14,
-                            1
-                        ],
-                        [
-                            15,
-                            1.3
-                        ],
-                        [
-                            17,
-                            1.3
-                        ],
-                        [
-                            18,
-                            1.6
-                        ]
-                    ]
-                },
-                "line-dasharray":
-                [
-                    2,
-                    2
-                ]
-            },
-            "metadata":
-            {},
-            "filter":
-            [
-                "all",
-                [
-                    "==",
-                    "$type",
-                    "LineString"
-                ],
-                [
-                    "==",
-                    "brunnel",
-                    "bridge"
-                ],
-                [
-                    "in",
-                    "class",
-                    "path"
-                ],
-                [
-                    "in",
-                    "subclass",
-                    "footway"
-                ],
-                [
-                    "!=",
-                    "bicycle",
-                    "designated"
-                ],
-                [
-                    "!=",
-                    "horse",
-                    "designated"
-                ]
-            ]
-        },
-        {
-            "id": "bridge_path",
+            "id": "bridge_path_footway",
             "type": "line",
             "source": "openmaptiles",
             "source-layer": "transportation",
@@ -9107,6 +8790,7 @@
                 [
                     "in",
                     "subclass",
+                    "footway",
                     "path"
                 ],
                 [
