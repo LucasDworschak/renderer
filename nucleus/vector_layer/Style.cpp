@@ -39,8 +39,7 @@ Style::Style(const QString& filename)
     : m_filename(filename)
 {
     // make sure that style_bits and style_buffer_size are correctly matched -> changing one means you also need to change the other
-    // -1 because one bit is used to signal if it should blend with next style or not
-    assert(((constants::style_buffer_size * constants::style_buffer_size) >> (constants::style_bits)) == 1);
+    assert((((constants::style_buffer_size * constants::style_buffer_size) / (constants::style_zoom_range.y + 1)) >> (constants::style_bits)) <= 1);
     StyleExpression::initialize();
 }
 
@@ -344,14 +343,17 @@ void Style::load()
             const uint first_zoom = style_map.begin()->first;
             const auto first_style = style_map.at(first_zoom);
 
-            // duplicate first style with alpha 0
-            // since we premultiply alpha -> alpha: 0 = color: 0,0,0
-            style_values.push_back({ 0, 0, first_style.outline_width, first_style.outline_dash });
+            const uint32_t style_index = style_values.size() / (constants::style_zoom_range.y + 1);
+
+            for (uint i = 0; i < first_zoom; i++) {
+                // duplicate first style with alpha 0
+                // since we premultiply alpha -> alpha: 0 = color: 0,0,0
+                style_values.push_back({ 0, 0, first_style.outline_width, first_style.outline_dash });
+            }
 
             for (const auto& [zoom, style] : style_map) {
 
                 // add a new style every loop iteration
-                const uint32_t style_index = style_values.size();
                 style_values.push_back({ style.fill_color, style.outline_color, style.outline_width, style.outline_dash });
 
                 // add the styles to the data structure where we later can find the relevant style_index
@@ -364,15 +366,15 @@ void Style::load()
             const uint last_zoom = style_map.rbegin()->first;
             const auto last_style = style_values[style_values.size() - 1];
 
-            // duplicate last style with alpha 0 (if we are not yet at maxzoom)
-            // since we premultiply alpha -> alpha: 0 = color: 0,0,0
-            if (last_zoom < constants::style_zoom_range.y) {
-                const uint32_t style_index = style_values.size();
+            for (uint i = last_zoom + 1; i < constants::style_zoom_range.y + 1; i++) {
+                // duplicate last style with alpha 0 (if we are not yet at maxzoom)
+                // since we premultiply alpha -> alpha: 0 = color: 0,0,0
                 style_values.push_back({ 0, 0, last_style.z, last_style.w });
-                m_layer_to_style[key.first].add_filter({ { style_index, layer_index }, key.second }, last_zoom + 1);
+                if (i == last_zoom + 1)
+                    m_layer_to_style[key.first].add_filter({ { style_index, layer_index }, key.second }, i);
             }
             // set it to the highest value
-            m_lowest_encountered_zoom[layer_index] = { constants::style_zoom_range.y + 1, last_zoom };
+            m_lowest_encountered_zoom[layer_index] = constants::style_zoom_range.y + 1;
 
             // make sure that layer_index also fits into style_bits (we use this in preprocess)
             assert(layer_index < ((1u << constants::style_bits) - 1u)); // TODO why layer_index???
@@ -418,8 +420,8 @@ std::vector<StyleLayerIndex> Style::indices(std::string layer_name,
 
     for (const auto& indices : indices) {
 
-        if (zoom < m_lowest_encountered_zoom[indices.layer_index].lowest_zoom) {
-            m_lowest_encountered_zoom[indices.layer_index].lowest_zoom = zoom;
+        if (zoom < m_lowest_encountered_zoom[indices.layer_index]) {
+            m_lowest_encountered_zoom[indices.layer_index] = zoom;
             m_styles_to_update.push_back(indices);
         }
     }
@@ -441,9 +443,10 @@ bool Style::update_visible_styles()
 
         const auto encountered_zoom = m_lowest_encountered_zoom[indices.layer_index];
 
-        const auto zooms_to_max = std::min(constants::style_zoom_range.y, (encountered_zoom.max_zoom + 1)) - encountered_zoom.lowest_zoom;
+        // we only save one index per 0-18 zoom range -> we have to multiply the style_index with the zoom range to get the index in the buffer
+        const auto zooms_per_style = constants::style_zoom_range.y + 1;
 
-        for (auto i = indices.style_index - 1; i <= indices.style_index + zooms_to_max; i++) {
+        for (auto i = indices.style_index * zooms_per_style + encountered_zoom - 1; i <= indices.style_index * zooms_per_style + zooms_per_style; i++) {
             visible_style_buffer[i] = style_buffer[i];
         }
     }
@@ -495,6 +498,8 @@ uint32_t Style::interpolate_color(float t, uint32_t color1, uint32_t color2)
     return interpolated;
 }
 
+uint32_t Style::get_style_index(const uint32_t style_index, const uint zoom_level) { return style_index * (constants::style_zoom_range.y + 1) + zoom_level; }
+
 // uses https://github.com/maplibre/maplibre-style-spec/blob/main/src/expression/definitions/interpolate.ts -> exponentialInterpolation()
 float Style::interpolation_factor(uint8_t zoom, float base, uint8_t zoom1, uint8_t zoom2)
 {
@@ -511,42 +516,6 @@ float Style::interpolation_factor(uint8_t zoom, float base, uint8_t zoom1, uint8
     else
         return std::clamp((pow(base, progress) - 1) / (pow(base, diff) - 1), 0.0, 1.0);
 }
-
-// template <typename T>
-// T Style::interpolate(uint8_t zoom, float base, std::pair<uint8_t, T> prev, std::pair<uint8_t, T> current)
-// {
-//     const auto diff = current.first - prev.first;
-//     const auto progress = zoom - diff;
-
-//     if (diff == 0) // both values are the same
-//         return current.second;
-
-//     float t = 0;
-//     if (base == 1)
-//         t = float(progress) / float(diff);
-//     else
-//         t = (pow(base, progress) - 1) / (pow(base, diff) - 1);
-
-//     return prev.second * (1.0 - t) + current.second * t;
-// }
-
-// // interpolate with pairs (for dashes)
-// std::pair<uint8_t, uint8_t> Style::interpolate(uint8_t zoom, float base, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> prev, std::pair<uint8_t, std::pair<uint8_t, uint8_t>> current)
-// {
-//     const auto diff = current.first - prev.first;
-//     const auto progress = zoom - diff;
-
-//     if (diff == 0) // both values are the same
-//         return current.second;
-
-//     float t = 0;
-//     if (base == 1)
-//         t = float(progress) / float(diff);
-//     else
-//         t = (pow(base, progress) - 1) / (pow(base, diff) - 1);
-
-//     return { prev.second.first * (1.0 - t) + current.second.first * t, prev.second.second * (1.0 - t) + current.second.second * t };
-// }
 
 void Style::parse_colors(const QJsonValue& value, std::vector<std::pair<uint8_t, uint32_t>>& colors, float& base)
 {

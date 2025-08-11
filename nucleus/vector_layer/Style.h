@@ -37,11 +37,6 @@ struct LayerStyle {
     bool operator==(const LayerStyle& other) const = default;
 };
 
-struct LowestEncounteredZoom {
-    unsigned lowest_zoom;
-    unsigned max_zoom;
-};
-
 struct StyleHasher {
     size_t operator()(const LayerStyle& style) const
     {
@@ -112,6 +107,8 @@ public:
     std::pair<uint8_t, uint8_t> parse_dash(const QJsonValue& value);
     uint16_t parse_line_width(const QJsonValue& value);
 
+    static uint32_t get_style_index(const uint32_t style_index, const uint zoom_level);
+
     static uint32_t premultiply_alpha(uint32_t color);
 
     std::vector<StyleLayerIndex> indices(std::string layer_name,
@@ -150,11 +147,10 @@ private:
     std::unordered_map<std::pair<std::string, int>, StyleFilter, StyleHasher> m_layer_to_style;
 
     // styles on the server and in the stylesheet might be a bit different
-    // we want to ensure that we fade to alpha 0 if the next lower tile zoom does not contain a blendable style
-    // we ensure that a feature that uses style blending (!all_styles_same) has a style at constants::style_zoom_range.y-1
-    // key: style_index of highest style
-    // value: lowest zoom_level of current style
-    std::unordered_map<uint32_t, LowestEncounteredZoom> m_lowest_encountered_zoom;
+    // we want to ensure that we fade to alpha 0 if the next lower tile zoom does not contain geometry of this style
+    // key: style_index
+    // value: lowest zoom_level of current style_index
+    std::unordered_map<uint32_t, unsigned> m_lowest_encountered_zoom;
     std::vector<StyleLayerIndex> m_styles_to_update;
 
     QString m_filename;

@@ -101,7 +101,7 @@ GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vecto
 
     auto tile_data = parse_tile(id, vector_tile_data);
 
-    preprocess_geometry(tile_data);
+    preprocess_geometry(tile_data, id.zoom_level);
 
     // return if not a single thing was written
     if (m_processed_amount == 0u)
@@ -113,7 +113,8 @@ GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vecto
     return tile;
 }
 
-std::vector<StyleLayerIndex> Preprocessor::simplify_styles(std::vector<StyleLayerIndex>* style_and_layer_indices, const std::vector<glm::u32vec4>& style_buffer)
+std::vector<StyleLayerIndex> Preprocessor::simplify_styles(
+    std::vector<StyleLayerIndex>* style_and_layer_indices, const uint zoom_level, const std::vector<glm::u32vec4>& style_buffer)
 {
     // we get multiple styles that may have full opacity and the same width
     // creating render calls for both does not make sense -> we only want to draw the top layer
@@ -128,8 +129,8 @@ std::vector<StyleLayerIndex> Preprocessor::simplify_styles(std::vector<StyleLaye
     float width = 0.0;
 
     for (const auto& indices : *style_and_layer_indices) {
-        const auto style_data_lower = style_buffer[indices.style_index - 1];
-        const auto style_data_higher = style_buffer[indices.style_index];
+        const auto style_data_lower = style_buffer[Style::get_style_index(indices.style_index, zoom_level) - 1];
+        const auto style_data_higher = style_buffer[Style::get_style_index(indices.style_index, zoom_level)];
         const float lower_width = float(style_data_lower.z) / float(constants::style_precision);
         const float lower_opacity = style_data_lower.x & 255;
         const float higher_width = float(style_data_higher.z) / float(constants::style_precision);
@@ -189,7 +190,7 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
             const auto type = (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) ? 0 : 1;
             // qDebug() << layer_name;
             auto style_and_layer_indices = m_style.indices(layer_name, type, id.zoom_level, feature, &temp_values);
-            style_and_layer_indices = simplify_styles(&style_and_layer_indices, m_style_buffer);
+            style_and_layer_indices = simplify_styles(&style_and_layer_indices, id.zoom_level, m_style_buffer);
 
             if (style_and_layer_indices.size() == 0) // no styles found -> we do not visualize it
                 continue;
@@ -218,8 +219,8 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
             }
 
             for (const auto& style_layer : style_and_layer_indices) {
-                const auto opacity_lower = m_style_buffer[style_layer.style_index - 1].x & 255;
-                const auto opacity_higher = m_style_buffer[style_layer.style_index].x & 255;
+                const auto opacity_lower = m_style_buffer[Style::get_style_index(style_layer.style_index, id.zoom_level) - 1].x & 255;
+                const auto opacity_higher = m_style_buffer[Style::get_style_index(style_layer.style_index, id.zoom_level)].x & 255;
                 const auto full_opaque = opacity_lower + opacity_higher == (255 + 255);
 
                 data[style_layer.layer_index].emplace_back(ClipperPaths(geom.begin(), geom.end()), bounds, aabb, style_layer, is_polygon, full_opaque);
@@ -494,7 +495,7 @@ size_t Preprocessor::line_fully_covers(const ClipperPaths& solution, float line_
 // polygon describe the outer edge of a closed shape
 // -> neighbouring vertices form an edge
 // last vertex connects to first vertex
-void Preprocessor::preprocess_geometry(const VectorLayers& layers)
+void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zoom_level)
 {
     // TODOs
     // - accelleration grid vector<map> to array<map> since size is given from start
@@ -567,7 +568,10 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers)
 
                 float line_width = 0;
                 // use the line width of the previous style
-                line_width = float(m_style_buffer[(data[i].style_layer.style_index) - 1u].z) / float(constants::style_precision) + constants::aa_lines;
+
+                line_width
+                    = float(m_style_buffer[Style::get_style_index(data[i].style_layer.style_index, zoom_level) - 1].z) / float(constants::style_precision)
+                    + constants::aa_lines;
 
                 std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
 

@@ -150,7 +150,7 @@ public:
     GpuVectorLayerTile preprocess(tile::Id id, const QByteArray& vector_tile_data);
 
     VectorLayers parse_tile(tile::Id id, const QByteArray& vector_tile_data);
-    void preprocess_geometry(const VectorLayers& layers);
+    void preprocess_geometry(const VectorLayers& layers, const uint zoom_level);
     GpuVectorLayerTile create_gpu_tile();
 
     static glm::u32vec2 pack_triangle_data(VectorLayerData data);
@@ -162,7 +162,8 @@ public:
 
     static GpuVectorLayerTile create_default_gpu_tile();
 
-    static std::vector<StyleLayerIndex> simplify_styles(std::vector<StyleLayerIndex>* styles, const std::vector<glm::u32vec4>& style_buffer);
+    static std::vector<StyleLayerIndex> simplify_styles(
+        std::vector<StyleLayerIndex>* styles, const uint zoom_level, const std::vector<glm::u32vec4>& style_buffer);
 
     const std::shared_ptr<const nucleus::Raster<glm::u32vec4>> style();
     bool update_visible_styles();

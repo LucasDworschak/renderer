@@ -43,7 +43,7 @@ constexpr auto mipmap_levels = 4;
 
 // if you change one of the following setting you also need to change the other (that they match is asserted in style.cpp)
 constexpr auto style_bits = 12;
-constexpr auto style_buffer_size = 64;
+constexpr auto style_buffer_size = 128;
 
 // number is used to multiply float numbers in style to get int values for storage ( e.g. style_precision:100 means 1.253 -> 125 -> 1.250)
 constexpr uint16_t style_precision = 100;
@@ -51,7 +51,7 @@ constexpr uint16_t style_precision = 100;
 constexpr uint16_t max_line_width = 48;
 
 constexpr float line_width_multiplier = 1.56;
-constexpr glm::uvec2 style_zoom_range = glm::uvec2(8u, 18u);
+constexpr glm::uvec2 style_zoom_range = glm::uvec2(0u, 18u);
 
 constexpr float small_line_px = 0.5; // how many px on a 256x256 resolution
 constexpr unsigned small_line_zoom_threshold = 4; // until what zoom level do we use the small line simplification

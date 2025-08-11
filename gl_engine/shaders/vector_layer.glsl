@@ -115,7 +115,7 @@ highp uvec2 pack_vectorlayer_data(VectorLayerData data)
 
 highp uint unpack_style_index(highp uvec2 packed_data)
 {
-    return packed_data.y & style_bitmask;
+    return (packed_data.y & style_bitmask) * uint(max_zoom+1);
 }
 
 bool is_polygon(highp uvec2 packed_data)
@@ -185,6 +185,7 @@ VectorLayerData normalize_unpack_for_unittest(VectorLayerData unpacked_data, low
     unpacked_data.b = (vec2(unpacked_data.b) / division_extent) - cell_offset;
     unpacked_data.c = (vec2(unpacked_data.c) / division_extent) - cell_offset;
 
+    unpacked_data.style_index /= uint(max_zoom+1);
 
     return unpacked_data;
 }

@@ -82,7 +82,7 @@ std::map<std::string, uint32_t> parse_tile(
             // qDebug() << key;
 
             auto style_indices = s->indices(layer_name, type, zoom, feature, &temp_values);
-            style_indices = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, style_buffer);
+            style_indices = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, zoom, style_buffer);
 
             if (check_valid_style)
                 CHECK(style_indices.size() > 0); // make sure that every style is available in the stylesheet
@@ -93,7 +93,7 @@ std::map<std::string, uint32_t> parse_tile(
             int index = 0;
 
             for (const auto& style : style_indices) {
-                const uint32_t style_index = style.style_index;
+                const uint32_t style_index = Style::get_style_index(style.style_index, zoom);
                 std::string indexed_key = key + "_" + std::to_string(index);
                 if (feature_to_style.contains(indexed_key)) // make sure that all features with the same key share the style (if not we have to expand how we generate the key)
                 {
@@ -180,27 +180,53 @@ TEST_CASE("nucleus/vector_style")
         // the layer_index order is however preserved (just not tested in this testcase)
 
         // "opacity outside of zoom range"
-        CHECK(style_buffer[0].x == 0); // z 13-1
-        CHECK(style_buffer[1].x == 0xbbbbbbff); // z 13
-        CHECK(style_buffer[2].x == 0xbbbbbbff); // z 14
-        CHECK(style_buffer[3].x == 0xbbbbbbff); // z 15
-        CHECK(style_buffer[4].x == 0); // z 15+1
+        CHECK(style_buffer[0].x == 0); // z 0
+        CHECK(style_buffer[1].x == 0); // z 1
+        CHECK(style_buffer[2].x == 0); // z 2
+        CHECK(style_buffer[3].x == 0); // z 3
+        CHECK(style_buffer[4].x == 0); // z 4
+        CHECK(style_buffer[5].x == 0); // z 5
+        CHECK(style_buffer[6].x == 0); // z 6
+        CHECK(style_buffer[7].x == 0); // z 7
+        CHECK(style_buffer[8].x == 0); // z 8
+        CHECK(style_buffer[9].x == 0); // z 9
+        CHECK(style_buffer[10].x == 0); // z 10
+        CHECK(style_buffer[11].x == 0); // z 11
+        CHECK(style_buffer[12].x == 0); // z 12
+        CHECK(style_buffer[13].x == 0xbbbbbbff); // z 13
+        CHECK(style_buffer[14].x == 0xbbbbbbff); // z 14
+        CHECK(style_buffer[15].x == 0xbbbbbbff); // z 15
+        CHECK(style_buffer[16].x == 0); // z 16
+        CHECK(style_buffer[17].x == 0); // z 17
+        CHECK(style_buffer[18].x == 0); // z 18
 
         // reuse style if no blending
-        CHECK(style_buffer[5].x == 0); // make sure that we are in the right style instruction here (not using other style)
-        CHECK(style_buffer[5].z == 8 * line_multipliers); // z 11-1
-        CHECK(style_buffer[6].x == 0xaaaaaaff); // z 11 // color
-        CHECK(style_buffer[6].z == 8 * line_multipliers); // z 11
-        CHECK(style_buffer[7].z == 8 * line_multipliers); // z 12
-        CHECK(style_buffer[8].z == 8 * line_multipliers); // z 13
-        CHECK(style_buffer[9].z == 9 * line_multipliers); // z 14
-        CHECK(style_buffer[10].x == 0xaaaaaaff); // z 15 color
-        CHECK(style_buffer[10].z == 10 * line_multipliers); // z 15
-        CHECK(style_buffer[11].x == 0); // z 15+1 color
-        CHECK(style_buffer[11].z == 10 * line_multipliers); // z 15+1
+        CHECK(style_buffer[19].x == 0); // z0 // make sure that we are in the right style instruction here (not using other style)
+        CHECK(style_buffer[19].z == 8 * line_multipliers); // z 0
+        CHECK(style_buffer[20].x == 0); // z1
+        CHECK(style_buffer[21].x == 0); // z2
+        CHECK(style_buffer[22].x == 0); // z3
+        CHECK(style_buffer[23].x == 0); // z4
+        CHECK(style_buffer[24].x == 0); // z5
+        CHECK(style_buffer[25].x == 0); // z6
+        CHECK(style_buffer[26].x == 0); // z7
+        CHECK(style_buffer[27].x == 0); // z8
+        CHECK(style_buffer[28].x == 0); // z9
+        CHECK(style_buffer[29].x == 0); // z10
+        CHECK(style_buffer[30].x == 0xaaaaaaff); // z 11 // color
+        CHECK(style_buffer[30].z == 8 * line_multipliers); // z 11
+        CHECK(style_buffer[31].z == 8 * line_multipliers); // z 12
+        CHECK(style_buffer[32].z == 8 * line_multipliers); // z 13
+        CHECK(style_buffer[33].z == 9 * line_multipliers); // z 14
+        CHECK(style_buffer[34].x == 0xaaaaaaff); // z 15 color
+        CHECK(style_buffer[34].z == 10 * line_multipliers); // z 15
+        CHECK(style_buffer[35].x == 0); // z 16
+        CHECK(style_buffer[35].z == 10 * line_multipliers); // z 16
+        CHECK(style_buffer[36].x == 0); // z 17
+        CHECK(style_buffer[37].x == 0); // z 18
 
-        CHECK(style_buffer[12].x == -1u); // no data
-        CHECK(style_buffer[13].z == -1u); // no data
+        CHECK(style_buffer[38].x == -1u); // no data
+        CHECK(style_buffer[39].z == -1u); // no data
     }
 
     SECTION("Simple style parsing - merge similar instructions")
@@ -214,29 +240,70 @@ TEST_CASE("nucleus/vector_style")
 
         const auto style_buffer = s.styles()->buffer();
 
-        CHECK(style_buffer[0].x == 0); // z 13-1
-        CHECK(style_buffer[1].x == 0xbbbbbbff); // z 13
-        CHECK(style_buffer[2].x == 0xbbbbbbff); // z 14
-        CHECK(style_buffer[3].x == 0xbbbbbbff); // z 15
-        CHECK(style_buffer[4].x == 0); // z 15+1
+        constexpr auto z_per_style = 19;
 
-        CHECK(style_buffer[5].x == 0); // z 14-1
-        CHECK(style_buffer[6].x == 0xaaaaaaff); // z 14
-        CHECK(style_buffer[7].x == 0xaaaaaaff); // z 15
-        CHECK(style_buffer[8].x == 0xaaaaaaff); // z 16
-        CHECK(style_buffer[9].x == 0xaaaaaaff); // z 17
-        CHECK(style_buffer[10].x == 0xaaaaaaff); // z 18
+        CHECK(style_buffer[(z_per_style * 0) + 0].x == 0); // z 0
+        CHECK(style_buffer[(z_per_style * 0) + 1].x == 0); // z 1
+        CHECK(style_buffer[(z_per_style * 0) + 2].x == 0); // z 2
+        CHECK(style_buffer[(z_per_style * 0) + 3].x == 0); // z 3
+        CHECK(style_buffer[(z_per_style * 0) + 4].x == 0); // z 4
+        CHECK(style_buffer[(z_per_style * 0) + 5].x == 0); // z 5
+        CHECK(style_buffer[(z_per_style * 0) + 6].x == 0); // z 6
+        CHECK(style_buffer[(z_per_style * 0) + 7].x == 0); // z 7
+        CHECK(style_buffer[(z_per_style * 0) + 8].x == 0); // z 8
+        CHECK(style_buffer[(z_per_style * 0) + 9].x == 0); // z 9
+        CHECK(style_buffer[(z_per_style * 0) + 10].x == 0); // z 10
+        CHECK(style_buffer[(z_per_style * 0) + 11].x == 0); // z 11
+        CHECK(style_buffer[(z_per_style * 0) + 12].x == 0); // z 12
+        CHECK(style_buffer[(z_per_style * 0) + 13].x == 0xbbbbbbff); // z 13
+        CHECK(style_buffer[(z_per_style * 0) + 14].x == 0xbbbbbbff); // z 14
+        CHECK(style_buffer[(z_per_style * 0) + 15].x == 0xbbbbbbff); // z 15
+        CHECK(style_buffer[(z_per_style * 0) + 16].x == 0); // z 16
+        CHECK(style_buffer[(z_per_style * 0) + 17].x == 0); // z 17
+        CHECK(style_buffer[(z_per_style * 0) + 18].x == 0); // z 18
 
-        CHECK(style_buffer[11].x == 0); // z 13-1
-        CHECK(style_buffer[12].x == 0xccccccff); // z 13
-        CHECK(style_buffer[13].x == 0xccccccff); // z 14
-        CHECK(style_buffer[14].x == 0xccccccff); // z 15
-        CHECK(style_buffer[15].x == 0xccccccff); // z 16
-        CHECK(style_buffer[16].x == 0xccccccff); // z 17
-        CHECK(style_buffer[17].x == 0xccccccff); // z 18
+        CHECK(style_buffer[(z_per_style * 1) + 0].x == 0); // z 0
+        CHECK(style_buffer[(z_per_style * 1) + 1].x == 0); // z 1
+        CHECK(style_buffer[(z_per_style * 1) + 2].x == 0); // z 2
+        CHECK(style_buffer[(z_per_style * 1) + 3].x == 0); // z 3
+        CHECK(style_buffer[(z_per_style * 1) + 4].x == 0); // z 4
+        CHECK(style_buffer[(z_per_style * 1) + 5].x == 0); // z 5
+        CHECK(style_buffer[(z_per_style * 1) + 6].x == 0); // z 6
+        CHECK(style_buffer[(z_per_style * 1) + 7].x == 0); // z 7
+        CHECK(style_buffer[(z_per_style * 1) + 8].x == 0); // z 8
+        CHECK(style_buffer[(z_per_style * 1) + 9].x == 0); // z 9
+        CHECK(style_buffer[(z_per_style * 1) + 10].x == 0); // z 10
+        CHECK(style_buffer[(z_per_style * 1) + 11].x == 0); // z 11
+        CHECK(style_buffer[(z_per_style * 1) + 12].x == 0); // z 12
+        CHECK(style_buffer[(z_per_style * 1) + 13].x == 0); // z 13
+        CHECK(style_buffer[(z_per_style * 1) + 14].x == 0xaaaaaaff); // z 14
+        CHECK(style_buffer[(z_per_style * 1) + 15].x == 0xaaaaaaff); // z 15
+        CHECK(style_buffer[(z_per_style * 1) + 16].x == 0xaaaaaaff); // z 16
+        CHECK(style_buffer[(z_per_style * 1) + 17].x == 0xaaaaaaff); // z 17
+        CHECK(style_buffer[(z_per_style * 1) + 18].x == 0xaaaaaaff); // z 18
 
-        CHECK(style_buffer[18].x == -1u); // no data
-        CHECK(style_buffer[19].x == -1u); // no data
+        CHECK(style_buffer[(z_per_style * 2) + 0].x == 0); // z 0
+        CHECK(style_buffer[(z_per_style * 2) + 1].x == 0); // z 1
+        CHECK(style_buffer[(z_per_style * 2) + 2].x == 0); // z 2
+        CHECK(style_buffer[(z_per_style * 2) + 3].x == 0); // z 3
+        CHECK(style_buffer[(z_per_style * 2) + 4].x == 0); // z 4
+        CHECK(style_buffer[(z_per_style * 2) + 5].x == 0); // z 5
+        CHECK(style_buffer[(z_per_style * 2) + 6].x == 0); // z 6
+        CHECK(style_buffer[(z_per_style * 2) + 7].x == 0); // z 7
+        CHECK(style_buffer[(z_per_style * 2) + 8].x == 0); // z 8
+        CHECK(style_buffer[(z_per_style * 2) + 9].x == 0); // z 9
+        CHECK(style_buffer[(z_per_style * 2) + 10].x == 0); // z 10
+        CHECK(style_buffer[(z_per_style * 2) + 11].x == 0); // z 11
+        CHECK(style_buffer[(z_per_style * 2) + 12].x == 0); // z 12
+        CHECK(style_buffer[(z_per_style * 2) + 13].x == 0xccccccff); // z 13
+        CHECK(style_buffer[(z_per_style * 2) + 14].x == 0xccccccff); // z 14
+        CHECK(style_buffer[(z_per_style * 2) + 15].x == 0xccccccff); // z 15
+        CHECK(style_buffer[(z_per_style * 2) + 16].x == 0xccccccff); // z 16
+        CHECK(style_buffer[(z_per_style * 2) + 17].x == 0xccccccff); // z 17
+        CHECK(style_buffer[(z_per_style * 2) + 18].x == 0xccccccff); // z 18
+
+        CHECK(style_buffer[(z_per_style * 3) + 0].x == -1u); // no data
+        CHECK(style_buffer[(z_per_style * 3) + 1].x == -1u); // no data
     }
 
     SECTION("Style expand openstreetmap")
@@ -378,6 +445,8 @@ TEST_CASE("nucleus/vector_style")
 
         // check if the color stored int he style buffer points to the correct color in the stylesheet
         const auto style_buffer = s.styles()->buffer();
+
+        qDebug() << "building debug" << feature_to_style.at("fill__building__null__null_0");
 
         CHECK(feature_to_style.size() == 150);
         CHECK(style_buffer[feature_to_style.at("fill__building__null__null_0")].x == s.parse_color("#ded5cfff"));

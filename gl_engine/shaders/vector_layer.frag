@@ -440,8 +440,8 @@ highp uvec3 u32_2_to_u16_u24_u24(highp uvec2 data){
     return res;
 }
 
-mediump ivec2 to_dict_pixel_64(mediump uint hash) {
-    return ivec2(int(hash & 63u), int(hash >> 6u));
+mediump ivec2 to_dict_pixel_128(mediump uint hash) {
+    return ivec2(int(hash & 127u), int(hash >> 7u));
 }
 
 void parse_style(out LayerStyle style, highp uint style_index, mediump float zoom_offset, mediump float zoom_blend, lowp vec4 ortho_color, mediump float cos_smoothing_factor, bool is_polygon)
@@ -454,8 +454,8 @@ void parse_style(out LayerStyle style, highp uint style_index, mediump float zoo
     highp uint style_index_higher = uint(int(style_index) + zoom_offset_higher);
 
     // get the actual data
-    highp uvec4 style_data_lower = texelFetch(styles_sampler, ivec2(to_dict_pixel_64(style_index_lower)), 0);
-    highp uvec4 style_data_higher = texelFetch(styles_sampler, ivec2(to_dict_pixel_64(style_index_higher)), 0);
+    highp uvec4 style_data_lower = texelFetch(styles_sampler, ivec2(to_dict_pixel_128(style_index_lower)), 0);
+    highp uvec4 style_data_higher = texelFetch(styles_sampler, ivec2(to_dict_pixel_128(style_index_higher)), 0);
 
     ///////////////////////////////////////
     // colors
@@ -679,7 +679,7 @@ void main() {
                 debug_draw_calls = debug_draw_calls + 1;
 
                 highp uvec2 raw_geom_data = fetch_raw_geometry_data(sampler_buffer_index,i, texture_layer.y);
-                highp uint style_index = unpack_style_index(raw_geom_data);
+                highp uint style_index = unpack_style_index(raw_geom_data) + tile_id.z;
 
                 if (style_index != style.index) {
                     // we changed style -> blend previous style, reset layer infos and parse the new style
