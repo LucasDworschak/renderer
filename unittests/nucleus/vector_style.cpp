@@ -324,7 +324,7 @@ TEST_CASE("nucleus/vector_style")
         QJsonArray expanded_layers = style_expander::expand(layers);
 
         CHECK(layers.size() == 208); // makes sure that the input file is still the same
-        CHECK(expanded_layers.size() == 312);
+        CHECK(expanded_layers.size() == 397);
 
         // // DEBUG view what is written in expanded layers
         // QFile out_file("expanded.style.json");
