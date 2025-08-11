@@ -418,11 +418,11 @@ std::vector<StyleLayerIndex> Style::indices(std::string layer_name,
 
     const auto indices = m_layer_to_style.at(layer).indices(zoom, feature, temp_values);
 
-    for (const auto& indices : indices) {
+    for (const auto& index : indices) {
 
-        if (zoom < m_lowest_encountered_zoom[indices.layer_index]) {
-            m_lowest_encountered_zoom[indices.layer_index] = zoom;
-            m_styles_to_update.push_back(indices);
+        if (zoom < m_lowest_encountered_zoom[index.layer_index]) {
+            m_lowest_encountered_zoom[index.layer_index] = zoom;
+            m_styles_to_update.push_back(index);
         }
     }
 
@@ -446,7 +446,7 @@ bool Style::update_visible_styles()
         // we only save one index per 0-18 zoom range -> we have to multiply the style_index with the zoom range to get the index in the buffer
         const auto zooms_per_style = constants::style_zoom_range.y + 1;
 
-        for (auto i = indices.style_index * zooms_per_style + encountered_zoom - 1; i <= indices.style_index * zooms_per_style + zooms_per_style; i++) {
+        for (auto i = indices.style_index * zooms_per_style + encountered_zoom; i <= indices.style_index * zooms_per_style + zooms_per_style; i++) {
             visible_style_buffer[i] = style_buffer[i];
         }
     }

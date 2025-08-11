@@ -166,7 +166,7 @@ SubLayerInfo generate_expanded_filters(const QJsonObject& paint, const QJsonArra
             // add filter to sub filters
             sub_filter.push_back(filter[i].toArray());
 
-            if (sub_filter[i - 1].contains("in")) {
+            if (sub_filter[i - 1].contains("in") && sub_filter[i - 1].size() > 3) {
                 assert(in_filter_index == -1); // 2 in conditions -> function needs to be rewritten do deal with it
                 in_filter_index = i - 1;
             }
@@ -202,6 +202,10 @@ SubLayerInfo generate_expanded_filters(const QJsonObject& paint, const QJsonArra
             info.filter[key] = new_filter;
             if (!info.criterium_values.contains(key)) {
                 info.criterium_values[key] = QSet<size_t>();
+                if (criterium_value.isString())
+                    info.readable[key] = "_" + filter_criterium.toString() + "_" + criterium_value.toString();
+                else
+                    info.readable[key] = QString("_" + filter_criterium.toString() + "_%1").arg(criterium_value.toDouble());
             }
 
             info.criterium_values[key].insert(qHash(filter_criterium.toString() + criterium_value.toString()));
@@ -212,6 +216,7 @@ SubLayerInfo generate_expanded_filters(const QJsonObject& paint, const QJsonArra
         info.filter_order.push_back(key);
         info.filter[key] = sub_filter;
         info.criterium_values[key] = QSet<size_t>(); // empty
+        info.readable[key] = "";
     }
     const auto filter_criterium_hash = qHash(QJsonArray { "==", filter_criterium });
 
@@ -328,18 +333,18 @@ QJsonArray expand(const QJsonArray& layers)
 
         // if any of the following values is true we will epxand the layer to individual ones
         // else we will simply copy the existing layer
-        bool fill_color_match = details::sub_is_array(paint, "fill-color");
-        bool fill_opacity_match = details::sub_is_array(paint, "fill-opacity");
-        bool line_color_match = details::sub_is_array(paint, "line-color");
-        bool line_width_match = details::sub_is_array(paint, "line-width");
-        bool line_opacity_match = details::sub_is_array(paint, "line-opacity");
+        // bool fill_color_match = details::sub_is_array(paint, "fill-color");
+        // bool fill_opacity_match = details::sub_is_array(paint, "fill-opacity");
+        // bool line_color_match = details::sub_is_array(paint, "line-color");
+        // bool line_width_match = details::sub_is_array(paint, "line-width");
+        // bool line_opacity_match = details::sub_is_array(paint, "line-opacity");
 
-        bool needs_to_expand = fill_color_match || fill_opacity_match || line_color_match || line_width_match || line_opacity_match;
+        // bool needs_to_expand = fill_color_match || fill_opacity_match || line_color_match || line_width_match || line_opacity_match;
 
-        if (!needs_to_expand) {
-            out_layer.append(layer);
-            continue;
-        }
+        // if (!needs_to_expand) {
+        //     out_layer.append(layer);
+        //     continue;
+        // }
 
         ///////////////////////////////////
         // we need to expand the layer
@@ -369,6 +374,9 @@ QJsonArray expand(const QJsonArray& layers)
             QJsonObject new_layer = QJsonObject(layer.toObject());
             new_layer["filter"] = details::rejoin_filter(sub_layer_info.filter.at(sub_layer_key));
             new_layer["paint"] = new_paint;
+
+            // create new id to have a unique identifier
+            new_layer["id"] = QJsonValue(new_layer["id"].toString() + sub_layer_info.readable.at(sub_layer_key));
 
             out_layer.append(new_layer);
         }

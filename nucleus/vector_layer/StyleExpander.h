@@ -48,6 +48,9 @@ struct SubLayerInfo {
     std::unordered_map<size_t, std::vector<QJsonArray>> filter;
     // the value is a qHash of the criterium_value (for match it is a combination of criterium and value)
     QMap<size_t, QSet<size_t>> criterium_values;
+
+    // used to generate a new style id that is human readable (most likely only used for debugging)
+    std::unordered_map<size_t, QString> readable;
 };
 
 QJsonValue evaluate_get(QJsonValue expression);

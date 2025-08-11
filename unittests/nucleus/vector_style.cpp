@@ -390,7 +390,7 @@ TEST_CASE("nucleus/vector_style")
         QJsonArray expanded_layers = style_expander::expand(layers);
 
         CHECK(layers.size() == 128); // makes sure that the input file is still the same
-        CHECK(expanded_layers.size() == 128);
+        CHECK(expanded_layers.size() == 194);
 
         // qDebug() << layers.size();
         // qDebug() << expanded_layers.size();
@@ -445,8 +445,6 @@ TEST_CASE("nucleus/vector_style")
 
         // check if the color stored int he style buffer points to the correct color in the stylesheet
         const auto style_buffer = s.styles()->buffer();
-
-        qDebug() << "building debug" << feature_to_style.at("fill__building__null__null_0");
 
         CHECK(feature_to_style.size() == 150);
         CHECK(style_buffer[feature_to_style.at("fill__building__null__null_0")].x == s.parse_color("#ded5cfff"));
@@ -1050,6 +1048,8 @@ TEST_CASE("nucleus/vector_style")
         const auto forest0_style_index = feature_to_style.at("fill__landcover__wood__forest_0");
         const auto forest1_style_index = feature_to_style.at("fill__landcover__wood__forest_1");
 
+        const auto service_style_index = feature_to_style.at("line__transportation__service__null__paved_0");
+
         // checking forest with minzoom 13
         // style at z12 is transparent, (premultiplied alpha means that color is black)
         CHECK(visible_style_buffer[forest0_style_index - 1].x == 0); // z 12
@@ -1059,10 +1059,17 @@ TEST_CASE("nucleus/vector_style")
 
         // checking forest with maxzoom 13
         // maxzoom is 13 -> 13 is still visible and 14 will blend out -> but since we blend only with the rest of the available alpha, this does not matter
-        CHECK(visible_style_buffer[forest1_style_index - 1].x == s.parse_color("#add19eff")); // z 12
+        CHECK(visible_style_buffer[forest1_style_index - 1].x == 0); // z 12
         CHECK(visible_style_buffer[forest1_style_index + 0].x == s.parse_color("#add19eff")); // z 13
         CHECK(style_buffer[forest1_style_index - 1].x == s.parse_color("#add19eff")); // z 12
         CHECK(style_buffer[forest1_style_index + 0].x == s.parse_color("#add19eff")); // z 13
+
+        CHECK(visible_style_buffer[service_style_index - 2].x == 0); // z 12
+        CHECK(visible_style_buffer[service_style_index - 1].x == 0); // z 12
+        CHECK(visible_style_buffer[service_style_index + 0].x == s.parse_color("#FFFFFFFF")); // z 13
+        CHECK(style_buffer[service_style_index - 2].x == 0); // z 12
+        CHECK(style_buffer[service_style_index - 1].x == s.parse_color("#FFFFFFFF")); // z 12
+        CHECK(style_buffer[service_style_index + 0].x == s.parse_color("#FFFFFFFF")); // z 13
 
         // parse data again and make sure that update_visible_styles now returns false -> styles remain the same
         parse_tile(&s, tile, zoom, key_generator, skipped_layers, false);
