@@ -76,6 +76,7 @@ public slots:
     void reload_shader();
     void pick_value(const glm::dvec2& screen_space_coordinates) override;
     void update_max_zoom(unsigned int new_max_zoom);
+    void update_max_vector_geometry(unsigned int new_max_vector_geometry);
 
 signals:
     void timer_measurements_ready(QList<nucleus::timing::TimerReport> values);

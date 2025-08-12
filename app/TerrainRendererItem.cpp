@@ -151,6 +151,7 @@ QQuickFramebufferObject::Renderer* TerrainRendererItem::createRenderer() const
     // connect glWindow to forward key events.
     connect(this, &TerrainRendererItem::shared_config_changed, r->glWindow(), &gl_engine::Window::shared_config_changed);
     connect(this, &TerrainRendererItem::max_zoom_changed, r->glWindow(), &gl_engine::Window::update_max_zoom);
+    connect(this, &TerrainRendererItem::max_vector_geometry_changed, r->glWindow(), &gl_engine::Window::update_max_vector_geometry);
 
     // connect glWindow for shader hotreload by frontend button
     connect(this, &TerrainRendererItem::reload_shader, r->glWindow(), &gl_engine::Window::reload_shader);
@@ -292,6 +293,16 @@ void TerrainRendererItem::set_max_zoom(unsigned int new_max_zoom)
         return;
     m_max_zoom = new_max_zoom;
     emit max_zoom_changed(m_max_zoom);
+};
+
+unsigned int TerrainRendererItem::max_vector_geometry() const { return m_max_vector_geometry; };
+void TerrainRendererItem::set_max_vector_geometry(unsigned int new_max_vector_geometry)
+{
+    new_max_vector_geometry = std::clamp(new_max_vector_geometry, 0u, 255u);
+    if (m_max_vector_geometry == new_max_vector_geometry)
+        return;
+    m_max_vector_geometry = new_max_vector_geometry;
+    emit max_vector_geometry_changed(m_max_vector_geometry);
 };
 
 nucleus::camera::Definition TerrainRendererItem::camera() const

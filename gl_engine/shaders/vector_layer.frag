@@ -44,6 +44,8 @@ uniform highp usampler2DArray geometry_buffer_sampler_1;
 uniform highp usampler2DArray geometry_buffer_sampler_2;
 uniform highp usampler2DArray geometry_buffer_sampler_3;
 
+uniform highp int max_vector_geometry;
+
 layout (location = 0) out lowp vec3 texout_albedo;
 layout (location = 1) out highp vec4 texout_position;
 layout (location = 2) out highp uvec2 texout_normal;
@@ -672,9 +674,9 @@ void main() {
             mediump float zoom_blend = fract(zoom_offset);
 
 
-            // for(highp uint i = offset_size.x; i < offset_size.x + min(6u,offset_size.y); i++) // show only x layers
+            for(highp uint i = offset_size.x; i < offset_size.x + min(uint(max_vector_geometry),offset_size.y); i++) // show only x layers
             // for(highp uint i = offset_size.x+ offset_size.y; i --> offset_size.x ; ) // reverse traversal
-            for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
+            // for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
             {
                 debug_draw_calls = debug_draw_calls + 1;
 

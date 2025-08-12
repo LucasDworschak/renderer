@@ -506,6 +506,10 @@ void Window::update_debug_scheduler_stats(const QString& stats)
 }
 
 void Window::update_max_zoom(unsigned int new_max_zoom) { m_max_zoom = new_max_zoom; }
+void Window::update_max_vector_geometry(unsigned int new_max_vector_geometry)
+{
+    m_context->vector_layer()->update_max_vector_geometry(new_max_vector_geometry);
+}
 
 float Window::depth(const glm::dvec2& normalised_device_coordinates)
 {

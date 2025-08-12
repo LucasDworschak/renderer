@@ -63,6 +63,7 @@ class TerrainRendererItem : public QQuickFramebufferObject {
     Q_PROPERTY(nucleus::picker::Feature picked_feature READ picked_feature NOTIFY picked_feature_changed FINAL)
     Q_PROPERTY(QVector3D world_space_cursor_position READ world_space_cursor_position NOTIFY world_space_cursor_position_changed FINAL)
     Q_PROPERTY(unsigned int max_zoom READ max_zoom WRITE set_max_zoom NOTIFY max_zoom_changed)
+    Q_PROPERTY(unsigned int max_vector_geometry READ max_vector_geometry WRITE set_max_vector_geometry NOTIFY max_vector_geometry_changed)
 
 public:
     explicit TerrainRendererItem(QQuickItem* parent = 0);
@@ -73,6 +74,7 @@ signals:
 
     void redraw_delay_changed();
     void max_zoom_changed(unsigned int new_max_zoom);
+    void max_vector_geometry_changed(unsigned int new_max_vector_geometry);
 
     void mouse_pressed(const nucleus::event_parameter::Mouse&) const;
     void mouse_released(const nucleus::event_parameter::Mouse&) const;
@@ -147,6 +149,9 @@ public:
     [[nodiscard]] unsigned int max_zoom() const;
     void set_max_zoom(unsigned int new_max_zoom);
 
+    [[nodiscard]] unsigned int max_vector_geometry() const;
+    void set_max_vector_geometry(unsigned int new_max_vector_geometry);
+
     [[nodiscard]] nucleus::camera::Definition camera() const;
     void set_read_only_camera(const nucleus::camera::Definition& new_camera); // implementation detail
 
@@ -209,6 +214,7 @@ private:
     float m_field_of_view = 60;
     int m_redraw_delay = 1;
     unsigned int m_max_zoom = 19u;
+    unsigned int m_max_vector_geometry = 8u;
     unsigned m_tile_cache_size = 12000;
     unsigned int m_selected_camera_position_index = 0;
     unsigned int m_selected_benchmark_position_index = 0;

@@ -117,6 +117,7 @@ void VectorLayer::draw(const TileGeometry& tile_geometry,
 
     texture_layer.bind_buffer(m_shader, draw_list);
 
+    m_shader->set_uniform("max_vector_geometry", m_max_vector_geometry);
     m_shader->set_uniform("acceleration_grid_sampler", 9);
     m_acceleration_grid_texture->bind(9);
 
@@ -217,6 +218,11 @@ void VectorLayer::update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec
     {
         m_styles_texture->upload(*m_styles);
     }
+}
+
+void VectorLayer::update_max_vector_geometry(unsigned int new_max_vector_geometry)
+{
+    m_max_vector_geometry = int(new_max_vector_geometry); // uint uniforms do not work ...;
 }
 
 } // namespace gl_engine

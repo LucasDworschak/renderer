@@ -52,6 +52,7 @@ public:
 
     unsigned tile_count() const;
 
+    void update_max_vector_geometry(unsigned int new_max_vector_geometry);
     void set_defines(const std::unordered_map<QString, QString>& defines);
     static std::unordered_map<QString, QString> default_defines();
 
@@ -75,6 +76,8 @@ private:
     std::shared_ptr<const nucleus::Raster<glm::u32vec4>> m_styles;
 
     bool m_initialized;
+
+    int m_max_vector_geometry = 8;
 
     std::unordered_map<QString, QString> m_defines;
 };
