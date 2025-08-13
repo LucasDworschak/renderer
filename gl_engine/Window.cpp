@@ -278,7 +278,7 @@ void Window::paint(QOpenGLFramebufferObject* framebuffer)
     cc->inv_proj_matrix = glm::inverse(cc->proj_matrix);
     cc->viewport_size = m_camera.viewport_size();
     cc->distance_scaling_factor = m_camera.distance_scale_factor();
-    // cc->error_threshold_px = m_camera.error_threshold_px();
+    cc->error_threshold_px = m_camera.pixel_error_threshold();
     m_camera_config_ubo->update_gpu_data();
 
     // DRAW ATMOSPHERIC BACKGROUND

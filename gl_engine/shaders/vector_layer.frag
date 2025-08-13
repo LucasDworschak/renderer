@@ -412,18 +412,13 @@ mediump float float_zoom_interpolation()
 {
     highp float dist_camera = length(var_pos_cws.xyz);
 
-    // TODO move error_threshold_px to camera_config
-    // const highp float error_threshold_px = 1.0 / 0.1;
-    const highp float error_threshold_px = 1.0 / 0.5;
-    // const highp float error_threshold_px = 1.0 / 2.0;
-
     const highp float sqrt2 = 1.414213562373095;
     const highp float cEarthCircumference = 40075016.685578486;
     const highp float tile_size = 256.0;
 
     highp float camera_factors = camera.viewport_size.y * 0.5 * camera.distance_scaling_factor;
     highp float static_factors = camera_factors * sqrt2 * cEarthCircumference / tile_size;
-    highp float z = log2(static_factors / dist_camera / error_threshold_px)+1.0;
+    highp float z = log2(static_factors / dist_camera / camera.error_threshold_px)+1.0;
 
     return clamp(z, 0.0, float(max_zoom));
 }
