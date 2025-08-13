@@ -506,10 +506,10 @@ mediump float calculate_cos_smoothing()
 {
 #if shallow_angle_signal_frequency == 1
     float cos_angle = dot(normalize(var_pos_cws.xyz),vec3(0.,0.,1.));
+    float dist = smoothstep(2000.0, 500.0, length(var_pos_cws.xy)); // between 0-500m -> no cos smoothing; between 2000m and inf use cos smoothing; inbetween transition
 
-    return mix(0.0, sqrt(sqrt(abs(cos_angle))), smoothstep(0.0,0.15,abs(cos_angle)));
+    return mix(0.0, sqrt(sqrt(abs(cos_angle))), smoothstep(0.0,0.15,abs(cos_angle))) * (1.0-dist) + dist;
 
-    // float dist = smoothstep(2000.0, 500.0, length(var_pos_cws.xy)); // between 0-500m -> no cos smoothing; between 2000m and inf use cos smoothing; inbetween transition
     // return sqrt(sqrt(abs(cos_angle))) * (1.0-dist) + dist;
 #else
     return 1.0;
