@@ -115,10 +115,6 @@ const highp float full_threshold = 0.99;
 
 
 
-highp float calculate_falloff(highp float dist, highp float from, highp float to) {
-    return clamp(1.0 - (dist - from) / (to - from), 0.0, 1.0);
-}
-
 highp vec3 normal_by_fragment_position_interpolation() {
     highp vec3 dFdxPos = dFdx(var_pos_cws);
     highp vec3 dFdyPos = dFdy(var_pos_cws);
@@ -190,7 +186,8 @@ void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samp
             highp vec2 stretched_mult = vec2(dot(grad_u, raw_mult), dot(grad_v, raw_mult));
             highp vec2 stretch_factor = stretched_mult / raw_mult;
 
-            aa_sample_multipliers[index] = (clamp(uv + stretched_mult, min_cell, max_cell) - uv) / stretch_factor;
+            // aa_sample_multipliers[index] = (clamp(uv + stretched_mult, min_cell, max_cell) - uv) / stretch_factor;
+            aa_sample_multipliers[index] = raw_mult; // TODO not clamping is faster and looks more or less the same -> check this again at the end and remove clamping approach
         }
     }
 
@@ -257,13 +254,11 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle )
         poly_sign = -sign(d.y);
         result = d.x;
 
-        // return -sqrt(d.x)*sign(d.y); // TODO sqrt and length is basically the same instruction -> get them out of the if
     }
     else{
         poly_sign = 1.0;
         result = dot(pq0,pq0);
 
-        // return sqrt(dot(pq0,pq0));
     }
 
     return sqrt(result)*poly_sign;
@@ -275,6 +270,10 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle )
 highp float grad_clamp_fun(highp float v, highp float min, highp float max, highp float incoming_grad)
 {
     // return incoming_grad * // TODO convert to * instead of if
+
+    // return float(v > min && v < max) * incoming_grad;
+    // return incoming_grad * step(v,min) * step(max,v);
+
     if (v > min && v < max)
         return incoming_grad;
     return 0.0;
@@ -538,10 +537,6 @@ void main() {
 #endif
 
 
-    // highp float depth = depthWSEncode2n8(length(var_pos_cws));
-    highp float depth = length(var_pos_cws);
-
-
 
     lowp vec3 debug_cacscade_layer = vec3(0,0,0);// DEBUG -> which cascade is being used
     lowp vec3 debug_cell_size = vec3(0,0,0);// DEBUG -> how many triangles per cell
@@ -552,22 +547,20 @@ void main() {
 
 
 
-    // get grid acceleration structure data
     highp uvec3 tile_id = var_tile_id;
     highp vec2 uv = var_uv;
-
-
-    lowp ivec2 dict_px;
     highp uvec2 offset_size = uvec2(0u);
 
-    lowp vec4 pixel_color = vec4(0.0f, 0.0, 0.0f, 0.0f);
 
+    lowp vec4 pixel_color = vec4(0.0f, 0.0, 0.0f, 0.0f);
     // openmaptile
     lowp vec3 background_color = vec3(242.0f/255.0f, 239.0f/255.0f, 233.0f/255.0f);
     // qwant
     // lowp vec3 background_color = vec3(248.0f/255.0f, 248.0f/255.0f, 248.0f/255.0f);
     // osm-bright
     // lowp vec3 background_color = vec3(248.0f/255.0f, 244.0f/255.0f, 240.0f/255.0f);
+
+
 
     // ORTHO color -> note we wrap tile_id in uvec3 and use ortho_uv, to not change those variables for the vector color
     highp vec2 ortho_uv = uv;
@@ -599,157 +592,158 @@ void main() {
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, mipmap_level), 0).xy;
 
     decrease_zoom_level_until(tile_id, uv, tile_id.z - mipmap_level);
+
     mediump float zoom_offset = float_zoom-float(tile_id.z);
 
+
+
+
+    // acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
+    lowp ivec2 grid_cell = ivec2(grid_size*uv);
+    lowp vec2 grid_cell_float = vec2(grid_cell);
+    offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(grid_cell.x, grid_cell.y, texture_layer.x & layer_mask),0).r);
+
+
+    // anti-alialing
     mediump float cos_smoothing_factor = calculate_cos_smoothing();
-
-
     highp float aa_half_radius = calculate_aa_half_radius(uv);
 
-    if(texture_layer.x != bit_mask_ones && texture_layer.y != bit_mask_ones) // check for valid data
+#if SDF_MODE == 0
+    highp vec2 aa_sample_positions[n_aa_samples]; // uv space
+    calculate_sample_positions(aa_sample_positions, uv, grid_cell);
+#endif
+#if SDF_MODE == 1
+    highp vec2 aa_sample_multipliers[n_aa_samples];
+    calculate_sample_multipliers(aa_sample_multipliers, uv, duvdx, duvdy, grid_cell_float);
+#endif
+
+
+
+
+    // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
+    if(offset_size.y != uint(0)) // only if we have data here
     {
+        // get the buffer index and extract the correct texture_layer.y
+        lowp uint sampler_buffer_index = texture_layer.y >> sampler_offset;
+        texture_layer.y = texture_layer.y & layer_mask;
 
-        // acceleration_grid_sampler contains the offset and the number of triangles of the current grid cell
-        lowp ivec2 grid_cell = ivec2(grid_size*uv);
-        lowp vec2 grid_cell_float = vec2(grid_cell);
-        offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(grid_cell.x, grid_cell.y, texture_layer.x & layer_mask),0).r);
+        { // DEBUG
+            debug_texture_layer = color_from_id_hash(texture_layer.y);
 
-#if SDF_MODE == 0
-        highp vec2 aa_sample_positions[n_aa_samples]; // uv space
-        calculate_sample_positions(aa_sample_positions, uv, grid_cell);
-#endif
-#if SDF_MODE == 1
-        highp vec2 aa_sample_multipliers[n_aa_samples];
-        calculate_sample_multipliers(aa_sample_multipliers, uv, duvdx, duvdy, grid_cell_float);
-#endif
-
-
-
-
-        // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
-        if(offset_size.y != uint(0)) // only if we have data here
-        {
-            // get the buffer index and extract the correct texture_layer.y
-            lowp uint sampler_buffer_index = (texture_layer.y & ((bit_mask_ones << sampler_offset))) >> sampler_offset;
-            texture_layer.y = texture_layer.y & layer_mask;
-
-            { // DEBUG
-                debug_texture_layer = color_from_id_hash(texture_layer.y);
-
-                {
-                    if(sampler_buffer_index == 0u)
-                        debug_cacscade_layer = vec3(0,1,0); // green
-                    else if(sampler_buffer_index == 1u)
-                        debug_cacscade_layer = vec3(1,1,0); // yellow
-                    else if(sampler_buffer_index == 2u)
-                        debug_cacscade_layer = vec3(1,0.5,0); // orange
-                    else if(sampler_buffer_index == 3u)
-                        debug_cacscade_layer = vec3(1,0,0); // red
-                    else
-                        debug_cacscade_layer = vec3(1,0,1); // purple -> should never happen -> unrecognized index
-                }
-
-                {
-                    if(offset_size.y < 32u)
-                        debug_cell_size = vec3(0,1,0); // green
-                    else if(offset_size.y < 64u)
-                        debug_cell_size = vec3(1,1,0); // yellow
-                    else if(offset_size.y  < 128u)
-                        debug_cell_size = vec3(1,0.5,0); // orange
-                    else if(offset_size.y < 255u)
-                        debug_cell_size = vec3(1,0,0); // red
-                    else
-                        debug_cell_size = vec3(1,0,1); // purple -> should never happen -> unrecognized index
-                }
-
-                debug_index_buffer_start = color_from_id_hash(offset_size.x);
-                debug_index_buffer_size = color_from_id_hash(offset_size.y);
-            } // DEBUG END
-
-            LayerStyle style;
-            style.index = -1u;
-            style.color = vec4(0.0);
-            style.line_width = 0.0;
-            style.dash_info = vec2(1.0, 0.0);
-            style.line_caps = 0;
-
-            mediump float intersection_percentage = 0.0;
-            mediump float zoom_blend = fract(zoom_offset);
-
-
-            for(highp uint i = offset_size.x; i < offset_size.x + min(uint(max_vector_geometry),offset_size.y); i++) // show only x layers
-            // for(highp uint i = offset_size.x+ offset_size.y; i --> offset_size.x ; ) // reverse traversal
-            // for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
             {
-                debug_draw_calls = debug_draw_calls + 1;
-
-                highp uvec2 raw_geom_data = fetch_raw_geometry_data(sampler_buffer_index,i, texture_layer.y);
-                highp uint style_index = unpack_style_index(raw_geom_data) + tile_id.z;
-
-                if (style_index != style.index) {
-                    // we changed style -> blend previous style, reset layer infos and parse the new style
-                    alpha_blend(pixel_color, style, intersection_percentage);
-                    intersection_percentage = 0.0;
-                    if (pixel_color.a > full_threshold) {
-                        break;
-                    }
-
-                    parse_style(style, style_index, zoom_offset, zoom_blend, ortho_color, cos_smoothing_factor, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
-                }
-
-
-#if SDF_MODE == 1
-                { // derivative aa
-                    VectorLayerData geom_data = unpack_data(raw_geom_data, grid_cell_float); // TODO move below code inside unpack_data
-
-                    highp vec3 dist_and_grad = sdf_with_grad(geom_data, uv, 1.0);
-                    highp float accumulated = 0.0;
-
-                    for (lowp int j = 0; j < n_aa_samples; ++j)
-                    {
-                        highp float dDist_dx = dot(dist_and_grad.yz, duvdx);
-                        highp float dDist_dy = dot(dist_and_grad.yz, duvdy);
-
-                        highp float d = dist_and_grad.x + aa_sample_multipliers[j].x * dDist_dx + aa_sample_multipliers[j].y * dDist_dy;
-                        if(!geom_data.is_polygon)
-                            d = abs(d);
-                        d = d - style.line_width;
-
-
-                        // mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
-#if shallow_angle_signal_frequency == 0
-                        mediump float percentage = 1.0 - smoothstep(-aa_half_radius*2.0,0.0, d);
-#else
-                        mediump float percentage = 1.0 - step(0.0,d);
-#endif
-                        accumulated += percentage;
-                    }
-                    merge_intersection(intersection_percentage, accumulated * division_by_n_samples);
-
-                }
-#endif
-#if SDF_MODE == 0
-                { // naive aa
-                    VectorLayerData geom_data = unpack_data(raw_geom_data, grid_cell_float);
-                    SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data);
-
-                    highp float accumulated = 0.0;
-                    for (lowp int j = 0; j < n_aa_samples; ++j)
-                    {
-                        highp float d = sd_Line_Triangle(aa_sample_positions[j], prepared_sdf_data, geom_data.is_polygon) - style.line_width;
-                        mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
-                        accumulated += percentage;
-                    }
-                    merge_intersection(intersection_percentage, accumulated * division_by_n_samples); // try current min(1, sum(geometries)) and alternative max(geometries)
-                }
-#endif
-
+                if(sampler_buffer_index == 0u)
+                    debug_cacscade_layer = vec3(0,1,0); // green
+                else if(sampler_buffer_index == 1u)
+                    debug_cacscade_layer = vec3(1,1,0); // yellow
+                else if(sampler_buffer_index == 2u)
+                    debug_cacscade_layer = vec3(1,0.5,0); // orange
+                else if(sampler_buffer_index == 3u)
+                    debug_cacscade_layer = vec3(1,0,0); // red
+                else
+                    debug_cacscade_layer = vec3(1,0,1); // purple -> should never happen -> unrecognized index
             }
 
-            // blend the last layer (this only does something if we did not break out of the loop early)
-            alpha_blend(pixel_color, style, intersection_percentage);
+            {
+                if(offset_size.y < 32u)
+                    debug_cell_size = vec3(0,1,0); // green
+                else if(offset_size.y < 64u)
+                    debug_cell_size = vec3(1,1,0); // yellow
+                else if(offset_size.y  < 128u)
+                    debug_cell_size = vec3(1,0.5,0); // orange
+                else if(offset_size.y < 255u)
+                    debug_cell_size = vec3(1,0,0); // red
+                else
+                    debug_cell_size = vec3(1,0,1); // purple -> should never happen -> unrecognized index
+            }
+
+            debug_index_buffer_start = color_from_id_hash(offset_size.x);
+            debug_index_buffer_size = color_from_id_hash(offset_size.y);
+        } // DEBUG END
+
+        LayerStyle style;
+        style.index = -1u;
+        style.color = vec4(0.0);
+        style.line_width = 0.0;
+        style.dash_info = vec2(1.0, 0.0);
+        style.line_caps = 0;
+
+        mediump float intersection_percentage = 0.0;
+        mediump float zoom_blend = fract(zoom_offset);
+
+
+        for(highp uint i = offset_size.x; i < offset_size.x + min(uint(max_vector_geometry),offset_size.y); i++) // show only x layers
+        // for(highp uint i = offset_size.x+ offset_size.y; i --> offset_size.x ; ) // reverse traversal
+        // for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++)
+        {
+            debug_draw_calls++;
+
+            highp uvec2 raw_geom_data = fetch_raw_geometry_data(sampler_buffer_index, i, texture_layer.y);
+            highp uint style_index = unpack_style_index(raw_geom_data) + tile_id.z;
+
+            if (style_index != style.index) {
+                // we changed style -> blend previous style, reset layer infos and parse the new style
+                alpha_blend(pixel_color, style, intersection_percentage);
+                intersection_percentage = 0.0;
+                if (pixel_color.a > full_threshold) {
+                    break;
+                }
+
+                parse_style(style, style_index, zoom_offset, zoom_blend, ortho_color, cos_smoothing_factor, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
+            }
+
+
+#if SDF_MODE == 1
+            { // derivative aa
+                VectorLayerData geom_data = unpack_data(raw_geom_data, grid_cell_float);
+
+                highp vec3 dist_and_grad = sdf_with_grad(geom_data, uv, 1.0);
+                highp float accumulated = 0.0;
+
+                highp float dDist_dx = dot(dist_and_grad.yz, duvdx);
+                highp float dDist_dy = dot(dist_and_grad.yz, duvdy);
+
+                for (lowp int j = 0; j < n_aa_samples; ++j)
+                {
+                    highp float d = dist_and_grad.x + aa_sample_multipliers[j].x * dDist_dx + aa_sample_multipliers[j].y * dDist_dy;
+
+                    // for lines use the abs(d) -> lines should not be able to be negative -> but it is possible with derivative -> we have to correct this
+                    d = mix(abs(d), d, geom_data.is_polygon) - style.line_width;
+
+
+                    // mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
+#if shallow_angle_signal_frequency == 0
+                    mediump float percentage = 1.0 - smoothstep(-aa_half_radius*2.0,0.0, d);
+#else
+                    mediump float percentage = 1.0 - step(0.0,d);
+#endif
+                    accumulated += percentage;
+                }
+                merge_intersection(intersection_percentage, accumulated * division_by_n_samples);
+
+            }
+#endif
+#if SDF_MODE == 0
+            { // naive aa
+                VectorLayerData geom_data = unpack_data(raw_geom_data, grid_cell_float);
+                SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data);
+
+                highp float accumulated = 0.0;
+                for (lowp int j = 0; j < n_aa_samples; ++j)
+                {
+                    highp float d = sd_Line_Triangle(aa_sample_positions[j], prepared_sdf_data, geom_data.is_polygon) - style.line_width;
+                    mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
+                    accumulated += percentage;
+                }
+                merge_intersection(intersection_percentage, accumulated * division_by_n_samples); // try current min(1, sum(geometries)) and alternative max(geometries)
+            }
+#endif
+
         }
+
+        // blend the last layer (this only does something if we did not break out of the loop early)
+        alpha_blend(pixel_color, style, intersection_percentage);
     }
+
 
 
     // blend with background color and write pixel color to output
