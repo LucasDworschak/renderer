@@ -76,7 +76,7 @@ struct DataQuad {
     unsigned n_tiles = 0;
     std::array<Data, 4> tiles = {};
     NetworkInfo network_info() const { return NetworkInfo::join(tiles[0].network_info, tiles[1].network_info, tiles[2].network_info, tiles[3].network_info); }
-    static constexpr std::array<char, 25> version_information = { "DataQuad, version 0.1" };
+    static constexpr std::array<char, 25> version_information = { "DataQuad, version 0.2" };
 };
 static_assert(NamedTile<DataQuad>);
 static_assert(SerialisableTile<DataQuad>);

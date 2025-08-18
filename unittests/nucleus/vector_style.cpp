@@ -324,7 +324,7 @@ TEST_CASE("nucleus/vector_style")
         QJsonArray expanded_layers = style_expander::expand(layers);
 
         CHECK(layers.size() == 208); // makes sure that the input file is still the same
-        CHECK(expanded_layers.size() == 397);
+        CHECK(expanded_layers.size() == 281);
 
         // // DEBUG view what is written in expanded layers
         // QFile out_file("expanded.style.json");
@@ -335,13 +335,6 @@ TEST_CASE("nucleus/vector_style")
 
     SECTION("Style expand qwant")
     {
-        // expanding the following filters
-        // landcover-grass (+1)
-        // water (+1)
-        // bridge-link (+4)
-        // bridge-trunk-primary (+2)
-        // = adds 8 filters
-
         QFile file(":/vectorlayerstyles/qwant.json");
         file.open(QIODeviceBase::OpenModeFlag::ReadOnly);
 
@@ -358,7 +351,7 @@ TEST_CASE("nucleus/vector_style")
         QJsonArray expanded_layers = style_expander::expand(layers);
 
         CHECK(layers.size() == 115); // makes sure that the input file is still the same
-        CHECK(expanded_layers.size() == 123);
+        CHECK(expanded_layers.size() == 134);
 
         // qDebug() << layers.size();
         // qDebug() << expanded_layers.size();
@@ -390,7 +383,7 @@ TEST_CASE("nucleus/vector_style")
         QJsonArray expanded_layers = style_expander::expand(layers);
 
         CHECK(layers.size() == 128); // makes sure that the input file is still the same
-        CHECK(expanded_layers.size() == 194);
+        CHECK(expanded_layers.size() == 148);
 
         // qDebug() << layers.size();
         // qDebug() << expanded_layers.size();

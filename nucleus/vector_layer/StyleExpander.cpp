@@ -293,6 +293,11 @@ SubLayerInfo generate_expanded_filters(const QJsonObject& paint, const QJsonArra
                 if (!info.criterium_values.contains(key))
                     info.criterium_values[key] = QSet<size_t>();
                 info.criterium_values[key].insert(qHash(paint_filter));
+
+                if (paint_filter[2].isString())
+                    info.readable[key] = "_" + paint_filter[1].toString() + "_" + paint_filter[2].toString();
+                else
+                    info.readable[key] = QString("_" + paint_filter[1].toString() + "_%1").arg(paint_filter[2].toDouble());
             }
         }
     }
@@ -329,6 +334,12 @@ QJsonArray expand(const QJsonArray& layers)
 
     for (const auto& layer : layers) {
 
+        // only allow background, lines and fill types
+        if (layer.toObject().value("type").toString() != "line" && layer.toObject().value("type").toString() != "fill"
+            && layer.toObject().value("type").toString() != "background") {
+            continue; // not valid
+        }
+
         const auto paint = layer.toObject().value("paint").toObject();
 
         // if any of the following values is true we will epxand the layer to individual ones
@@ -349,7 +360,6 @@ QJsonArray expand(const QJsonArray& layers)
         ///////////////////////////////////
         // we need to expand the layer
 
-        // qDebug() << layer.toObject().value("id");
         const auto sub_layer_info = details::generate_expanded_filters(paint, layer.toObject().value("filter").toArray());
 
         // loop over all the filters we just generated
@@ -359,6 +369,7 @@ QJsonArray expand(const QJsonArray& layers)
             const auto criteriums = sub_layer_info.criterium_values.value(sub_layer_key);
 
             for (const auto& key : paint.keys()) {
+
                 if (paint[key].isArray() && paint[key].toArray()[0] == "match") {
                     // choose the value that matches and use it for the paint option
                     new_paint[key] = details::get_match_value(paint[key].toArray(), criteriums);
