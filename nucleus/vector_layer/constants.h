@@ -29,12 +29,12 @@ namespace nucleus::vector_layer::constants {
 // if values here change -> you also need to change them in the shader
 constexpr auto grid_size = 64;
 // constexpr auto grid_size = 128;
-constexpr auto data_size = std::array<uint32_t, 4> { 64u, 128u, 256u, 512u }; // needs to be in ascending order
-// constexpr auto data_size = std::array<uint32_t, 4> { 128u, 256u, 512u, 1024u }; // needs to be in ascending order
+// constexpr auto data_size = std::array<uint32_t, 4> { 64u, 128u, 256u, 512u }; // needs to be in ascending order
+constexpr auto data_size = std::array<uint32_t, 4> { 128u, 256u, 512u, 1024u }; // needs to be in ascending order
 // how many array layers tiles per data size
 // NOTE: -1u is used to say that we should use the upper limit determined by renderingcontext, if renderingcontext gives us a lower value than set, it is
 // automatically lowered IMPORTANT: only set -1u for the first values since those values will be combined to only one array_helper
-constexpr auto array_layer_tile_amount = std::array<uint32_t, 4> { -1u, -1u, 2048u, 256u };
+constexpr auto array_layer_tile_amount = std::array<uint32_t, 4> { -1u, -1u, 256u, 32u };
 // constexpr auto array_layer_tile_amount = std::array<uint32_t, 4> { -1u, -1u, 1024u, 128u };
 constexpr auto tile_extent = 1024;
 constexpr auto scale_polygons = 4.0;

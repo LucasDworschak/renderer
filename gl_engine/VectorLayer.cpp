@@ -26,19 +26,21 @@
 #include "TileGeometry.h"
 #include <QOpenGLExtraFunctions>
 
+#include <gl_engine/Framebuffer.h>
+
 #include "nucleus/vector_layer/constants.h"
 
 namespace gl_engine {
 
 using namespace nucleus::vector_layer;
 
-VectorLayer::VectorLayer(QObject* parent)
+VectorLayer::VectorLayer(unsigned int fallback_resolution, QObject* parent)
     : QObject { parent }
-    , m_gpu_multi_array_helper()
     , m_initialized(false)
+    , m_fallback_resolution(fallback_resolution)
+    , m_gpu_multi_array_helper()
 
 {
-
     m_defines = default_defines();
 }
 
@@ -69,13 +71,22 @@ void gl_engine::VectorLayer::set_defines(const std::unordered_map<QString, QStri
 
 void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
 {
+    m_screen_quad_geometry = gl_engine::helpers::create_screen_quad_geometry();
+
     std::vector<QString> defines;
     for (const auto& define : m_defines) {
         defines.push_back("#define " + define.first + " " + define.second);
     }
 
+    std::vector<QString> defines_fallback(defines);
+    // defines_fallback.push_back("#define FALLBACK_MODE 1");
+    // defines_fallback.push_back("#define SHALLOW_ANGLE_SIGNAL_FREQUENCY 2"); // no angle smoothing
+    // defines_fallback.push_back("#define VIEW_MODE 2"); // vector only (for now)
+
     m_shader = std::make_shared<ShaderProgram>("tile.vert", "vector_layer.frag", ShaderCodeSource::FILE, defines);
+    m_fallback_shader = std::make_shared<ShaderProgram>("vector_layer_fallback.vert", "vector_layer_fallback.frag", ShaderCodeSource::FILE, defines_fallback);
     shader_registry->add_shader(m_shader);
+    shader_registry->add_shader(m_fallback_shader);
 
     m_acceleration_grid_texture = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::R32UI);
     m_acceleration_grid_texture->setParams(gl_engine::Texture::Filter::Nearest, gl_engine::Texture::Filter::Nearest);
@@ -100,6 +111,10 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_styles_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RGBA32UI);
     m_styles_texture->setParams(gl_engine::Texture::Filter::Nearest, gl_engine::Texture::Filter::Nearest);
 
+    m_fallback_texture_array = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::RGBA8);
+    m_fallback_texture_array->setParams(Texture::Filter::MipMapLinear, Texture::Filter::Linear, true);
+    m_fallback_texture_array->allocate_array(m_fallback_resolution, m_fallback_resolution, unsigned(m_gpu_multi_array_helper.layer_amount(0)));
+
     m_initialized = true;
     if (m_styles) {
         m_styles_texture->upload(*m_styles);
@@ -108,17 +123,9 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
 
 unsigned VectorLayer::tile_count() const { return m_gpu_multi_array_helper.n_occupied(); }
 
-void VectorLayer::draw(const TileGeometry& tile_geometry,
-    const TextureLayer& texture_layer,
-    const nucleus::camera::Definition& camera,
-    const std::vector<nucleus::tile::TileBounds>& draw_list) const
+void VectorLayer::bind_buffer(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const
 {
-    m_shader->bind();
-
-    texture_layer.bind_buffer(m_shader, draw_list);
-
-    m_shader->set_uniform("max_vector_geometry", m_max_vector_geometry);
-    m_shader->set_uniform("acceleration_grid_sampler", 9);
+    shader->set_uniform("acceleration_grid_sampler", 9);
     m_acceleration_grid_texture->bind(9);
 
     nucleus::Raster<uint8_t> zoom_level_raster = { glm::uvec2 { 1024, 1 } };
@@ -150,23 +157,51 @@ void VectorLayer::draw(const TileGeometry& tile_geometry,
     }
 
     m_instanced_array_index->bind(10);
-    m_shader->set_uniform("instanced_texture_array_index_sampler_vector", 10);
+    shader->set_uniform("instanced_texture_array_index_sampler_vector", 10);
     m_instanced_array_index->upload(array_index_raster);
 
     m_instanced_zoom->bind(11);
-    m_shader->set_uniform("instanced_texture_zoom_sampler_vector", 11);
+    shader->set_uniform("instanced_texture_zoom_sampler_vector", 11);
     m_instanced_zoom->upload(zoom_level_raster);
 
-    m_shader->set_uniform("styles_sampler", 12);
+    shader->set_uniform("styles_sampler", 12);
     m_styles_texture->bind(12);
 
     // upload all geometry buffers
     // binds the buffers to "...buffer_sampler_[0-max]"
-    constexpr uint8_t triangle_vertex_buffer_start = 13;
-    for (uint8_t i = 0; i < constants::array_layer_tile_amount.size(); i++) {
-        m_shader->set_uniform("geometry_buffer_sampler_" + std::to_string(i), triangle_vertex_buffer_start + i);
-        m_geometry_buffer_texture[i]->bind(triangle_vertex_buffer_start + i);
-    }
+    // constexpr uint8_t triangle_vertex_buffer_start = 13;
+    // for (uint8_t i = 0; i < constants::array_layer_tile_amount.size(); i++) {
+    //     shader->set_uniform("geometry_buffer_sampler_" + std::to_string(i), triangle_vertex_buffer_start + i);
+    //     m_geometry_buffer_texture[i]->bind(triangle_vertex_buffer_start + i);
+    // }
+
+    shader->set_uniform("geometry_buffer_sampler_0", 13);
+    m_geometry_buffer_texture[0]->bind(13);
+    shader->set_uniform("geometry_buffer_sampler_1", 14);
+    m_geometry_buffer_texture[1]->bind(14);
+    shader->set_uniform("geometry_buffer_sampler_2", 15);
+    m_geometry_buffer_texture[2]->bind(15);
+    shader->set_uniform("geometry_buffer_sampler_3", 16);
+    m_geometry_buffer_texture[3]->bind(16);
+}
+
+void VectorLayer::draw(const TileGeometry& tile_geometry,
+    const TextureLayer& texture_layer,
+    const nucleus::camera::Definition& camera,
+    const std::vector<nucleus::tile::TileBounds>& draw_list) const
+{
+    m_shader->bind();
+
+    texture_layer.bind_buffer(m_shader, draw_list); // binds texture_sampler -> for ortho fotos
+
+    m_shader->set_uniform("max_vector_geometry", m_max_vector_geometry);
+
+    bind_buffer(m_shader, draw_list);
+
+    // constexpr uint8_t next_buffer_start = 13 + constants::array_layer_tile_amount.size();
+    constexpr uint8_t next_buffer_start = 17;
+    m_shader->set_uniform("fallback_texture_array", next_buffer_start);
+    m_fallback_texture_array->bind(next_buffer_start);
 
     tile_geometry.draw(m_shader.get(), camera, draw_list);
 }
@@ -181,6 +216,8 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
             m_gpu_multi_array_helper.remove_tile(id);
         }
     }
+
+    IdLayer id_layer;
 
     for (const auto& tile : new_tiles) {
         // test for validity
@@ -197,7 +234,48 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
         m_acceleration_grid_texture->upload(*tile.acceleration_grid, layer_index[0]);
 
         m_geometry_buffer_texture[tile.buffer_info]->upload(*tile.geometry_buffer, layer_index[1]);
+
+        id_layer.buffer_layer.push_back(layer_index[0]);
+        id_layer.bounds.push_back({ tile.id, {} });
     }
+
+    create_fallback_texture(id_layer);
+}
+
+void VectorLayer::create_fallback_texture(const IdLayer& id_layer)
+{
+    // needs ortho fotos
+    // needs style
+    // needs uploaded geometry_buffer / acceleration grid
+
+    // SETUP framebuffer
+    QOpenGLExtraFunctions* f = QOpenGLContext::currentContext()->extraFunctions();
+
+    unsigned m_frame_buffer = unsigned(-1);
+    f->glGenFramebuffers(1, &m_frame_buffer);
+    f->glViewport(0, 0, m_fallback_resolution, m_fallback_resolution);
+
+    f->glBindFramebuffer(GL_FRAMEBUFFER, m_frame_buffer);
+
+    m_fallback_shader->bind();
+
+    bind_buffer(m_fallback_shader, id_layer.bounds);
+
+    int index = 0;
+
+    for (const auto& buffer_layer : id_layer.buffer_layer) {
+        m_fallback_texture_array->bind_layer_to_frame_buffer(0, buffer_layer);
+
+        m_fallback_shader->set_uniform("instance_id", index);
+        m_fallback_shader->set_uniform("tile_zoom", int(id_layer.bounds[index].id.zoom_level));
+
+        m_screen_quad_geometry.draw();
+        index++;
+    }
+    // generate mipmaps after all the individual layers have been rendered
+    m_fallback_texture_array->generate_mipmap();
+
+    Framebuffer::unbind();
 }
 
 void VectorLayer::set_tile_limit(unsigned int new_limit)

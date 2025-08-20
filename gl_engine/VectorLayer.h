@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "helpers.h"
 #include <QObject>
 #include <nucleus/Raster.h>
 #include <nucleus/tile/DrawListGenerator.h>
@@ -40,10 +41,16 @@ class Texture;
 class TileGeometry;
 class TextureLayer;
 
+struct IdLayer {
+    std::vector<nucleus::tile::TileBounds> bounds;
+    std::vector<uint> buffer_layer;
+};
+
 class VectorLayer : public QObject {
     Q_OBJECT
 public:
-    explicit VectorLayer(QObject* parent = nullptr);
+    explicit VectorLayer(unsigned fallback_resolution = 256, QObject* parent = nullptr);
+
     void init(ShaderRegistry* shader_registry); // needs OpenGL context
     void draw(const TileGeometry& tile_geometry,
         const TextureLayer& texture_layer,
@@ -62,11 +69,19 @@ public slots:
     void update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles);
 
 private:
+    bool m_initialized;
+
+    const unsigned m_fallback_resolution;
+    int m_max_vector_geometry = 8;
+
     std::shared_ptr<ShaderProgram> m_shader;
+    std::shared_ptr<ShaderProgram> m_fallback_shader;
 
     std::unique_ptr<Texture> m_acceleration_grid_texture;
     std::vector<std::unique_ptr<Texture>> m_geometry_buffer_texture;
     std::unique_ptr<Texture> m_styles_texture;
+
+    std::unique_ptr<Texture> m_fallback_texture_array;
 
     std::unique_ptr<Texture> m_instanced_zoom;
     std::unique_ptr<Texture> m_instanced_array_index;
@@ -75,10 +90,11 @@ private:
 
     std::shared_ptr<const nucleus::Raster<glm::u32vec4>> m_styles;
 
-    bool m_initialized;
-
-    int m_max_vector_geometry = 8;
-
     std::unordered_map<QString, QString> m_defines;
+
+    helpers::ScreenQuadGeometry m_screen_quad_geometry;
+
+    void create_fallback_texture(const IdLayer& id_layers);
+    void bind_buffer(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const;
 };
 } // namespace gl_engine

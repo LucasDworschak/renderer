@@ -98,6 +98,21 @@ void gl_engine::Texture::bind(unsigned int texture_unit)
     f->glBindTexture(GLenum(m_target), m_id);
 }
 
+void gl_engine::Texture::bind_layer_to_frame_buffer(unsigned int attachment_offset, unsigned int buffer_layer)
+{
+    QOpenGLExtraFunctions* f = QOpenGLContext::currentContext()->extraFunctions();
+    f->glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + attachment_offset, m_id, 0, buffer_layer);
+    f->glBindTexture(GLenum(m_target), m_id);
+}
+
+void gl_engine::Texture::generate_mipmap()
+{
+    QOpenGLExtraFunctions* f = QOpenGLContext::currentContext()->extraFunctions();
+    f->glBindTexture(GLenum(m_target), m_id);
+    if (m_min_filter == Filter::MipMapLinear)
+        f->glGenerateMipmap(GLenum(m_target));
+}
+
 void gl_engine::Texture::setParams(Filter min_filter, Filter mag_filter, bool anisotropic_filtering)
 {
     // doesn't make sense, does it?
