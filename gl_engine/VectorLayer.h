@@ -64,17 +64,21 @@ public:
     static std::unordered_map<QString, QString> default_defines();
 
     bool check_fallback_textures();
-
+signals:
+    void fallback_textures_rendered();
 public slots:
     void update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted_tiles, const std::vector<nucleus::tile::GpuVectorLayerTile>& new_tiles);
     void set_tile_limit(unsigned new_limit);
     void update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles);
+    void generate_fallback_mipmaps();
 
 private:
     bool m_initialized;
 
     const unsigned m_fallback_resolution;
     int m_max_vector_geometry = 8;
+
+    unsigned m_fallback_framebuffer = unsigned(-1);
 
     std::shared_ptr<ShaderProgram> m_shader;
     std::shared_ptr<ShaderProgram> m_fallback_shader;
@@ -99,7 +103,7 @@ private:
     std::vector<nucleus::tile::Id> m_vector_on_gpu;
     std::vector<nucleus::tile::Id> m_fallback_on_gpu;
 
-    static constexpr int max_fallback_renders_per_frame = 16;
+    static constexpr int max_fallback_renders_per_frame = 32;
 
     bool m_fallback_render_possible;
 

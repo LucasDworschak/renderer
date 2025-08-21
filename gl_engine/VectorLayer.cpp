@@ -42,6 +42,9 @@ VectorLayer::VectorLayer(unsigned int fallback_resolution, QObject* parent)
 
 {
     m_defines = default_defines();
+
+    // using QueuedConnection flag should render mipmaps after render function finished
+    connect(this, &VectorLayer::fallback_textures_rendered, this, &VectorLayer::generate_fallback_mipmaps, Qt::QueuedConnection);
 }
 
 std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
@@ -71,7 +74,14 @@ void gl_engine::VectorLayer::set_defines(const std::unordered_map<QString, QStri
 
 void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
 {
-    m_screen_quad_geometry = gl_engine::helpers::create_screen_quad_geometry();
+    {
+        // fallback meta structure
+        QOpenGLExtraFunctions* f = QOpenGLContext::currentContext()->extraFunctions();
+
+        f->glGenFramebuffers(1, &m_fallback_framebuffer);
+
+        m_screen_quad_geometry = gl_engine::helpers::create_screen_quad_geometry();
+    }
 
     std::vector<QString> defines;
     for (const auto& define : m_defines) {
@@ -142,12 +152,17 @@ bool VectorLayer::check_fallback_textures()
         }
     }
 
+    update_fallback_textures(fallbacks_to_render);
+
     // if we found max amount to render -> we need to look at the next frame to determine if we rendered all
     bool search_next_frame = fallbacks_to_render.layer.size() >= max_fallback_renders_per_frame;
-    if (!search_next_frame)
+    if (!search_next_frame) {
         m_fallback_render_possible = false; // we found all -> we can early exit until we get new tiles
 
-    update_fallback_textures(fallbacks_to_render);
+        // after we are finished we can queue mipmap generation
+        // -> doing this only once, after finish should be the best compromise between performance and no errors
+        emit fallback_textures_rendered();
+    }
 
     return search_next_frame;
 }
@@ -279,16 +294,17 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
 void VectorLayer::update_fallback_textures(const IdLayer& id_layer)
 {
     // SETUP framebuffer
+    if (m_fallback_framebuffer < 0)
+        return; // framebuffer not ready
+
     QOpenGLExtraFunctions* f = QOpenGLContext::currentContext()->extraFunctions();
 
-    unsigned m_frame_buffer = unsigned(-1);
-    f->glGenFramebuffers(1, &m_frame_buffer);
     f->glViewport(0, 0, m_fallback_resolution, m_fallback_resolution);
 
     f->glDisable(GL_CULL_FACE);
     f->glDisable(GL_DEPTH_TEST);
 
-    f->glBindFramebuffer(GL_FRAMEBUFFER, m_frame_buffer);
+    f->glBindFramebuffer(GL_FRAMEBUFFER, m_fallback_framebuffer);
 
     m_fallback_shader->bind();
 
@@ -311,10 +327,11 @@ void VectorLayer::update_fallback_textures(const IdLayer& id_layer)
     }
 
     // generate mipmaps after all the individual layers have been rendered
-    m_fallback_texture_array->generate_mipmap();
 
     f->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
+void VectorLayer::generate_fallback_mipmaps() { m_fallback_texture_array->generate_mipmap(); }
 
 void VectorLayer::set_tile_limit(unsigned int new_limit)
 {
