@@ -121,9 +121,40 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     }
 }
 
+/**
+ * returns true if another update step is required (-> we need to call window.update_requested())
+ */
+bool VectorLayer::check_fallback_textures()
+{
+    if (!m_fallback_render_possible)
+        return false; // there shouldn't be any fallback textures to render -> early exit
+
+    IdLayer fallbacks_to_render;
+
+    for (uint i = 0; i < m_vector_on_gpu.size(); i++) {
+        if (m_vector_on_gpu[i] != m_fallback_on_gpu[i]) {
+            // TODO also do ortho fotos
+            fallbacks_to_render.layer.push_back(i);
+            fallbacks_to_render.bounds.push_back({ m_vector_on_gpu[i], {} });
+
+            if (fallbacks_to_render.layer.size() >= max_fallback_renders_per_frame)
+                break; // early exit if we are full
+        }
+    }
+
+    // if we found max amount to render -> we need to look at the next frame to determine if we rendered all
+    bool search_next_frame = fallbacks_to_render.layer.size() >= max_fallback_renders_per_frame;
+    if (!search_next_frame)
+        m_fallback_render_possible = false; // we found all -> we can early exit until we get new tiles
+
+    update_fallback_textures(fallbacks_to_render);
+
+    return search_next_frame;
+}
+
 unsigned VectorLayer::tile_count() const { return m_gpu_multi_array_helper.n_occupied(); }
 
-void VectorLayer::bind_buffer(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const
+void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const
 {
     shader->set_uniform("acceleration_grid_sampler", 9);
     m_acceleration_grid_texture->bind(9);
@@ -131,6 +162,7 @@ void VectorLayer::bind_buffer(std::shared_ptr<ShaderProgram> shader, const std::
     nucleus::Raster<uint8_t> zoom_level_raster = { glm::uvec2 { 1024, 1 } };
     nucleus::Raster<glm::u16vec2> array_index_raster = { glm::uvec2 { 1024, 4 } };
     for (unsigned i = 0; i < std::min(unsigned(draw_list.size()), 1024u); ++i) {
+        // todo -> automatically go to parent ( or parent.parent())
         const auto layer0 = m_gpu_multi_array_helper.layer(draw_list[i].id);
         zoom_level_raster.pixel({ i, 0 }) = layer0.id.zoom_level;
         array_index_raster.pixel({ i, 0 }) = { layer0.index1, layer0.index2 };
@@ -196,7 +228,7 @@ void VectorLayer::draw(const TileGeometry& tile_geometry,
 
     m_shader->set_uniform("max_vector_geometry", m_max_vector_geometry);
 
-    bind_buffer(m_shader, draw_list);
+    setup_buffers(m_shader, draw_list);
 
     // constexpr uint8_t next_buffer_start = 13 + constants::array_layer_tile_amount.size();
     constexpr uint8_t next_buffer_start = 17;
@@ -213,11 +245,15 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
 
     for (const auto& quad : deleted_tiles) {
         for (const auto& id : quad.children()) {
+            const auto exact_layer = m_gpu_multi_array_helper.exact_layer(0, id);
+            if (exact_layer != -1u) {
+                m_vector_on_gpu[exact_layer] = {};
+                m_fallback_on_gpu[exact_layer] = {};
+            }
+
             m_gpu_multi_array_helper.remove_tile(id);
         }
     }
-
-    IdLayer id_layer;
 
     for (const auto& tile : new_tiles) {
         // test for validity
@@ -232,22 +268,16 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
         const auto layer_index = m_gpu_multi_array_helper.add_tile(tile.id, tile.buffer_info);
 
         m_acceleration_grid_texture->upload(*tile.acceleration_grid, layer_index[0]);
-
         m_geometry_buffer_texture[tile.buffer_info]->upload(*tile.geometry_buffer, layer_index[1]);
 
-        id_layer.buffer_layer.push_back(layer_index[0]);
-        id_layer.bounds.push_back({ tile.id, {} });
-    }
+        m_vector_on_gpu[layer_index[0]] = tile.id;
 
-    create_fallback_texture(id_layer);
+        m_fallback_render_possible = true; // there was at least one new tile -> check if we need to render fallbacks
+    }
 }
 
-void VectorLayer::create_fallback_texture(const IdLayer& id_layer)
+void VectorLayer::update_fallback_textures(const IdLayer& id_layer)
 {
-    // needs ortho fotos
-    // needs style
-    // needs uploaded geometry_buffer / acceleration grid
-
     // SETUP framebuffer
     QOpenGLExtraFunctions* f = QOpenGLContext::currentContext()->extraFunctions();
 
@@ -255,27 +285,35 @@ void VectorLayer::create_fallback_texture(const IdLayer& id_layer)
     f->glGenFramebuffers(1, &m_frame_buffer);
     f->glViewport(0, 0, m_fallback_resolution, m_fallback_resolution);
 
+    f->glDisable(GL_CULL_FACE);
+    f->glDisable(GL_DEPTH_TEST);
+
     f->glBindFramebuffer(GL_FRAMEBUFFER, m_frame_buffer);
 
     m_fallback_shader->bind();
 
-    bind_buffer(m_fallback_shader, id_layer.bounds);
+    m_fallback_shader->set_uniform("min_vector_geometry", m_max_vector_geometry);
 
-    int index = 0;
+    setup_buffers(m_fallback_shader, id_layer.bounds);
 
-    for (const auto& buffer_layer : id_layer.buffer_layer) {
-        m_fallback_texture_array->bind_layer_to_frame_buffer(0, buffer_layer);
+    for (unsigned i = 0; i < id_layer.layer.size(); i++) {
+        m_fallback_texture_array->bind_layer_to_frame_buffer(0, id_layer.layer[i]);
 
-        m_fallback_shader->set_uniform("instance_id", index);
-        m_fallback_shader->set_uniform("tile_zoom", int(id_layer.bounds[index].id.zoom_level));
+        const GLfloat clearAlbedoColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+        f->glClearBufferfv(GL_COLOR, 0, clearAlbedoColor);
 
+        m_fallback_shader->set_uniform("instance_id", int(i));
+        m_fallback_shader->set_uniform("tile_zoom", int(id_layer.bounds[i].id.zoom_level));
+
+        // it is possible to render 4 or 8 tiles at once (using different color attachments) -> but not sure if really performance relevant
         m_screen_quad_geometry.draw();
-        index++;
+        m_fallback_on_gpu[id_layer.layer[i]] = id_layer.bounds[i].id;
     }
+
     // generate mipmaps after all the individual layers have been rendered
     m_fallback_texture_array->generate_mipmap();
 
-    Framebuffer::unbind();
+    f->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void VectorLayer::set_tile_limit(unsigned int new_limit)
@@ -285,6 +323,9 @@ void VectorLayer::set_tile_limit(unsigned int new_limit)
     assert(m_geometry_buffer_texture.size() == 0);
 
     m_gpu_multi_array_helper.set_tile_limit(new_limit);
+
+    m_vector_on_gpu.resize(new_limit, {});
+    m_fallback_on_gpu.resize(new_limit, {});
 }
 
 void VectorLayer::update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles)

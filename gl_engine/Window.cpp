@@ -226,6 +226,7 @@ void Window::initialise_gpu()
         m_timer->add_timer(make_shared<GpuAsyncQueryTimer>("shadowmap", "GPU", 240, 1.0f/60.0f));
         m_timer->add_timer(make_shared<GpuAsyncQueryTimer>("compose", "GPU", 240, 1.0f/60.0f));
         m_timer->add_timer(make_shared<GpuAsyncQueryTimer>("labels", "GPU", 240, 1.0f / 60.0f));
+        m_timer->add_timer(make_shared<GpuAsyncQueryTimer>("vector_fallback", "GPU", 240, 1.0f / 60.0f));
         m_timer->add_timer(make_shared<GpuAsyncQueryTimer>("picker", "GPU", 240, 1.0f / 60.0f));
         m_timer->add_timer(make_shared<GpuAsyncQueryTimer>("gpu_total", "TOTAL", 240, 1.0f/60.0f));
 #endif
@@ -258,8 +259,14 @@ void Window::resize_framebuffer(int width, int height)
 
 void Window::paint(QOpenGLFramebufferObject* framebuffer)
 {
+
     m_timer->start_timer("cpu_total");
     m_timer->start_timer("gpu_total");
+
+    m_timer->start_timer("vector_fallback");
+    if (m_context->vector_layer()->check_fallback_textures())
+        emit update_requested();
+    m_timer->stop_timer("vector_fallback");
 
     QOpenGLExtraFunctions *f = QOpenGLContext::currentContext()->extraFunctions();
 

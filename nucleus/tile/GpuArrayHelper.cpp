@@ -65,7 +65,7 @@ void GpuArrayHelper::remove_tile(const tile::Id& tile_id)
     }
 }
 
-bool GpuArrayHelper::contains_tile(const tile::Id& tile_id) { return m_id_to_array_layer.contains(tile_id); }
+bool GpuArrayHelper::contains_tile(const tile::Id& tile_id) const { return m_id_to_array_layer.contains(tile_id); }
 
 void GpuArrayHelper::set_tile_limit(unsigned int new_limit)
 {

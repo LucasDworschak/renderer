@@ -123,6 +123,17 @@ GpuMultiArrayHelper::MultiLayerInfo GpuMultiArrayHelper::layer(tile::Id tile_id)
     return { layer_info_common.id, layer_info_common.index, index2 };
 }
 
+// returns the exact layer the tile_id is located at, if the tile_id is not present, returns -1
+unsigned GpuMultiArrayHelper::exact_layer(uint8_t helper, tile::Id tile_id) const
+{
+    assert(helper < helper_size);
+
+    if (!helpers[helper].contains_tile(tile_id))
+        return -1u;
+
+    return helpers[helper].layer(tile_id).index;
+}
+
 GpuMultiArrayHelper::Dictionary GpuMultiArrayHelper::generate_dictionary() const
 {
     GpuMultiArrayHelper::Dictionary dict;

@@ -640,7 +640,7 @@ struct DrawMeta
     mediump float zoom_blend;
 };
 
-bool draw_layer(inout lowp float line_percentage, inout lowp vec4 pixel_color, inout mediump float intersection_percentage, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
+bool draw_layer(inout lowp vec4 pixel_color, inout mediump float intersection_percentage, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
 {
 
 
@@ -684,9 +684,6 @@ bool draw_layer(inout lowp float line_percentage, inout lowp vec4 pixel_color, i
 #else
             mediump float percentage = 1.0 - step(0.0,d);
 #endif
-
-            // increase line_percentage by the percentage if it is a line
-            line_percentage += percentage * step(0.01, style.line_width);
 
             accumulated += percentage;
         }

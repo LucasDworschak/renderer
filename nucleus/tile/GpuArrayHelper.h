@@ -40,7 +40,7 @@ public:
     /// returns index in texture array
     uint16_t add_tile(const tile::Id& tile_id, bool add_to_array = true, uint8_t additonal_info = 0, uint8_t additional_info_bitshift = 16);
     void remove_tile(const tile::Id& tile_id);
-    bool contains_tile(const tile::Id& tile_id);
+    bool contains_tile(const tile::Id& tile_id) const;
     void set_tile_limit(unsigned new_limit);
     unsigned size() const;
     unsigned int n_occupied() const;

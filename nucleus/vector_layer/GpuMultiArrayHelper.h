@@ -59,6 +59,7 @@ public:
     unsigned int n_occupied() const;
     Dictionary generate_dictionary() const;
     MultiLayerInfo layer(tile::Id tile_id) const;
+    unsigned exact_layer(uint8_t helper, tile::Id tile_id) const;
 
 private:
     uint8_t buffer_to_helper(uint8_t buffer) const;

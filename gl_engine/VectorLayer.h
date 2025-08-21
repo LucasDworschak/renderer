@@ -43,7 +43,7 @@ class TextureLayer;
 
 struct IdLayer {
     std::vector<nucleus::tile::TileBounds> bounds;
-    std::vector<uint> buffer_layer;
+    std::vector<uint> layer;
 };
 
 class VectorLayer : public QObject {
@@ -62,6 +62,8 @@ public:
     void update_max_vector_geometry(unsigned int new_max_vector_geometry);
     void set_defines(const std::unordered_map<QString, QString>& defines);
     static std::unordered_map<QString, QString> default_defines();
+
+    bool check_fallback_textures();
 
 public slots:
     void update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted_tiles, const std::vector<nucleus::tile::GpuVectorLayerTile>& new_tiles);
@@ -94,7 +96,14 @@ private:
 
     helpers::ScreenQuadGeometry m_screen_quad_geometry;
 
-    void create_fallback_texture(const IdLayer& id_layers);
-    void bind_buffer(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const;
+    std::vector<nucleus::tile::Id> m_vector_on_gpu;
+    std::vector<nucleus::tile::Id> m_fallback_on_gpu;
+
+    static constexpr int max_fallback_renders_per_frame = 16;
+
+    bool m_fallback_render_possible;
+
+    void update_fallback_textures(const IdLayer& fallbacks_to_render);
+    void setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const;
 };
 } // namespace gl_engine

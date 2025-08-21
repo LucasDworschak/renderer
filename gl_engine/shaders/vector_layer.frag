@@ -243,9 +243,6 @@ void main() {
     calculate_sample_multipliers(meta.aa_sample_multipliers, uv, meta.duvdx, meta.duvdy, meta.grid_cell_float);
 #endif
 
-    lowp float line_percentage = 0.0;
-
-
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
     if(offset_size.y != uint(0)) // only if we have data here
     {
@@ -277,7 +274,7 @@ void main() {
         for(highp uint i = offset_size.x; i < offset_size.x + min(uint(max_vector_geometry),offset_size.y); i++) // show only x layers
         {
             debug_draw_calls++;
-            if(draw_layer(line_percentage, pixel_color, intersection_percentage, style, uv, i, meta))
+            if(draw_layer(pixel_color, intersection_percentage, style, uv, i, meta))
                 break; // pixel is finished -> we can exit the loop early
         }
 
@@ -298,7 +295,7 @@ void main() {
     lowp vec3 fallback_ortho_color = mix(fallback_mixed_color.rgb*meta.ortho_color.rgb, fallback_mixed_color.rgb, 0.0);
 
     texout_albedo = vec3(pixel_color.rgb) + ((1.0-pixel_color.a) * fallback_ortho_color);
-    // texout_albedo = mix(fallback_color2, fallback_color, fract(float_zoom)).rgb;
+    texout_albedo = mix(fallback_color2, fallback_color, fract(float_zoom)).rgb;
 #endif
 
 

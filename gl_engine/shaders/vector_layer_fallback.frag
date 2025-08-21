@@ -19,10 +19,6 @@
 *****************************************************************************/
 
 
-#include "shared_config.glsl"
-#include "camera_config.glsl"
-#include "encoder.glsl"
-#include "tile_id.glsl"
 #include "vector_layer.glsl"
 
 #include "hashing.glsl" // DEBUG
@@ -45,6 +41,9 @@ in highp vec2 var_uv;
 
 uniform highp int instance_id;
 uniform highp int tile_zoom;
+
+uniform highp int min_vector_geometry;
+const lowp uint max_vector_geometry = 255u;
 
 
 highp float calculate_aa_half_radius(highp vec2 uv)
@@ -161,9 +160,6 @@ void main() {
     calculate_sample_multipliers(meta.aa_sample_multipliers, uv, meta.duvdx, meta.duvdy, meta.grid_cell_float);
 #endif
 
-    lowp float line_percentage = 0.0;
-
-
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
     if(offset_size.y != uint(0)) // only if we have data here
     {
@@ -191,10 +187,11 @@ void main() {
 
         mediump float intersection_percentage = 0.0;
 
-        for(highp uint i = offset_size.x; i < offset_size.x + min(255u,offset_size.y); i++) // show only x layers
+        // for(highp uint i = offset_size.x + min(offset_size.y, uint(min_vector_geometry)); i < offset_size.x + min(max_vector_geometry,offset_size.y); i++) // show only x layers
+        for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++) // show only x layers
         {
             debug_draw_calls++;
-            if(draw_layer(line_percentage, pixel_color, intersection_percentage, style, uv, i, meta))
+            if(draw_layer(pixel_color, intersection_percentage, style, uv, i, meta))
                 break; // pixel is finished -> we can exit the loop early
         }
 
@@ -210,7 +207,7 @@ void main() {
 #else
     // the alpha value is 1 if we encountered a line (with at least 0.2 percentage summed up) or 0 if only polygons have been encountered
     // -> important for ortho color mixing
-    texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color), 1.0);// step(0.2,line_percentage));
+    texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color), 1.0);
 
      // texout_albedo = vec4(debug_index_buffer_size, 1.0);
 
