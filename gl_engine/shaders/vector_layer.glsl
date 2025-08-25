@@ -22,18 +22,24 @@
 
 // SDF_MODE 0: naive multisample antialiasing (golden -> but worse performnace)
 // SDF_MODE 1: derivative multisample antialiasing
+#ifndef SDF_MODE
 #define SDF_MODE 1
+#endif
 
 // for antialiasing we want to reduce the frequency of faraway tiles when viewing them at shallow angles
 // 0 smoothstep
 // 1 cos angle reduces opacity
 // 2 no smoothing
+#ifndef shallow_angle_signal_frequency
 #define shallow_angle_signal_frequency 1
+#endif
 
 // 0 ortho only
 // 1 mixed
 // 2 vector only
+#ifndef VIEW_MODE
 #define VIEW_MODE 1
+#endif
 
 
 uniform highp usampler2D styles_sampler;
@@ -57,7 +63,11 @@ uniform highp usampler2DArray geometry_buffer_sampler_3;
 
 ///////////////////////////////////////////////
 
+#ifndef n_multisamples
 const lowp int n_aa_samples_row_cols = 4;
+#else
+const lowp int n_aa_samples_row_cols = n_multisamples;
+#endif
 const lowp int n_aa_samples = n_aa_samples_row_cols*n_aa_samples_row_cols;
 const lowp float aa_sample_dist = 1.0; // 0.5 goes from -0.25 to +0.25 of the current uv coordinate
 

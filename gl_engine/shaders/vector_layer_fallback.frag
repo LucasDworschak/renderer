@@ -18,12 +18,13 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *****************************************************************************/
 
+#define n_multisamples 1
 
 #include "vector_layer.glsl"
 
 #include "hashing.glsl" // DEBUG
 
-#line 30031
+#line 30028
 
 uniform lowp sampler2DArray texture_sampler;
 uniform lowp sampler2DArray fallback_texture_array;
@@ -187,8 +188,7 @@ void main() {
 
         mediump float intersection_percentage = 0.0;
 
-        // for(highp uint i = offset_size.x + min(offset_size.y, uint(min_vector_geometry)); i < offset_size.x + min(max_vector_geometry,offset_size.y); i++) // show only x layers
-        for(highp uint i = offset_size.x; i < offset_size.x + offset_size.y; i++) // show only x layers
+        for(highp uint i = offset_size.x + min(offset_size.y, uint(min_vector_geometry)); i < offset_size.x + min(max_vector_geometry,offset_size.y); i++) // show only x layers
         {
             debug_draw_calls++;
             if(draw_layer(pixel_color, intersection_percentage, style, uv, i, meta))

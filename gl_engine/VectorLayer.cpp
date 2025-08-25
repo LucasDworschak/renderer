@@ -132,7 +132,7 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
 }
 
 /**
- * returns true if another update step is required (-> we need to call window.update_requested())
+ * returns true to indicate that window.update_requested() should be called
  */
 bool VectorLayer::check_fallback_textures()
 {
@@ -164,7 +164,7 @@ bool VectorLayer::check_fallback_textures()
         emit fallback_textures_rendered();
     }
 
-    return search_next_frame;
+    return true; // always return true here to update
 }
 
 unsigned VectorLayer::tile_count() const { return m_gpu_multi_array_helper.n_occupied(); }
@@ -294,7 +294,7 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
 void VectorLayer::update_fallback_textures(const IdLayer& id_layer)
 {
     // SETUP framebuffer
-    if (m_fallback_framebuffer < 0)
+    if (m_fallback_framebuffer == unsigned(-1))
         return; // framebuffer not ready
 
     QOpenGLExtraFunctions* f = QOpenGLContext::currentContext()->extraFunctions();
@@ -358,7 +358,13 @@ void VectorLayer::update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec
 
 void VectorLayer::update_max_vector_geometry(unsigned int new_max_vector_geometry)
 {
-    m_max_vector_geometry = int(new_max_vector_geometry); // uint uniforms do not work ...;
+    m_max_vector_geometry = int(new_max_vector_geometry); // uint uniforms do not work ...
+
+    for (unsigned i = 0; i < m_fallback_on_gpu.size(); i++) {
+        m_fallback_on_gpu[i] = {};
+    }
+
+    m_fallback_render_possible = true;
 }
 
 } // namespace gl_engine

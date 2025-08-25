@@ -295,7 +295,7 @@ void main() {
     lowp vec3 fallback_ortho_color = mix(fallback_mixed_color.rgb*meta.ortho_color.rgb, fallback_mixed_color.rgb, 0.0);
 
     texout_albedo = vec3(pixel_color.rgb) + ((1.0-pixel_color.a) * fallback_ortho_color);
-    texout_albedo = mix(fallback_color2, fallback_color, fract(float_zoom)).rgb;
+    // texout_albedo = mix(fallback_color2, fallback_color, fract(float_zoom)).rgb;
 #endif
 
 

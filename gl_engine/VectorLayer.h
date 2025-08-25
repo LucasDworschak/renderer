@@ -19,8 +19,9 @@
 
 #pragma once
 
-#include "helpers.h"
 #include <QObject>
+
+#include "helpers.h"
 #include <nucleus/Raster.h>
 #include <nucleus/tile/DrawListGenerator.h>
 #include <nucleus/tile/types.h>

@@ -238,6 +238,8 @@ private:
     glm::dvec3 m_last_camera_latlonalt;
     glm::dvec3 m_last_camera_lookat_latlonalt;
 
+    QTimer* m_trigger_max_vector_geometry_changed_timer = nullptr;
+
     // Note: This was originaly a singleton. But that introduces some issues
     // with the multi-thread nature of this app. So far the url modifier is
     // only necessary in this class and on this thread, so we'll use it here.
