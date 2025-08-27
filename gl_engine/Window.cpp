@@ -356,7 +356,7 @@ void Window::paint(QOpenGLFramebufferObject* framebuffer)
     if (false)
         m_context->ortho_layer()->draw(*m_context->tile_geometry(), m_camera, culled_draw_list);
     else
-        m_context->vector_layer()->draw(*m_context->tile_geometry(), *m_context->ortho_layer(), m_camera, culled_draw_list);
+        m_context->vector_layer()->draw(*m_context->tile_geometry(), m_camera, culled_draw_list);
     m_timer->stop_timer("tiles");
 
     m_gbuffer->unbind();

@@ -82,6 +82,10 @@ void TextureLayer::draw(
 
 unsigned TextureLayer::tile_count() const { return m_gpu_array_helper.n_occupied(); }
 
+bool TextureLayer::is_tile_loaded(nucleus::tile::Id id) { return m_gpu_array_helper.contains_tile(id); }
+
+nucleus::tile::GpuArrayHelper::LayerInfo TextureLayer::tile(nucleus::tile::Id id) { return m_gpu_array_helper.layer(id); }
+
 void TextureLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted_tiles, const std::vector<nucleus::tile::GpuTextureTile>& new_tiles)
 {
     if (!QOpenGLContext::currentContext()) // can happen during shutdown.

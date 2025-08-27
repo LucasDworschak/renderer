@@ -467,6 +467,7 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
     auto texture_layer = load_texture_layer(&shader_registry, aabb_decorator, camera);
 
     auto layer = load(&shader_registry);
+    layer->set_texture_layer(texture_layer.get());
 
     // bind framebuffer
     // Framebuffer b(Framebuffer::DepthFormat::Float32, { Framebuffer::ColourFormat::RGB8 }, { 1024, 1024 });
@@ -475,9 +476,8 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
             Framebuffer::ColourFormat::RGB8, // Albedo
             // Framebuffer::ColourFormat::RGBA32F, // Position WCS and distance (distance is optional, but i use it directly for a little speed improvement)
             // Framebuffer::ColourFormat::RG16UI, // Octahedron Normals
-            // Framebuffer::ColourFormat::RGBA8, // Discretized Encoded Depth for readback IMPORTANT: IF YOU MOVE THIS YOU HAVE TO ADAPT THE GET DEPTH FUNCTION
-            // TextureDefinition { Framebuffer::ColourFormat::R32UI }, // VertexID
-            // Framebuffer::ColourFormat::RGB8, // vector map colour
+            // Framebuffer::ColourFormat::RGBA8, // Discretized Encoded Depth for readback IMPORTANT: IF YOU MOVE THIS YOU HAVE TO ADAPT THE GET DEPTH
+            // FUNCTION TextureDefinition { Framebuffer::ColourFormat::R32UI }, // VertexID Framebuffer::ColourFormat::RGB8, // vector map colour
             // Framebuffer::ColourFormat::RGBA8, // vector map colour
         },
         { camera.viewport_size() });
@@ -491,7 +491,7 @@ void draw_tile(const nucleus::tile::utils::AabbDecoratorPtr& aabb_decorator,
     for (const auto& config : config.draw_config) {
         auto shared_conf = bind_shared_config(&shader_registry, config.mode);
         clear_buffer();
-        layer->draw(*tile_geometry, *texture_layer, camera, draw_list);
+        layer->draw(*tile_geometry, camera, draw_list);
         const QImage render_result = b.read_colour_attachment(0);
 
         compare_images(render_result, config.name);

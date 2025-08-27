@@ -109,6 +109,12 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_instanced_array_index = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RG16UI);
     m_instanced_array_index->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
 
+    m_instanced_zoom_fallback = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::R8UI);
+    m_instanced_zoom_fallback->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
+
+    m_instanced_array_index_fallback = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::R16UI);
+    m_instanced_array_index_fallback->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
+
     m_geometry_buffer_texture.resize(constants::array_layer_tile_amount.size());
     for (uint8_t i = 0; i < constants::array_layer_tile_amount.size(); i++) {
         const auto layer_amount = m_gpu_multi_array_helper.layer_amount(i);
@@ -131,6 +137,8 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     }
 }
 
+void VectorLayer::set_texture_layer(TextureLayer* texture_layer) { m_texture_layer = texture_layer; }
+
 /**
  * returns true to indicate that window.update_requested() should be called
  */
@@ -141,9 +149,42 @@ bool VectorLayer::check_fallback_textures()
 
     IdLayer fallbacks_to_render;
 
+    assert(m_texture_layer);
+
+    unsigned num_unfinished = 0;
+
+    const auto current_time = nucleus::utils::time_since_epoch();
+
     for (uint i = 0; i < m_vector_on_gpu.size(); i++) {
-        if (m_vector_on_gpu[i] != m_fallback_on_gpu[i]) {
-            // TODO also do ortho fotos
+        // early exit if tile is finished or not even vector data on gpu
+        if (m_fallback_on_gpu[i].finished || m_vector_on_gpu[i] == nucleus::tile::Id {})
+            continue;
+
+        num_unfinished++;
+
+        // try to render if not finished and diff between last check and now is over threshold
+        if (current_time > m_fallback_on_gpu[i].last_check + 500) {
+
+            // ortho uses quads and does not have valid data over certain zoom level
+            auto ortho_id = m_vector_on_gpu[i];
+            while (ortho_id.zoom_level > 17)
+                ortho_id = ortho_id.parent();
+
+            if (ortho_id.zoom_level > 0)
+                ortho_id = ortho_id.parent();
+
+            // only finished if ortho tile is loaded
+            // additionally we also check if enough time between first_check and now has passed (to allow a worse ortho tile if it cannot be loaded)
+            const bool tile_finished = m_texture_layer->is_tile_loaded(ortho_id) || (current_time > m_fallback_on_gpu[i].first_check + 20000);
+            m_fallback_on_gpu[i].finished = tile_finished;
+            m_fallback_on_gpu[i].last_check = current_time;
+
+            // only try to render if ortho zoom_level improved from last render
+            const auto ortho_zoom_level = m_texture_layer->tile(ortho_id).id.zoom_level;
+            if (ortho_zoom_level <= m_fallback_on_gpu[i].last_ortho_zoom)
+                continue;
+            m_fallback_on_gpu[i].last_ortho_zoom = ortho_zoom_level;
+
             fallbacks_to_render.layer.push_back(i);
             fallbacks_to_render.bounds.push_back({ m_vector_on_gpu[i], {} });
 
@@ -154,13 +195,16 @@ bool VectorLayer::check_fallback_textures()
 
     update_fallback_textures(fallbacks_to_render);
 
-    // if we found max amount to render -> we need to look at the next frame to determine if we rendered all
-    bool search_next_frame = fallbacks_to_render.layer.size() >= max_fallback_renders_per_frame;
-    if (!search_next_frame) {
+    // we are finished with this method if fallbacks_to_render is not max amount and there aren't any orthos pending
+    if (fallbacks_to_render.layer.size() < max_fallback_renders_per_frame && num_unfinished == fallbacks_to_render.layer.size()) {
         m_fallback_render_possible = false; // we found all -> we can early exit until we get new tiles
 
         // after we are finished we can queue mipmap generation
         // -> doing this only once, after finish should be the best compromise between performance and no errors
+        emit fallback_textures_rendered();
+    } else if (m_fallback_render_waiting_for_mipmaps > 0 && fallbacks_to_render.layer.size() == 0) {
+        // in this frame we didn't draw any new fallback textures but there are still some textures we want to generate mipmaps for
+        // -> generate mipmaps to minimize errors while we wait for better orthofotos
         emit fallback_textures_rendered();
     }
 
@@ -169,6 +213,15 @@ bool VectorLayer::check_fallback_textures()
 
 unsigned VectorLayer::tile_count() const { return m_gpu_multi_array_helper.n_occupied(); }
 
+nucleus::tile::GpuArrayHelper::LayerInfo VectorLayer::fallback_layer(nucleus::tile::Id tile_id) const
+{
+    while (!m_gpu_fallback_map.contains(tile_id) && tile_id.zoom_level > 0)
+        tile_id = tile_id.parent();
+    if (!m_gpu_fallback_map.contains(tile_id))
+        return { {}, 0 }; // may be empty during startup.
+    return { tile_id, m_gpu_fallback_map.at(tile_id) };
+}
+
 void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const
 {
     shader->set_uniform("acceleration_grid_sampler", 9);
@@ -176,9 +229,14 @@ void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std
 
     nucleus::Raster<uint8_t> zoom_level_raster = { glm::uvec2 { 1024, 1 } };
     nucleus::Raster<glm::u16vec2> array_index_raster = { glm::uvec2 { 1024, 4 } };
+
+    nucleus::Raster<uint8_t> zoom_level_raster_fallback = { glm::uvec2 { 1024, 1 } };
+    nucleus::Raster<uint16_t> array_index_raster_fallback = { glm::uvec2 { 1024, 2 } };
     for (unsigned i = 0; i < std::min(unsigned(draw_list.size()), 1024u); ++i) {
         // todo -> automatically go to parent ( or parent.parent())
         const auto layer0 = m_gpu_multi_array_helper.layer(draw_list[i].id);
+        if (layer0.id.zoom_level > 200)
+            continue; // invalid zoom_level -> go to next
         zoom_level_raster.pixel({ i, 0 }) = layer0.id.zoom_level;
         array_index_raster.pixel({ i, 0 }) = { layer0.index1, layer0.index2 };
 
@@ -201,6 +259,34 @@ void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std
         } else {
             array_index_raster.pixel({ i, 3 }) = array_index_raster.pixel({ i, 2 });
         }
+
+        // if (layer0.id.zoom_level)
+
+        // const auto fallback_layer_info = fallback_layer(layer0.id);
+        // if (fallback_layer_info.id.zoom_level > 200) {
+        //     // invalid -> we need default values
+        //     zoom_level_raster_fallback.pixel({ i, 0 }) = 0;
+        //     array_index_raster_fallback.pixel({ i, 0 }) = 0;
+        //     array_index_raster_fallback.pixel({ i, 1 }) = 0;
+        // } else {
+        //     zoom_level_raster_fallback.pixel({ i, 0 }) = fallback_layer_info.id.zoom_level;
+        //     array_index_raster_fallback.pixel({ i, 0 }) = fallback_layer_info.index;
+
+        //     auto fallback_layer_info_parent = fallback_layer_info;
+        //     if (fallback_layer_info.id.zoom_level > 0)
+        //         fallback_layer_info_parent = fallback_layer(fallback_layer_info.id.parent());
+        //     // array_index_raster_fallback.pixel({ i, 1 }) = fallback_layer_info.index;
+        //     // for interpolation between two levels (if parent is not loaded -> use the current one for now)
+        //     if (fallback_layer_info_parent.id.zoom_level < 200) {
+        //         array_index_raster_fallback.pixel({ i, 1 }) = fallback_layer_info_parent.index;
+        //     } else {
+        //         array_index_raster_fallback.pixel({ i, 1 }) = array_index_raster_fallback.pixel({ i, 0 });
+        //     }
+        // }
+
+        zoom_level_raster_fallback.pixel({ i, 0 }) = layer0.id.zoom_level;
+        array_index_raster_fallback.pixel({ i, 0 }) = layer0.index1;
+        array_index_raster_fallback.pixel({ i, 1 }) = layer0.index1;
     }
 
     m_instanced_array_index->bind(10);
@@ -211,42 +297,38 @@ void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std
     shader->set_uniform("instanced_texture_zoom_sampler_vector", 11);
     m_instanced_zoom->upload(zoom_level_raster);
 
-    shader->set_uniform("styles_sampler", 12);
-    m_styles_texture->bind(12);
+    m_instanced_array_index_fallback->bind(12);
+    shader->set_uniform("instanced_texture_array_index_sampler_vector_fallback", 12);
+    m_instanced_array_index_fallback->upload(array_index_raster_fallback);
+
+    m_instanced_zoom_fallback->bind(13);
+    shader->set_uniform("instanced_texture_zoom_sampler_vector_fallback", 13);
+    m_instanced_zoom_fallback->upload(zoom_level_raster_fallback);
+
+    shader->set_uniform("styles_sampler", 14);
+    m_styles_texture->bind(14);
 
     // upload all geometry buffers
     // binds the buffers to "...buffer_sampler_[0-max]"
-    // constexpr uint8_t triangle_vertex_buffer_start = 13;
-    // for (uint8_t i = 0; i < constants::array_layer_tile_amount.size(); i++) {
-    //     shader->set_uniform("geometry_buffer_sampler_" + std::to_string(i), triangle_vertex_buffer_start + i);
-    //     m_geometry_buffer_texture[i]->bind(triangle_vertex_buffer_start + i);
-    // }
-
-    shader->set_uniform("geometry_buffer_sampler_0", 13);
-    m_geometry_buffer_texture[0]->bind(13);
-    shader->set_uniform("geometry_buffer_sampler_1", 14);
-    m_geometry_buffer_texture[1]->bind(14);
-    shader->set_uniform("geometry_buffer_sampler_2", 15);
-    m_geometry_buffer_texture[2]->bind(15);
-    shader->set_uniform("geometry_buffer_sampler_3", 16);
-    m_geometry_buffer_texture[3]->bind(16);
+    constexpr uint8_t triangle_vertex_buffer_start = 15;
+    for (uint8_t i = 0; i < constants::array_layer_tile_amount.size(); i++) {
+        shader->set_uniform("geometry_buffer_sampler_" + std::to_string(i), triangle_vertex_buffer_start + i);
+        m_geometry_buffer_texture[i]->bind(triangle_vertex_buffer_start + i);
+    }
 }
 
-void VectorLayer::draw(const TileGeometry& tile_geometry,
-    const TextureLayer& texture_layer,
-    const nucleus::camera::Definition& camera,
-    const std::vector<nucleus::tile::TileBounds>& draw_list) const
+void VectorLayer::draw(
+    const TileGeometry& tile_geometry, const nucleus::camera::Definition& camera, const std::vector<nucleus::tile::TileBounds>& draw_list) const
 {
     m_shader->bind();
 
-    texture_layer.bind_buffer(m_shader, draw_list); // binds texture_sampler -> for ortho fotos
+    m_texture_layer->bind_buffer(m_shader, draw_list); // binds texture_sampler -> for ortho fotos
 
     m_shader->set_uniform("max_vector_geometry", m_max_vector_geometry);
 
     setup_buffers(m_shader, draw_list);
 
-    // constexpr uint8_t next_buffer_start = 13 + constants::array_layer_tile_amount.size();
-    constexpr uint8_t next_buffer_start = 17;
+    constexpr uint8_t next_buffer_start = 15 + constants::array_layer_tile_amount.size();
     m_shader->set_uniform("fallback_texture_array", next_buffer_start);
     m_fallback_texture_array->bind(next_buffer_start);
 
@@ -258,15 +340,18 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
     if (!QOpenGLContext::currentContext()) // can happen during shutdown.
         return;
 
+    const auto current_time = nucleus::utils::time_since_epoch();
+
     for (const auto& quad : deleted_tiles) {
         for (const auto& id : quad.children()) {
             const auto exact_layer = m_gpu_multi_array_helper.exact_layer(0, id);
             if (exact_layer != -1u) {
                 m_vector_on_gpu[exact_layer] = {};
-                m_fallback_on_gpu[exact_layer] = {};
+                m_fallback_on_gpu[exact_layer] = { false, 0, 0, 0 };
             }
 
             m_gpu_multi_array_helper.remove_tile(id);
+            m_gpu_fallback_map.erase(id);
         }
     }
 
@@ -286,6 +371,7 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
         m_geometry_buffer_texture[tile.buffer_info]->upload(*tile.geometry_buffer, layer_index[1]);
 
         m_vector_on_gpu[layer_index[0]] = tile.id;
+        m_fallback_on_gpu[layer_index[0]] = { false, current_time, current_time - 200000, 0 };
 
         m_fallback_render_possible = true; // there was at least one new tile -> check if we need to render fallbacks
     }
@@ -308,6 +394,8 @@ void VectorLayer::update_fallback_textures(const IdLayer& id_layer)
 
     m_fallback_shader->bind();
 
+    m_texture_layer->bind_buffer(m_fallback_shader, id_layer.bounds); // binds texture_sampler -> for ortho fotos
+
     m_fallback_shader->set_uniform("min_vector_geometry", m_max_vector_geometry);
 
     setup_buffers(m_fallback_shader, id_layer.bounds);
@@ -319,19 +407,26 @@ void VectorLayer::update_fallback_textures(const IdLayer& id_layer)
         f->glClearBufferfv(GL_COLOR, 0, clearAlbedoColor);
 
         m_fallback_shader->set_uniform("instance_id", int(i));
-        m_fallback_shader->set_uniform("tile_zoom", int(id_layer.bounds[i].id.zoom_level));
+        m_fallback_shader->set_uniform("tile_id", glm::vec3(id_layer.bounds[i].id.coords.x, id_layer.bounds[i].id.coords.y, id_layer.bounds[i].id.zoom_level));
 
         // it is possible to render 4 or 8 tiles at once (using different color attachments) -> but not sure if really performance relevant
         m_screen_quad_geometry.draw();
-        m_fallback_on_gpu[id_layer.layer[i]] = id_layer.bounds[i].id;
+
+        m_gpu_fallback_map[id_layer.bounds[i].id] = id_layer.layer[i];
     }
+
+    m_fallback_render_waiting_for_mipmaps += id_layer.layer.size();
 
     // generate mipmaps after all the individual layers have been rendered
 
     f->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void VectorLayer::generate_fallback_mipmaps() { m_fallback_texture_array->generate_mipmap(); }
+void VectorLayer::generate_fallback_mipmaps()
+{
+    m_fallback_texture_array->generate_mipmap();
+    m_fallback_render_waiting_for_mipmaps = 0;
+}
 
 void VectorLayer::set_tile_limit(unsigned int new_limit)
 {
@@ -360,8 +455,10 @@ void VectorLayer::update_max_vector_geometry(unsigned int new_max_vector_geometr
 {
     m_max_vector_geometry = int(new_max_vector_geometry); // uint uniforms do not work ...
 
+    const auto current_time = nucleus::utils::time_since_epoch();
+
     for (unsigned i = 0; i < m_fallback_on_gpu.size(); i++) {
-        m_fallback_on_gpu[i] = {};
+        m_fallback_on_gpu[i] = { false, current_time, current_time - 200000, 0 };
     }
 
     m_fallback_render_possible = true;

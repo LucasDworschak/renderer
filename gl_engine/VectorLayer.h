@@ -47,6 +47,13 @@ struct IdLayer {
     std::vector<uint> layer;
 };
 
+struct FallbackMeta {
+    bool finished;
+    uint64_t first_check;
+    uint64_t last_check;
+    unsigned last_ortho_zoom;
+};
+
 class VectorLayer : public QObject {
     Q_OBJECT
 public:
@@ -54,7 +61,6 @@ public:
 
     void init(ShaderRegistry* shader_registry); // needs OpenGL context
     void draw(const TileGeometry& tile_geometry,
-        const TextureLayer& texture_layer,
         const nucleus::camera::Definition& camera,
         const std::vector<nucleus::tile::TileBounds>& draw_list) const;
 
@@ -65,6 +71,8 @@ public:
     static std::unordered_map<QString, QString> default_defines();
 
     bool check_fallback_textures();
+
+    void set_texture_layer(TextureLayer* texture_layer);
 signals:
     void fallback_textures_rendered();
 public slots:
@@ -81,6 +89,8 @@ private:
 
     unsigned m_fallback_framebuffer = unsigned(-1);
 
+    TextureLayer* m_texture_layer;
+
     std::shared_ptr<ShaderProgram> m_shader;
     std::shared_ptr<ShaderProgram> m_fallback_shader;
 
@@ -92,6 +102,8 @@ private:
 
     std::unique_ptr<Texture> m_instanced_zoom;
     std::unique_ptr<Texture> m_instanced_array_index;
+    std::unique_ptr<Texture> m_instanced_zoom_fallback;
+    std::unique_ptr<Texture> m_instanced_array_index_fallback;
 
     nucleus::vector_layer::GpuMultiArrayHelper m_gpu_multi_array_helper;
 
@@ -102,12 +114,15 @@ private:
     helpers::ScreenQuadGeometry m_screen_quad_geometry;
 
     std::vector<nucleus::tile::Id> m_vector_on_gpu;
-    std::vector<nucleus::tile::Id> m_fallback_on_gpu;
+    std::vector<FallbackMeta> m_fallback_on_gpu;
 
     static constexpr int max_fallback_renders_per_frame = 32;
 
     bool m_fallback_render_possible;
+    unsigned m_fallback_render_waiting_for_mipmaps;
+    nucleus::tile::IdMap<uint16_t> m_gpu_fallback_map;
 
+    nucleus::tile::GpuArrayHelper::LayerInfo fallback_layer(nucleus::tile::Id tile_id) const;
     void update_fallback_textures(const IdLayer& fallbacks_to_render);
     void setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const;
 };

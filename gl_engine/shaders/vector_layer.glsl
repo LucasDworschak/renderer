@@ -41,6 +41,12 @@
 #define VIEW_MODE 1
 #endif
 
+// 0 only use step function
+// 1 use smoothstep with -halfradius, + halfradius
+#ifndef smoothstep_render
+#define smoothstep_render 0
+#endif
+
 
 uniform highp usampler2D styles_sampler;
 
@@ -688,11 +694,14 @@ bool draw_layer(inout lowp vec4 pixel_color, inout mediump float intersection_pe
 
 
 
-            // mediump float percentage = 1.0 - smoothstep(-aa_half_radius, aa_half_radius, d);
 #if shallow_angle_signal_frequency == 0
             mediump float percentage = 1.0 - smoothstep(-meta.aa_half_radius*2.0,0.0, d);
 #else
+    #if smoothstep_render == 1
+            mediump float percentage = 1.0 - smoothstep(-meta.aa_half_radius, meta.aa_half_radius, d);
+    #else
             mediump float percentage = 1.0 - step(0.0,d);
+    #endif
 #endif
 
             accumulated += percentage;

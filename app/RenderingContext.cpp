@@ -200,6 +200,7 @@ void RenderingContext::initialise()
     m->engine_context->ortho_layer()->set_tile_limit(1024);
     m->engine_context->set_vector_layer(std::make_shared<gl_engine::VectorLayer>());
     m->engine_context->vector_layer()->set_tile_limit(2048);
+    m->engine_context->vector_layer()->set_texture_layer(m->engine_context->ortho_layer());
 
     nucleus::utils::thread::async_call(m->geometry.scheduler.get(), [this]() { m->geometry.scheduler->set_enabled(true); });
     const auto texture_compression = gl_engine::Texture::compression_algorithm();
@@ -223,7 +224,7 @@ void RenderingContext::initialise()
     // clang-format off
     connect(m->geometry.scheduler.get(),        &nucleus::tile::GeometryScheduler::gpu_tiles_updated,   m->engine_context->tile_geometry(), &gl_engine::TileGeometry::update_gpu_tiles);
     connect(m->ortho_texture.scheduler.get(),   &nucleus::tile::TextureScheduler::gpu_tiles_updated,    m->engine_context->ortho_layer(),   &gl_engine::TextureLayer::update_gpu_tiles);
-    connect(m->vector_layer.scheduler.get(),   &nucleus::vector_layer::Scheduler::gpu_tiles_updated,    m->engine_context->vector_layer(),   &gl_engine::VectorLayer::update_gpu_tiles);
+    connect(m->vector_layer.scheduler.get(),    &nucleus::vector_layer::Scheduler::gpu_tiles_updated,   m->engine_context->vector_layer(),  &gl_engine::VectorLayer::update_gpu_tiles);
 
     connect(QOpenGLContext::currentContext(), &QOpenGLContext::aboutToBeDestroyed, m->engine_context.get(), &nucleus::EngineContext::destroy);
     connect(QOpenGLContext::currentContext(), &QOpenGLContext::aboutToBeDestroyed, this,                    &RenderingContext::destroy);

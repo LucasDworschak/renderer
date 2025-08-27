@@ -19,12 +19,14 @@
 *****************************************************************************/
 
 #define n_multisamples 1
+#define smoothstep_render 0
 
 #include "vector_layer.glsl"
-
+#include "shared_config.glsl"
+#include "tile_id.glsl"
 #include "hashing.glsl" // DEBUG
 
-#line 30028
+#line 30030
 
 uniform lowp sampler2DArray texture_sampler;
 uniform lowp sampler2DArray fallback_texture_array;
@@ -41,7 +43,8 @@ layout (location = 0) out lowp vec4 texout_albedo;
 in highp vec2 var_uv;
 
 uniform highp int instance_id;
-uniform highp int tile_zoom;
+// uniform highp int tile_zoom;
+uniform highp vec3 tile_id;
 
 uniform highp int min_vector_geometry;
 const lowp uint max_vector_geometry = 255u;
@@ -111,22 +114,23 @@ void main() {
     lowp vec4 pixel_color = vec4(0.0f, 0.0, 0.0f, 0.0f);
 
 
-//     /////////////////////////
-//     // ORTHO color -> note we wrap tile_id in uvec3 and use ortho_uv, to not change those variables for the vector color
-//     highp vec2 ortho_uv = uv;
-//     highp float texture_layer_f = float(texelFetch(instanced_texture_array_index_sampler, ivec2(instance_id, 0), 0).x);
-//     meta.ortho_color = vec4(texture(texture_sampler, vec3(ortho_uv, texture_layer_f)).rgb, 1.0);
-//     meta.ortho_color = mix(meta.ortho_color, conf.material_color, conf.material_color.a);
+    /////////////////////////
+    // ORTHO color -> note we wrap tile_id in uvec3 and use ortho_uv, to not change those variables for the vector color
+    highp vec2 ortho_uv = uv;
+    highp uvec3 temp_tile_id = uvec3(tile_id);
+    decrease_zoom_level_until(temp_tile_id, ortho_uv, texelFetch(instanced_texture_zoom_sampler, ivec2(instance_id, 0), 0).x);
+    highp float texture_layer_f = float(texelFetch(instanced_texture_array_index_sampler, ivec2(instance_id, 0), 0).x);
+    meta.ortho_color = vec4(texture(texture_sampler, vec3(ortho_uv, texture_layer_f)).rgb, 1.0);
+    meta.ortho_color = mix(meta.ortho_color, conf.material_color, conf.material_color.a);
 
-// #if VIEW_MODE == 2
-//     meta.ortho_color = vec4(1.0);
-// #endif
+#if VIEW_MODE == 2
     meta.ortho_color = vec4(1.0);
+#endif
 
 
     /////////////////////////
     // VECTOR color
-
+    mediump int tile_zoom = int(tile_id.z);
     mediump float float_zoom = tile_zoom;     // DEBUG
 
     // calculate uv derivatives before we apply mipmapping -> otherwise we have discontinous areas at border
@@ -204,12 +208,13 @@ void main() {
     // blend with background color and write pixel color to output
 #if VIEW_MODE == 0
     texout_albedo = vec4(background_color * meta.ortho_color.rgb, 1.0);
+    // texout_albedo = vec4( meta.ortho_color.rgba, 1.0);
 #else
     // the alpha value is 1 if we encountered a line (with at least 0.2 percentage summed up) or 0 if only polygons have been encountered
     // -> important for ortho color mixing
-    texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color), 1.0);
+    texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color * meta.ortho_color.rgb), 1.0);
+    // texout_albedo = vec4( meta.ortho_color.rgb, 1.0);
 
-     // texout_albedo = vec4(debug_index_buffer_size, 1.0);
 
     // texout_albedo = vec3(pixel_color.rgb) + ((1.0-pixel_color.a)*mix(fallback_color2, fallback_color, fract(float_zoom)).rgb);
 #endif

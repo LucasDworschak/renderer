@@ -50,6 +50,9 @@ public:
 
     void bind_buffer(const std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const;
 
+    bool is_tile_loaded(nucleus::tile::Id id);
+    nucleus::tile::GpuArrayHelper::LayerInfo tile(nucleus::tile::Id id);
+
 public slots:
     void update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted_tiles, const std::vector<nucleus::tile::GpuTextureTile>& new_tiles);
 

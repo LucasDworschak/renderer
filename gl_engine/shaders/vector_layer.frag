@@ -39,6 +39,9 @@ uniform highp usampler2DArray acceleration_grid_sampler;
 uniform highp usampler2D instanced_texture_array_index_sampler_vector;
 uniform highp usampler2D instanced_texture_zoom_sampler_vector;
 
+uniform highp usampler2D instanced_texture_array_index_sampler_vector_fallback;
+uniform highp usampler2D instanced_texture_zoom_sampler_vector_fallback;
+
 
 uniform highp int max_vector_geometry;
 
@@ -182,6 +185,19 @@ void main() {
     // meta.ortho_color = vec4(1.0);
 
 
+    /////////////////////////
+    // FALLBACK COLOR
+//     highp vec2 fallback_uv = uv;
+//     highp uvec3 temp_tile_id_fallback = uvec3(tile_id);
+
+//     decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, texelFetch(instanced_texture_zoom_sampler_vector_fallback, ivec2(instance_id, 0), 0).x);
+//     highp uint texture_layer_fallback = texelFetch(instanced_texture_array_index_sampler_vector_fallback, ivec2(instance_id, 0), 0).x;
+//     lowp vec4 fallback_color = vec4(texture(fallback_texture_array, vec3(fallback_uv, texture_layer_fallback & layer_mask),0));
+
+//     decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, temp_tile_id_fallback.z - 1u);
+//     highp uint texture_layer_fallback2 = texelFetch(instanced_texture_array_index_sampler_vector_fallback, ivec2(instance_id, 1), 0).x;
+//     lowp vec4 fallback_color2 = vec4(texture(fallback_texture_array, vec3(fallback_uv, texture_layer_fallback2 & layer_mask),0));
+// fallback_color2 = fallback_color;
 
 
 
@@ -291,11 +307,8 @@ void main() {
     texout_albedo = vec3(pixel_color.rgb + ((1.0-pixel_color.a)*background_color * meta.ortho_color.rgb));
 
     lowp vec4 fallback_mixed_color = mix(fallback_color2, fallback_color, fract(float_zoom));
-    // lowp vec3 fallback_ortho_color = mix(fallback_mixed_color.rgb*meta.ortho_color.rgb, fallback_mixed_color.rgb, fallback_mixed_color.a);
-    lowp vec3 fallback_ortho_color = mix(fallback_mixed_color.rgb*meta.ortho_color.rgb, fallback_mixed_color.rgb, 0.0);
 
-    texout_albedo = vec3(pixel_color.rgb) + ((1.0-pixel_color.a) * fallback_ortho_color);
-    // texout_albedo = mix(fallback_color2, fallback_color, fract(float_zoom)).rgb;
+    texout_albedo = vec3(pixel_color.rgb) + ((1.0-pixel_color.a) * fallback_mixed_color.rgb);
 #endif
 
 
