@@ -131,6 +131,13 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_fallback_texture_array->setParams(Texture::Filter::MipMapLinear, Texture::Filter::Linear, true);
     m_fallback_texture_array->allocate_array(m_fallback_resolution, m_fallback_resolution, unsigned(m_gpu_multi_array_helper.layer_amount(0)));
 
+    const auto empty_fallback
+        = nucleus::Raster<glm::u8vec4>({ m_fallback_resolution, m_fallback_resolution }, glm::u8vec4(242.0f * 0.7f, 239.0f * 0.7f, 233.0f * 0.7f, 255.0f));
+    const auto mipmapped_empty = nucleus::utils::generate_mipmapped_colour_texture(empty_fallback, nucleus::utils::ColourTexture::Format::Uncompressed_RGBA);
+    for (int layer = 0; layer < m_gpu_multi_array_helper.layer_amount(0); layer++) {
+        m_fallback_texture_array->upload(mipmapped_empty, layer);
+    }
+
     m_initialized = true;
     if (m_styles) {
         m_styles_texture->upload(*m_styles);
