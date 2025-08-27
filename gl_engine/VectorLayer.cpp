@@ -163,19 +163,18 @@ bool VectorLayer::check_fallback_textures()
         num_unfinished++;
 
         // try to render if not finished and diff between last check and now is over threshold
-        if (current_time > m_fallback_on_gpu[i].last_check + 500) {
+        if (current_time > m_fallback_on_gpu[i].last_check + ms_between_fallback_checks) {
 
             // ortho uses quads and does not have valid data over certain zoom level
             auto ortho_id = m_vector_on_gpu[i];
-            while (ortho_id.zoom_level > 17)
+            while (ortho_id.zoom_level > max_ortho_zoom_level)
                 ortho_id = ortho_id.parent();
-
             if (ortho_id.zoom_level > 0)
                 ortho_id = ortho_id.parent();
 
             // only finished if ortho tile is loaded
             // additionally we also check if enough time between first_check and now has passed (to allow a worse ortho tile if it cannot be loaded)
-            const bool tile_finished = m_texture_layer->is_tile_loaded(ortho_id) || (current_time > m_fallback_on_gpu[i].first_check + 20000);
+            const bool tile_finished = m_texture_layer->is_tile_loaded(ortho_id) || (current_time > m_fallback_on_gpu[i].first_check + max_ms_for_ortho_wait);
             m_fallback_on_gpu[i].finished = tile_finished;
             m_fallback_on_gpu[i].last_check = current_time;
 
@@ -371,7 +370,7 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
         m_geometry_buffer_texture[tile.buffer_info]->upload(*tile.geometry_buffer, layer_index[1]);
 
         m_vector_on_gpu[layer_index[0]] = tile.id;
-        m_fallback_on_gpu[layer_index[0]] = { false, current_time, current_time - 200000, 0 };
+        m_fallback_on_gpu[layer_index[0]] = { false, current_time, current_time - max_ms_for_ortho_wait, 0 };
 
         m_fallback_render_possible = true; // there was at least one new tile -> check if we need to render fallbacks
     }
@@ -458,7 +457,7 @@ void VectorLayer::update_max_vector_geometry(unsigned int new_max_vector_geometr
     const auto current_time = nucleus::utils::time_since_epoch();
 
     for (unsigned i = 0; i < m_fallback_on_gpu.size(); i++) {
-        m_fallback_on_gpu[i] = { false, current_time, current_time - 200000, 0 };
+        m_fallback_on_gpu[i] = { false, current_time, current_time - max_ms_for_ortho_wait, 0 };
     }
 
     m_fallback_render_possible = true;

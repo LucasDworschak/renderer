@@ -117,6 +117,9 @@ private:
     std::vector<FallbackMeta> m_fallback_on_gpu;
 
     static constexpr int max_fallback_renders_per_frame = 32;
+    static constexpr int ms_between_fallback_checks = 500;
+    static constexpr int max_ms_for_ortho_wait = 20000;
+    static constexpr int max_ortho_zoom_level = 17;
 
     bool m_fallback_render_possible;
     unsigned m_fallback_render_waiting_for_mipmaps;
