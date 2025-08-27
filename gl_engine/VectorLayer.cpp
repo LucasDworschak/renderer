@@ -154,7 +154,7 @@ bool VectorLayer::check_fallback_textures()
     if (!m_fallback_render_possible)
         return false; // there shouldn't be any fallback textures to render -> early exit
 
-    IdLayer fallbacks_to_render;
+    std::vector<IdLayer> tiles_to_render;
 
     assert(m_texture_layer);
 
@@ -191,24 +191,23 @@ bool VectorLayer::check_fallback_textures()
                 continue;
             m_fallback_on_gpu[i].last_ortho_zoom = ortho_zoom_level;
 
-            fallbacks_to_render.layer.push_back(i);
-            fallbacks_to_render.bounds.push_back({ m_vector_on_gpu[i], {} });
+            tiles_to_render.push_back({ { m_vector_on_gpu[i], {} }, i });
 
-            if (fallbacks_to_render.layer.size() >= max_fallback_renders_per_frame)
+            if (tiles_to_render.size() >= max_fallback_renders_per_frame)
                 break; // early exit if we are full
         }
     }
 
-    update_fallback_textures(fallbacks_to_render);
+    update_fallback_textures(tiles_to_render);
 
     // we are finished with this method if fallbacks_to_render is not max amount and there aren't any orthos pending
-    if (fallbacks_to_render.layer.size() < max_fallback_renders_per_frame && num_unfinished == fallbacks_to_render.layer.size()) {
+    if (tiles_to_render.size() < max_fallback_renders_per_frame && num_unfinished == tiles_to_render.size()) {
         m_fallback_render_possible = false; // we found all -> we can early exit until we get new tiles
 
         // after we are finished we can queue mipmap generation
         // -> doing this only once, after finish should be the best compromise between performance and no errors
         emit fallback_textures_rendered();
-    } else if (m_fallback_render_waiting_for_mipmaps > 0 && fallbacks_to_render.layer.size() == 0) {
+    } else if (m_fallback_render_waiting_for_mipmaps > 0 && tiles_to_render.size() == 0) {
         // in this frame we didn't draw any new fallback textures but there are still some textures we want to generate mipmaps for
         // -> generate mipmaps to minimize errors while we wait for better orthofotos
         emit fallback_textures_rendered();
@@ -351,7 +350,7 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
     for (const auto& quad : deleted_tiles) {
         for (const auto& id : quad.children()) {
             const auto exact_layer = m_gpu_multi_array_helper.exact_layer(0, id);
-            if (exact_layer != -1u) {
+            if (exact_layer < m_vector_on_gpu.size()) { // make sure that we got a valid layer
                 m_vector_on_gpu[exact_layer] = {};
                 m_fallback_on_gpu[exact_layer] = { false, 0, 0, 0 };
             }
@@ -383,7 +382,7 @@ void VectorLayer::update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted
     }
 }
 
-void VectorLayer::update_fallback_textures(const IdLayer& id_layer)
+void VectorLayer::update_fallback_textures(const std::vector<IdLayer>& tiles_to_render)
 {
     // SETUP framebuffer
     if (m_fallback_framebuffer == unsigned(-1))
@@ -400,28 +399,33 @@ void VectorLayer::update_fallback_textures(const IdLayer& id_layer)
 
     m_fallback_shader->bind();
 
-    m_texture_layer->bind_buffer(m_fallback_shader, id_layer.bounds); // binds texture_sampler -> for ortho fotos
+    std::vector<nucleus::tile::TileBounds> bounds;
+
+    std::transform(tiles_to_render.begin(), tiles_to_render.end(), std::back_inserter(bounds), [](const IdLayer& tile) { return tile.bounds; });
+
+    m_texture_layer->bind_buffer(m_fallback_shader, bounds); // binds texture_sampler -> for ortho fotos
 
     m_fallback_shader->set_uniform("min_vector_geometry", m_max_vector_geometry);
 
-    setup_buffers(m_fallback_shader, id_layer.bounds);
+    setup_buffers(m_fallback_shader, bounds);
 
-    for (unsigned i = 0; i < id_layer.layer.size(); i++) {
-        m_fallback_texture_array->bind_layer_to_frame_buffer(0, id_layer.layer[i]);
+    for (unsigned i = 0; i < tiles_to_render.size(); i++) {
+        m_fallback_texture_array->bind_layer_to_frame_buffer(0, tiles_to_render[i].layer);
 
         const GLfloat clearAlbedoColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
         f->glClearBufferfv(GL_COLOR, 0, clearAlbedoColor);
 
         m_fallback_shader->set_uniform("instance_id", int(i));
-        m_fallback_shader->set_uniform("tile_id", glm::vec3(id_layer.bounds[i].id.coords.x, id_layer.bounds[i].id.coords.y, id_layer.bounds[i].id.zoom_level));
+        m_fallback_shader->set_uniform(
+            "tile_id", glm::vec3(tiles_to_render[i].bounds.id.coords.x, tiles_to_render[i].bounds.id.coords.y, tiles_to_render[i].bounds.id.zoom_level));
 
         // it is possible to render 4 or 8 tiles at once (using different color attachments) -> but not sure if really performance relevant
         m_screen_quad_geometry.draw();
 
-        m_gpu_fallback_map[id_layer.bounds[i].id] = id_layer.layer[i];
+        m_gpu_fallback_map[tiles_to_render[i].bounds.id] = tiles_to_render[i].layer;
     }
 
-    m_fallback_render_waiting_for_mipmaps += id_layer.layer.size();
+    m_fallback_render_waiting_for_mipmaps += tiles_to_render.size();
 
     // generate mipmaps after all the individual layers have been rendered
 

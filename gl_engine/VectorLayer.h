@@ -43,8 +43,8 @@ class TileGeometry;
 class TextureLayer;
 
 struct IdLayer {
-    std::vector<nucleus::tile::TileBounds> bounds;
-    std::vector<uint> layer;
+    nucleus::tile::TileBounds bounds;
+    uint layer;
 };
 
 struct FallbackMeta {
@@ -126,7 +126,7 @@ private:
     nucleus::tile::IdMap<uint16_t> m_gpu_fallback_map;
 
     nucleus::tile::GpuArrayHelper::LayerInfo fallback_layer(nucleus::tile::Id tile_id) const;
-    void update_fallback_textures(const IdLayer& fallbacks_to_render);
+    void update_fallback_textures(const std::vector<IdLayer>& tiles_to_render);
     void setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const;
 };
 } // namespace gl_engine
