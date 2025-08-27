@@ -73,13 +73,11 @@ public:
     bool check_fallback_textures();
 
     void set_texture_layer(TextureLayer* texture_layer);
-signals:
-    void fallback_textures_rendered();
+
 public slots:
     void update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted_tiles, const std::vector<nucleus::tile::GpuVectorLayerTile>& new_tiles);
     void set_tile_limit(unsigned new_limit);
     void update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles);
-    void generate_fallback_mipmaps();
 
 private:
     bool m_initialized;
@@ -122,7 +120,6 @@ private:
     static constexpr int max_ortho_zoom_level = 17;
 
     bool m_fallback_render_possible;
-    unsigned m_fallback_render_waiting_for_mipmaps;
     nucleus::tile::IdMap<uint16_t> m_gpu_fallback_map;
 
     nucleus::tile::GpuArrayHelper::LayerInfo fallback_layer(nucleus::tile::Id tile_id) const;

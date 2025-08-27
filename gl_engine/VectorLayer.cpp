@@ -42,9 +42,6 @@ VectorLayer::VectorLayer(unsigned int fallback_resolution, QObject* parent)
 
 {
     m_defines = default_defines();
-
-    // using QueuedConnection flag should render mipmaps after render function finished
-    connect(this, &VectorLayer::fallback_textures_rendered, this, &VectorLayer::generate_fallback_mipmaps, Qt::QueuedConnection);
 }
 
 std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
@@ -203,14 +200,6 @@ bool VectorLayer::check_fallback_textures()
     // we are finished with this method if fallbacks_to_render is not max amount and there aren't any orthos pending
     if (tiles_to_render.size() < max_fallback_renders_per_frame && num_unfinished == tiles_to_render.size()) {
         m_fallback_render_possible = false; // we found all -> we can early exit until we get new tiles
-
-        // after we are finished we can queue mipmap generation
-        // -> doing this only once, after finish should be the best compromise between performance and no errors
-        emit fallback_textures_rendered();
-    } else if (m_fallback_render_waiting_for_mipmaps > 0 && tiles_to_render.size() == 0) {
-        // in this frame we didn't draw any new fallback textures but there are still some textures we want to generate mipmaps for
-        // -> generate mipmaps to minimize errors while we wait for better orthofotos
-        emit fallback_textures_rendered();
     }
 
     return true; // always return true here to update
@@ -409,33 +398,30 @@ void VectorLayer::update_fallback_textures(const std::vector<IdLayer>& tiles_to_
 
     setup_buffers(m_fallback_shader, bounds);
 
-    for (unsigned i = 0; i < tiles_to_render.size(); i++) {
-        m_fallback_texture_array->bind_layer_to_frame_buffer(0, tiles_to_render[i].layer);
+    const GLfloat clearAlbedoColor[] = { (242.0f * 0.7f) / 255.0f, (239.0f * 0.7f) / 255.0f, (233.0f * 0.7f) / 255.0f, 255.0f / 255.0f };
+    int mipmap_levels = 1 + static_cast<int>(std::floor(std::log2(m_fallback_resolution)));
 
-        const GLfloat clearAlbedoColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-        f->glClearBufferfv(GL_COLOR, 0, clearAlbedoColor);
+    for (unsigned i = 0; i < tiles_to_render.size(); i++) {
 
         m_fallback_shader->set_uniform("instance_id", int(i));
         m_fallback_shader->set_uniform(
             "tile_id", glm::vec3(tiles_to_render[i].bounds.id.coords.x, tiles_to_render[i].bounds.id.coords.y, tiles_to_render[i].bounds.id.zoom_level));
 
-        // it is possible to render 4 or 8 tiles at once (using different color attachments) -> but not sure if really performance relevant
-        m_screen_quad_geometry.draw();
+        for (int level = 0; level < mipmap_levels; level++) {
+            int mipmapped_resolution = m_fallback_resolution >> level;
+            f->glViewport(0, 0, mipmapped_resolution, mipmapped_resolution);
+            m_fallback_texture_array->bind_layer_to_frame_buffer(0, tiles_to_render[i].layer, level);
+
+            f->glClearBufferfv(GL_COLOR, 0, clearAlbedoColor);
+
+            // it is possible to render 4 or 8 tiles at once (using different color attachments) -> but not sure if really performance relevant
+            m_screen_quad_geometry.draw();
+        }
 
         m_gpu_fallback_map[tiles_to_render[i].bounds.id] = tiles_to_render[i].layer;
     }
 
-    m_fallback_render_waiting_for_mipmaps += tiles_to_render.size();
-
-    // generate mipmaps after all the individual layers have been rendered
-
     f->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-void VectorLayer::generate_fallback_mipmaps()
-{
-    m_fallback_texture_array->generate_mipmap();
-    m_fallback_render_waiting_for_mipmaps = 0;
 }
 
 void VectorLayer::set_tile_limit(unsigned int new_limit)

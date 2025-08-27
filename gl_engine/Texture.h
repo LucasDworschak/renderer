@@ -58,7 +58,7 @@ public:
     ~Texture();
 
     void bind(unsigned texture_unit);
-    void bind_layer_to_frame_buffer(unsigned int attachment_offset, unsigned int buffer_layer);
+    void bind_layer_to_frame_buffer(unsigned int attachment_offset, unsigned int buffer_layer, unsigned int mipmap_level = 0);
     void generate_mipmap();
     void setParams(Filter min_filter, Filter mag_filter, bool anisotropic_filtering = false);
     void allocate_array(unsigned width, unsigned height, unsigned n_layers);
