@@ -113,7 +113,7 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_instanced_array_index_fallback->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
 
     m_geometry_buffer_texture.resize(constants::array_layer_tile_amount.size());
-    for (uint8_t i = 0; i < constants::array_layer_tile_amount.size(); i++) {
+    for (unsigned i = 0; i < constants::array_layer_tile_amount.size(); i++) {
         const auto layer_amount = m_gpu_multi_array_helper.layer_amount(i);
 
         m_geometry_buffer_texture[i] = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::RG32UI);
@@ -221,6 +221,16 @@ void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std
     shader->set_uniform("acceleration_grid_sampler", 9);
     m_acceleration_grid_texture->bind(9);
 
+    // upload all geometry buffers
+    // binds the buffers to "...buffer_sampler_[0-max]"
+    // NOTE: we moved the texture binding of the geometry_buffer_samples earlier since for some reason the last texture array never bound correctly if done
+    // at the end of this function. We however leave the indices to the old ones to make the binding of the other textures easier
+    constexpr unsigned triangle_vertex_buffer_start = 15;
+    for (unsigned i = 0; i < constants::array_layer_tile_amount.size(); i++) {
+        shader->set_uniform("geometry_buffer_sampler_" + std::to_string(i), triangle_vertex_buffer_start + i);
+        m_geometry_buffer_texture[i]->bind(triangle_vertex_buffer_start + i);
+    }
+
     nucleus::Raster<uint8_t> zoom_level_raster = { glm::uvec2 { 1024, 1 } };
     nucleus::Raster<glm::u16vec2> array_index_raster = { glm::uvec2 { 1024, 4 } };
 
@@ -301,14 +311,6 @@ void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std
 
     shader->set_uniform("styles_sampler", 14);
     m_styles_texture->bind(14);
-
-    // upload all geometry buffers
-    // binds the buffers to "...buffer_sampler_[0-max]"
-    constexpr uint8_t triangle_vertex_buffer_start = 15;
-    for (uint8_t i = 0; i < constants::array_layer_tile_amount.size(); i++) {
-        shader->set_uniform("geometry_buffer_sampler_" + std::to_string(i), triangle_vertex_buffer_start + i);
-        m_geometry_buffer_texture[i]->bind(triangle_vertex_buffer_start + i);
-    }
 }
 
 void VectorLayer::draw(

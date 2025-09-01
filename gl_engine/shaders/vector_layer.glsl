@@ -53,7 +53,6 @@ uniform highp usampler2D styles_sampler;
 uniform highp usampler2DArray geometry_buffer_sampler_0;
 uniform highp usampler2DArray geometry_buffer_sampler_1;
 uniform highp usampler2DArray geometry_buffer_sampler_2;
-uniform highp usampler2DArray geometry_buffer_sampler_3;
 
 
 ///////////////////////////////////////////////
@@ -304,7 +303,7 @@ VectorLayerData normalize_unpack_for_unittest(VectorLayerData unpacked_data, low
 #if SDF_MODE == 0
 void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples], highp vec2 uv, highp ivec2 grid_cell)
 {
-    if(n_aa_samples == 1)
+    if(n_aa_samples <= 1)
     {
         aa_sample_positions[0] = uv;
         return;
@@ -341,7 +340,7 @@ void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples]
 #if SDF_MODE == 1
 void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samples], highp vec2 uv, highp vec2 duvdx, highp vec2 duvdy, lowp vec2 grid_cell)
 {
-    if(n_aa_samples == 1)
+    if(n_aa_samples <= 1)
     {
         aa_sample_multipliers[0] = vec2(0.0);
         return;
@@ -552,10 +551,10 @@ highp uvec2 to_offset_size(highp uint combined) {
 highp uvec2 fetch_raw_geometry_data(lowp uint sampler_index, highp uint index, highp uint texture_layer)
 {
 
-    // for constants::data_size: 128u, 256u, 512u, 1024u
+    // for constants::data_size: 128u, 256u, 512u
     mediump ivec3 dict_px = ivec3(int(index & ((128u<<sampler_index)-1u)), int(index >> (7u+sampler_index)), texture_layer);
 
-     // for constants::data_size: 64u, 128u, 256u, 512u
+     // for constants::data_size: 64u, 128u, 256u
     // highp ivec3 dict_px = ivec3(int(index & ((64u<<sampler_index)-1u)), int(index >> (6u+sampler_index)), texture_layer);
 
     switch (sampler_index) {
@@ -565,14 +564,8 @@ highp uvec2 fetch_raw_geometry_data(lowp uint sampler_index, highp uint index, h
         case 1u:
             return texelFetch(geometry_buffer_sampler_1, dict_px, 0).rg;
             break;
-        case 2u:
-            return texelFetch(geometry_buffer_sampler_2, dict_px, 0).rg;
-            break;
-        case 3u:
-            return texelFetch(geometry_buffer_sampler_3, dict_px, 0).rg;
-            break;
         default:
-            return texelFetch(geometry_buffer_sampler_3, dict_px, 0).rg;
+            return texelFetch(geometry_buffer_sampler_2, dict_px, 0).rg;
     }
 
     return uvec2(0u);

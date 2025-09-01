@@ -131,7 +131,7 @@ void main() {
     /////////////////////////
     // VECTOR color
     mediump int tile_zoom = int(tile_id.z);
-    mediump float float_zoom = tile_zoom;     // DEBUG
+    mediump float float_zoom = tile_id.z;
 
     // calculate uv derivatives before we apply mipmapping -> otherwise we have discontinous areas at border
     meta.duvdx = dFdx(uv);
@@ -140,8 +140,8 @@ void main() {
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, 0), 0).xy;
 
     meta.zoom_offset = float_zoom-float(tile_zoom);
-    meta.zoom_blend = fract(meta.zoom_offset);
-    meta.tile_zoom = uint(tile_zoom);
+    meta.zoom_blend = 0.0;
+    meta.tile_zoom = uint(tile_id.z);
 
 
 
@@ -155,7 +155,7 @@ void main() {
 
     /////////////////////////
     // anti-alialing
-    meta.cos_smoothing_factor = 1;
+    meta.cos_smoothing_factor = 1.0;
     meta.aa_half_radius = calculate_aa_half_radius(uv);
 
 #if SDF_MODE == 0
@@ -208,15 +208,10 @@ void main() {
     // blend with background color and write pixel color to output
 #if VIEW_MODE == 0
     texout_albedo = vec4(background_color * meta.ortho_color.rgb, 1.0);
-    // texout_albedo = vec4( meta.ortho_color.rgba, 1.0);
 #else
     // the alpha value is 1 if we encountered a line (with at least 0.2 percentage summed up) or 0 if only polygons have been encountered
     // -> important for ortho color mixing
     texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color * meta.ortho_color.rgb), 1.0);
-    // texout_albedo = vec4( meta.ortho_color.rgb, 1.0);
-
-
-    // texout_albedo = vec3(pixel_color.rgb) + ((1.0-pixel_color.a)*mix(fallback_color2, fallback_color, fract(float_zoom)).rgb);
 #endif
 
 

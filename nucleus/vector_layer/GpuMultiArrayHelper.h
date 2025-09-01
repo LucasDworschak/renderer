@@ -35,6 +35,8 @@ constexpr static size_t custom_array_layer_index()
     return constants::array_layer_tile_amount.size(); // no custom tiles found -> return max
 }
 
+// custom_array_layer_index() also gives us info how many layers use the max amount
+// we want to use the same GpuArrayHelper if we use the max layer amount -> helper_size = amount of custom layers + 1 for max_layer
 constexpr uint8_t helper_size = (constants::array_layer_tile_amount.size() - custom_array_layer_index() + 1);
 
 class GpuMultiArrayHelper {

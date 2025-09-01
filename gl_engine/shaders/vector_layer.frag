@@ -227,15 +227,14 @@ void main() {
 
     /////////////////////////
     // FALLBACK COLOR
-    lowp vec4 fallback_color = vec4(texture(fallback_texture_array, vec3(uv, texture_layer.x & layer_mask),0));
+    lowp vec4 fallback_color = texture(fallback_texture_array, vec3(uv, float(texture_layer.x & layer_mask)));
 
     // TODO not quite sure if 1) we want to mix two fallback colors and 2) if this is the best way to do this
     highp uvec2 texture_layer2 = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, mipmap_level+1u), 0).xy;
     highp vec2 fallback2_uv = uv;
     highp uvec3 temp_tile_id2 = uvec3(tile_id);
     decrease_zoom_level_until(temp_tile_id2, fallback2_uv, tile_id.z - 1u);
-    lowp vec4 fallback_color2 = vec4(texture(fallback_texture_array, vec3(fallback2_uv, texture_layer2.x & layer_mask),0));
-
+    lowp vec4 fallback_color2 = texture(fallback_texture_array, vec3(fallback2_uv, float(texture_layer2.x & layer_mask)));
 
 
 
@@ -249,7 +248,7 @@ void main() {
     /////////////////////////
     // anti-alialing
     meta.cos_smoothing_factor = calculate_cos_smoothing();
-    meta.cos_smoothing_factor = 1;
+    meta.cos_smoothing_factor = 1.0;
     meta.aa_half_radius = calculate_aa_half_radius(uv);
 
 #if SDF_MODE == 0
