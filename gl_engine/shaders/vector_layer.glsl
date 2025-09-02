@@ -33,12 +33,6 @@
 #define VIEW_MODE 1
 #endif
 
-// 0 only use step function
-// 1 use smoothstep with -halfradius, + halfradius
-#ifndef smoothstep_render
-#define smoothstep_render 0
-#endif
-
 
 uniform highp usampler2D styles_sampler;
 
@@ -591,18 +585,32 @@ void parse_style(out LayerStyle style, highp uint style_index, mediump float zoo
     // style.line_caps; // TODO
 }
 
-void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, lowp float intersection_percentage)
+lowp float hit_percentage(highp uint intersections)
 {
+    if(intersections == 0u)
+        return 0.0; // TODO check if early exit here is faster
+
+    lowp uint bits_hit = 0u;
+
+    // NOTE: this is essentially what bitCount method does, but bitCount does not exist for webassembly builds.
+    for (lowp int i = 0; i < n_aa_samples; ++i)
+    {
+        bits_hit += (intersections >> i) & 1u;
+    }
+
+    return float(bits_hit) / float(n_aa_samples);
+}
+
+
+void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp uint intersections)
+{
+    // we store which sample has hit the geometry -> if two geometries hit the same sample we only store one hit
+    // this should make multisample anti-aliasing a bit better
+    lowp float intersection_percentage = hit_percentage(intersections);
+
     pixel_color = pixel_color + ((1.0-pixel_color.a) * style.color * intersection_percentage);
 }
 
-
-void merge_intersection(inout mediump float intersection_percentage, mediump float current_sample)
-{
-    // TODO try max(accumulated, current_sample) instead of min(1, sum(accumulated + current_sample))
-    intersection_percentage = min(1.0, intersection_percentage + current_sample);
-    // accumulated = max(accumulated, current_sample); // -> worsens performance -> not sure if more accurated though
-}
 
 struct DrawMeta
 {
@@ -613,7 +621,6 @@ struct DrawMeta
     lowp vec2 grid_cell_float;
     highp vec2 aa_sample_multipliers[n_aa_samples];
     highp vec2 aa_sample_positions[n_aa_samples];
-    highp float aa_half_radius;
     mediump float cos_smoothing_factor;
     highp vec2 duvdx;
     highp vec2 duvdy;
@@ -621,17 +628,17 @@ struct DrawMeta
     mediump float zoom_blend;
 };
 
-bool draw_layer(inout lowp vec4 pixel_color, inout mediump float intersection_percentage, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
+
+bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
 {
-
-
     highp uvec2 raw_geom_data = fetch_raw_geometry_data(meta.sampler_buffer_index, i, meta.texture_layer);
     highp uint style_index = unpack_style_index(raw_geom_data) + meta.tile_zoom;
 
     if (style_index != style.index) {
         // we changed style -> blend previous style, reset layer infos and parse the new style
-        alpha_blend(pixel_color, style, intersection_percentage);
-        intersection_percentage = 0.0;
+
+        alpha_blend(pixel_color, style, intersections);
+        intersections = 0u;
         if (pixel_color.a > full_threshold) {
             return true;
         }
@@ -657,19 +664,9 @@ bool draw_layer(inout lowp vec4 pixel_color, inout mediump float intersection_pe
             // for lines use the abs(d) -> lines should not be able to be negative -> but it is possible with derivative -> we have to correct this
             d = mix(abs(d), d, geom_data.is_polygon) - style.line_width;
 
-
-
-
-#if smoothstep_render == 1
-            mediump float percentage = 1.0 - smoothstep(-meta.aa_half_radius, meta.aa_half_radius, d);
-#else
-            mediump float percentage = 1.0 - step(0.0,d);
-#endif
-
-            accumulated += percentage;
+            highp uint geometry_hit = uint(1.0 - step(0.0,d));
+            intersections |= geometry_hit << j;
         }
-        merge_intersection(intersection_percentage, accumulated * division_by_n_samples);
-
     }
 #endif
 #if SDF_MODE == 0
@@ -681,10 +678,10 @@ bool draw_layer(inout lowp vec4 pixel_color, inout mediump float intersection_pe
         for (lowp int j = 0; j < n_aa_samples; ++j)
         {
             highp float d = sd_Line_Triangle(meta.aa_sample_positions[j], prepared_sdf_data, geom_data.is_polygon) - style.line_width;
-            mediump float percentage = 1.0 - smoothstep(-meta.aa_half_radius, meta.aa_half_radius, d);
-            accumulated += percentage;
+
+            highp uint geometry_hit = uint(1.0 - step(0.0,d));
+            intersections |= geometry_hit << j;
         }
-        merge_intersection(intersection_percentage, accumulated * division_by_n_samples); // try current min(1, sum(geometries)) and alternative max(geometries)
     }
 #endif
 

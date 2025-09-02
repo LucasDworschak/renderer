@@ -18,8 +18,7 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *****************************************************************************/
 
-#define n_multisamples 1
-#define smoothstep_render 0
+#define n_multisamples 4
 
 #include "vector_layer.glsl"
 #include "shared_config.glsl"
@@ -49,20 +48,6 @@ uniform highp vec3 tile_id;
 uniform highp int min_vector_geometry;
 const lowp uint max_vector_geometry = 255u;
 
-
-highp float calculate_aa_half_radius(highp vec2 uv)
-{
-    //////////////////////
-    // jacobian determinant
-    //////////////////////
-    highp vec2 uv_x = dFdx(uv);
-    highp vec2 uv_y = dFdy(uv);
-
-    highp mat2 jacobian = mat2(uv_x.x,uv_x.y,uv_y.x,uv_y.y);
-
-    // return 0.0;
-    return sqrt(abs(determinant(jacobian))) / 2.0;
-}
 
 void debug_calculate_cascade_layer(out lowp vec3 debug_cacscade_layer, lowp uint sampler_buffer_index)
 {
@@ -156,11 +141,7 @@ void main() {
     /////////////////////////
     // anti-alialing
     meta.cos_smoothing_factor = 1.0;
-#if smoothstep_render == 1
-    meta.aa_half_radius = calculate_aa_half_radius(uv);
-#else
-    meta.aa_half_radius = 0.0;
-#endif
+
 
 #if SDF_MODE == 0
     calculate_sample_positions(meta.aa_sample_positions, uv, grid_cell);
@@ -194,17 +175,17 @@ void main() {
         style.dash_info = vec2(1.0, 0.0);
         style.line_caps = 0;
 
-        mediump float intersection_percentage = 0.0;
+        highp uint intersections = 0u;
 
         for(highp uint i = offset_size.x + min(offset_size.y, uint(min_vector_geometry)); i < offset_size.x + min(max_vector_geometry,offset_size.y); i++) // show only x layers
         {
             debug_draw_calls++;
-            if(draw_layer(pixel_color, intersection_percentage, style, uv, i, meta))
+            if(draw_layer(pixel_color, intersections, style, uv, i, meta))
                 break; // pixel is finished -> we can exit the loop early
         }
 
         // blend the last layer (this only does something if we did not break out of the loop early)
-        alpha_blend(pixel_color, style, intersection_percentage);
+        alpha_blend(pixel_color, style, intersections);
     }
 
 
