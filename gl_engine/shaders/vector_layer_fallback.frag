@@ -156,7 +156,11 @@ void main() {
     /////////////////////////
     // anti-alialing
     meta.cos_smoothing_factor = 1.0;
+#if smoothstep_render == 1
     meta.aa_half_radius = calculate_aa_half_radius(uv);
+#else
+    meta.aa_half_radius = 0.0;
+#endif
 
 #if SDF_MODE == 0
     calculate_sample_positions(meta.aa_sample_positions, uv, grid_cell);

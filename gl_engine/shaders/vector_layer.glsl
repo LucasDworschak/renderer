@@ -26,14 +26,6 @@
 #define SDF_MODE 1
 #endif
 
-// for antialiasing we want to reduce the frequency of faraway tiles when viewing them at shallow angles
-// 0 smoothstep
-// 1 cos angle reduces opacity
-// 2 no smoothing
-#ifndef shallow_angle_signal_frequency
-#define shallow_angle_signal_frequency 1
-#endif
-
 // 0 ortho only
 // 1 mixed
 // 2 vector only
@@ -298,8 +290,6 @@ VectorLayerData normalize_unpack_for_unittest(VectorLayerData unpacked_data, low
 
 
 
-
-
 #if SDF_MODE == 0
 void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples], highp vec2 uv, highp ivec2 grid_cell)
 {
@@ -336,45 +326,7 @@ void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples]
     }
 
 }
-#endif
-#if SDF_MODE == 1
-void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samples], highp vec2 uv, highp vec2 duvdx, highp vec2 duvdy, lowp vec2 grid_cell)
-{
-    if(n_aa_samples <= 1)
-    {
-        aa_sample_multipliers[0] = vec2(0.0);
-        return;
-    }
 
-    highp vec2 min_cell = grid_cell * cell_size_uv;
-    highp vec2 max_cell = min_cell + cell_size_uv;
-    min_cell -= vec2(aa_cell_overlap_uv);
-    max_cell += vec2(aa_cell_overlap_uv);
-
-    highp vec2 grad_u = vec2(duvdx.x, duvdy.x);
-    highp vec2 grad_v = vec2(duvdx.y, duvdy.y);
-
-    highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols-1);
-
-    for (int x = 0; x < n_aa_samples_row_cols; ++x) {
-        for (int y = 0; y < n_aa_samples_row_cols; ++y) {
-            lowp int index = x*n_aa_samples_row_cols + y;
-            highp vec2 raw_mult = vec2(-aa_sample_dist / 2.0) + vec2(x,y) * vec2(aa_sample_dist_increments);
-
-            // we stretch the multiplier by the uv derivatives
-            highp vec2 stretched_mult = vec2(dot(grad_u, raw_mult), dot(grad_v, raw_mult));
-            highp vec2 stretch_factor = stretched_mult / raw_mult;
-
-            // aa_sample_multipliers[index] = (clamp(uv + stretched_mult, min_cell, max_cell) - uv) / stretch_factor;
-            aa_sample_multipliers[index] = raw_mult; // TODO not clamping is faster and looks more or less the same -> check this again at the end and remove clamping approach
-        }
-    }
-
-}
-#endif
-
-
-#if SDF_MODE == 0
 SDFData prepare_sd_Line_Triangle(VectorLayerData geom_data)
 {
     SDFData data;
@@ -432,6 +384,26 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle )
 }
 #endif
 #if SDF_MODE == 1
+void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samples], highp vec2 uv, highp vec2 duvdx, highp vec2 duvdy, lowp vec2 grid_cell)
+{
+    if(n_aa_samples <= 1)
+    {
+        aa_sample_multipliers[0] = vec2(0.0);
+        return;
+    }
+
+
+    highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols);
+
+    highp vec2 start = vec2(-aa_sample_dist / 2.0 + aa_sample_dist_increments / 2.0);
+    for (int x = 0; x < n_aa_samples_row_cols; ++x) {
+        for (int y = 0; y < n_aa_samples_row_cols; ++y) {
+            lowp int index = x*n_aa_samples_row_cols + y;
+            aa_sample_multipliers[index] = start + vec2(x,y) * vec2(aa_sample_dist_increments);
+        }
+    }
+
+}
 
 highp float grad_clamp_fun(highp float v, highp float min, highp float max, highp float incoming_grad)
 {
@@ -625,10 +597,10 @@ void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, lowp float inter
 }
 
 
-void merge_intersection(inout mediump float accumulated, mediump float current_sample)
+void merge_intersection(inout mediump float intersection_percentage, mediump float current_sample)
 {
     // TODO try max(accumulated, current_sample) instead of min(1, sum(accumulated + current_sample))
-    accumulated = min(1.0, accumulated + current_sample);
+    intersection_percentage = min(1.0, intersection_percentage + current_sample);
     // accumulated = max(accumulated, current_sample); // -> worsens performance -> not sure if more accurated though
 }
 
@@ -687,14 +659,11 @@ bool draw_layer(inout lowp vec4 pixel_color, inout mediump float intersection_pe
 
 
 
-#if shallow_angle_signal_frequency == 0
-            mediump float percentage = 1.0 - smoothstep(-meta.aa_half_radius*2.0,0.0, d);
-#else
-    #if smoothstep_render == 1
+
+#if smoothstep_render == 1
             mediump float percentage = 1.0 - smoothstep(-meta.aa_half_radius, meta.aa_half_radius, d);
-    #else
+#else
             mediump float percentage = 1.0 - step(0.0,d);
-    #endif
 #endif
 
             accumulated += percentage;

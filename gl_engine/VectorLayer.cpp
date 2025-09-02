@@ -87,7 +87,6 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
 
     std::vector<QString> defines_fallback(defines);
     // defines_fallback.push_back("#define FALLBACK_MODE 1");
-    // defines_fallback.push_back("#define SHALLOW_ANGLE_SIGNAL_FREQUENCY 2"); // no angle smoothing
     // defines_fallback.push_back("#define VIEW_MODE 2"); // vector only (for now)
 
     m_shader = std::make_shared<ShaderProgram>("tile.vert", "vector_layer.frag", ShaderCodeSource::FILE, defines);
@@ -380,8 +379,6 @@ void VectorLayer::update_fallback_textures(const std::vector<IdLayer>& tiles_to_
         return; // framebuffer not ready
 
     QOpenGLExtraFunctions* f = QOpenGLContext::currentContext()->extraFunctions();
-
-    f->glViewport(0, 0, m_fallback_resolution, m_fallback_resolution);
 
     f->glDisable(GL_CULL_FACE);
     f->glDisable(GL_DEPTH_TEST);

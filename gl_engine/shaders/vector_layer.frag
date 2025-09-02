@@ -87,16 +87,10 @@ mediump float float_zoom_interpolation()
 
 mediump float calculate_cos_smoothing()
 {
-#if shallow_angle_signal_frequency == 1
     highp float cos_angle = dot(normalize(var_pos_cws.xyz),vec3(0.,0.,1.));
     highp float dist = smoothstep(2000.0, 500.0, length(var_pos_cws.xy)); // between 0-500m -> no cos smoothing; between 2000m and inf use cos smoothing; inbetween transition
 
     return mix(0.0, sqrt(sqrt(abs(cos_angle))), smoothstep(0.0,0.15,abs(cos_angle))) * (1.0-dist) + dist;
-
-    // return sqrt(sqrt(abs(cos_angle))) * (1.0-dist) + dist;
-#else
-    return 1.0;
-#endif
 }
 
 highp float calculate_aa_half_radius(highp vec2 uv)
@@ -248,8 +242,11 @@ void main() {
     /////////////////////////
     // anti-alialing
     meta.cos_smoothing_factor = calculate_cos_smoothing();
-    meta.cos_smoothing_factor = 1.0;
+#if smoothstep_render == 1
     meta.aa_half_radius = calculate_aa_half_radius(uv);
+#else
+    meta.aa_half_radius = 0.0;
+#endif
 
 #if SDF_MODE == 0
     calculate_sample_positions(meta.aa_sample_positions, uv, grid_cell);
