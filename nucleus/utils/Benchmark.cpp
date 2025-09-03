@@ -188,6 +188,8 @@ void Benchmark::create_report()
 
         for (const auto& report : timer_reports) {
             for (const auto& entry : report) {
+                if (entry.name == "vector_fallback") // not interested
+                    continue;
                 reports[location][entry.name].push_back(entry.value);
                 metrics.insert(entry.name);
             }
