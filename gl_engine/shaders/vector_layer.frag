@@ -75,7 +75,7 @@ mediump float float_zoom_interpolation()
 
     const highp float sqrt2 = 1.414213562373095;
     const highp float cEarthCircumference = 40075016.685578486;
-    const highp float tile_size = 256.0;
+    const highp float tile_size = 512.0;
 
     highp float camera_factors = camera.viewport_size.y * 0.5 * camera.distance_scaling_factor;
     highp float static_factors = camera_factors * sqrt2 * cEarthCircumference / tile_size;
@@ -121,6 +121,37 @@ void debug_calculate_cell_size(out lowp vec3 debug_cell_size, mediump uint offse
         debug_cell_size = vec3(1,0,1); // purple -> should never happen -> unrecognized index
 }
 
+lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallback_uv, DrawMeta meta, float float_zoom)
+{
+    // decrease tiles to zoom level given by c++ code (tile is guaranteed fetched)
+    decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, texelFetch(instanced_texture_zoom_sampler_vector_fallback, ivec2(instance_id, 0), 0).x);
+
+    lowp uint fallback_mipmap_level = uint(floor(float(temp_tile_id_fallback.z)-float_zoom));
+
+    highp float fallback_interpolation = meta.zoom_blend;
+    // if our float zoom is higher than max_zoom -> we have to make sure that only fallback_color0 is used
+    if(float_zoom >= float(max_zoom))
+        fallback_interpolation = 1.0;
+
+
+    highp uvec2 texture_layer_fallback = texelFetch(instanced_texture_array_index_sampler_vector_fallback, ivec2(instance_id, fallback_mipmap_level), 0).xy;
+
+    // we are using textureGrad and manually half duvdx/y for each mipmap_level
+    // -> if we are not doing this we would get a ring when changing the mipmap level
+    highp vec2 duvdx = dFdx(fallback_uv) * pow(0.5, float(fallback_mipmap_level));
+    highp vec2 duvdy = dFdy(fallback_uv) * pow(0.5, float(fallback_mipmap_level));
+
+    decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, temp_tile_id_fallback.z - fallback_mipmap_level);
+    lowp vec4 fallback_color0 = vec4(textureGrad(fallback_texture_array, vec3(fallback_uv, texture_layer_fallback.x & layer_mask),duvdx, duvdy));
+
+    decrease_zoom_level_by_one(temp_tile_id_fallback, fallback_uv);
+    // half duvdx/y again since we went one mipmap_level further
+    duvdx *= 0.5;
+    duvdy *= 0.5;
+    lowp vec4 fallback_color1 = vec4(textureGrad(fallback_texture_array, vec3(fallback_uv, texture_layer_fallback.y & layer_mask),duvdx, duvdy));
+    return mix(fallback_color1, fallback_color0, fallback_interpolation).rgb;
+}
+
 
 
 void main() {
@@ -162,32 +193,20 @@ void main() {
 #if VIEW_MODE == 2
     meta.ortho_color = vec4(1.0);
 #endif
-    // meta.ortho_color = vec4(1.0);
 
-
-    /////////////////////////
-    // FALLBACK COLOR
-//     highp vec2 fallback_uv = uv;
-//     highp uvec3 temp_tile_id_fallback = uvec3(tile_id);
-
-//     decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, texelFetch(instanced_texture_zoom_sampler_vector_fallback, ivec2(instance_id, 0), 0).x);
-//     highp uint texture_layer_fallback = texelFetch(instanced_texture_array_index_sampler_vector_fallback, ivec2(instance_id, 0), 0).x;
-//     lowp vec4 fallback_color = vec4(texture(fallback_texture_array, vec3(fallback_uv, texture_layer_fallback & layer_mask),0));
-
-//     decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, temp_tile_id_fallback.z - 1u);
-//     highp uint texture_layer_fallback2 = texelFetch(instanced_texture_array_index_sampler_vector_fallback, ivec2(instance_id, 1), 0).x;
-//     lowp vec4 fallback_color2 = vec4(texture(fallback_texture_array, vec3(fallback_uv, texture_layer_fallback2 & layer_mask),0));
-// fallback_color2 = fallback_color;
-
+    // hold uv and tile_id values for later (we do not want mipmap to influence it directly
+   highp vec2 fallback_uv = uv;
+   highp uvec3 temp_tile_id_fallback = uvec3(tile_id);
 
 
     /////////////////////////
     // VECTOR color
+    // decrease tiles to zoom level given by c++ code (tile is guaranteed fetched)
     decrease_zoom_level_until(tile_id, uv, texelFetch(instanced_texture_zoom_sampler_vector, ivec2(instance_id, 0), 0).x);
-
 
     mediump float float_zoom = float_zoom_interpolation();
     // float_zoom = tile_id.z;     // DEBUG
+    // calculate mipmap_level depending on floating zoom level
     lowp uint mipmap_level = uint(clamp(int(ceil(float(tile_id.z)-float_zoom)), 0,mipmap_levels-1));
 
     // calculate uv derivatives before we apply mipmapping -> otherwise we have discontinous areas at border
@@ -195,8 +214,10 @@ void main() {
     meta.duvdx = dFdx(uv) * pow(0.5, float(mipmap_level));
     meta.duvdy = dFdy(uv) * pow(0.5, float(mipmap_level));
 
+    // fetch the layer indices of the acceleration grid (.x) and the geometry buffer (.y)
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, mipmap_level), 0).xy;
 
+    // lower the tile_id/uv to the appropriate mipmap_level
     decrease_zoom_level_until(tile_id, uv, tile_id.z - mipmap_level);
 
     meta.zoom_offset = float_zoom-float(tile_id.z);
@@ -204,17 +225,10 @@ void main() {
     meta.tile_zoom = tile_id.z;
 
 
-
     /////////////////////////
     // FALLBACK COLOR
-    lowp vec4 fallback_color = texture(fallback_texture_array, vec3(uv, float(texture_layer.x & layer_mask)));
+    lowp vec3 fallback_color = get_fallback_color(temp_tile_id_fallback, fallback_uv, meta, float_zoom);
 
-    // TODO not quite sure if 1) we want to mix two fallback colors and 2) if this is the best way to do this
-    highp uvec2 texture_layer2 = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, mipmap_level+1u), 0).xy;
-    highp vec2 fallback2_uv = uv;
-    highp uvec3 temp_tile_id2 = uvec3(tile_id);
-    decrease_zoom_level_until(temp_tile_id2, fallback2_uv, tile_id.z - 1u);
-    lowp vec4 fallback_color2 = texture(fallback_texture_array, vec3(fallback2_uv, float(texture_layer2.x & layer_mask)));
 
 
 
@@ -284,10 +298,10 @@ void main() {
 #else
     texout_albedo = vec3(pixel_color.rgb + ((1.0-pixel_color.a)*background_color * meta.ortho_color.rgb));
 
-    lowp vec4 fallback_mixed_color = mix(fallback_color2, fallback_color, fract(float_zoom));
 
-    texout_albedo = vec3(pixel_color.rgb) + ((1.0-pixel_color.a) * fallback_mixed_color.rgb);
+    texout_albedo = vec3(pixel_color.rgb) + ((1.0-pixel_color.a) * fallback_color.rgb);
 #endif
+
 
 
 

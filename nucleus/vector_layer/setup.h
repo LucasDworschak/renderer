@@ -56,7 +56,7 @@ SchedulerHolder scheduler(TileLoadServicePtr tile_service, const tile::utils::Aa
 
     Scheduler::Settings settings;
     settings.max_zoom_level = constants::style_zoom_range.y;
-    settings.tile_resolution = 256;
+    settings.tile_resolution = 512;
     settings.gpu_quad_limit = 512;
     auto scheduler = std::make_unique<nucleus::vector_layer::Scheduler>(settings, std::move(style));
     scheduler->set_aabb_decorator(aabb_decorator);

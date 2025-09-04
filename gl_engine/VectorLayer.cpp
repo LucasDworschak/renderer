@@ -108,7 +108,7 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_instanced_zoom_fallback = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::R8UI);
     m_instanced_zoom_fallback->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
 
-    m_instanced_array_index_fallback = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::R16UI);
+    m_instanced_array_index_fallback = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RG16UI);
     m_instanced_array_index_fallback->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
 
     m_geometry_buffer_texture.resize(constants::array_layer_tile_amount.size());
@@ -208,6 +208,9 @@ unsigned VectorLayer::tile_count() const { return m_gpu_multi_array_helper.n_occ
 
 nucleus::tile::GpuArrayHelper::LayerInfo VectorLayer::fallback_layer(nucleus::tile::Id tile_id) const
 {
+    if (tile_id.zoom_level > 200) // zoom may be -1u during startup
+        return { {}, 0 };
+
     while (!m_gpu_fallback_map.contains(tile_id) && tile_id.zoom_level > 0)
         tile_id = tile_id.parent();
     if (!m_gpu_fallback_map.contains(tile_id))
@@ -215,7 +218,7 @@ nucleus::tile::GpuArrayHelper::LayerInfo VectorLayer::fallback_layer(nucleus::ti
     return { tile_id, m_gpu_fallback_map.at(tile_id) };
 }
 
-void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const
+void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list, bool draw_parent) const
 {
     shader->set_uniform("acceleration_grid_sampler", 9);
     m_acceleration_grid_texture->bind(9);
@@ -234,10 +237,15 @@ void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std
     nucleus::Raster<glm::u16vec2> array_index_raster = { glm::uvec2 { 1024, 4 } };
 
     nucleus::Raster<uint8_t> zoom_level_raster_fallback = { glm::uvec2 { 1024, 1 } };
-    nucleus::Raster<uint16_t> array_index_raster_fallback = { glm::uvec2 { 1024, 2 } };
+    nucleus::Raster<glm::u16vec2> array_index_raster_fallback = { glm::uvec2 { 1024, 4 } };
     for (unsigned i = 0; i < std::min(unsigned(draw_list.size()), 1024u); ++i) {
-        // todo -> automatically go to parent ( or parent.parent())
-        const auto layer0 = m_gpu_multi_array_helper.layer(draw_list[i].id);
+
+        GpuMultiArrayHelper::MultiLayerInfo layer0;
+        if (draw_parent)
+            layer0 = m_gpu_multi_array_helper.layer(draw_list[i].id.parent());
+        else
+            layer0 = m_gpu_multi_array_helper.layer(draw_list[i].id);
+
         if (layer0.id.zoom_level > 200)
             continue; // invalid zoom_level -> go to next
         zoom_level_raster.pixel({ i, 0 }) = layer0.id.zoom_level;
@@ -263,33 +271,41 @@ void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std
             array_index_raster.pixel({ i, 3 }) = array_index_raster.pixel({ i, 2 });
         }
 
-        // if (layer0.id.zoom_level)
+        { // fallback texture meta
+            const auto fallback_layer0 = fallback_layer(draw_list[i].id);
+            if (fallback_layer0.id.zoom_level > 200)
+                continue; // invalid zoom_level -> go to next
 
-        // const auto fallback_layer_info = fallback_layer(layer0.id);
-        // if (fallback_layer_info.id.zoom_level > 200) {
-        //     // invalid -> we need default values
-        //     zoom_level_raster_fallback.pixel({ i, 0 }) = 0;
-        //     array_index_raster_fallback.pixel({ i, 0 }) = 0;
-        //     array_index_raster_fallback.pixel({ i, 1 }) = 0;
-        // } else {
-        //     zoom_level_raster_fallback.pixel({ i, 0 }) = fallback_layer_info.id.zoom_level;
-        //     array_index_raster_fallback.pixel({ i, 0 }) = fallback_layer_info.index;
+            zoom_level_raster_fallback.pixel({ i, 0 }) = fallback_layer0.id.zoom_level;
 
-        //     auto fallback_layer_info_parent = fallback_layer_info;
-        //     if (fallback_layer_info.id.zoom_level > 0)
-        //         fallback_layer_info_parent = fallback_layer(fallback_layer_info.id.parent());
-        //     // array_index_raster_fallback.pixel({ i, 1 }) = fallback_layer_info.index;
-        //     // for interpolation between two levels (if parent is not loaded -> use the current one for now)
-        //     if (fallback_layer_info_parent.id.zoom_level < 200) {
-        //         array_index_raster_fallback.pixel({ i, 1 }) = fallback_layer_info_parent.index;
-        //     } else {
-        //         array_index_raster_fallback.pixel({ i, 1 }) = array_index_raster_fallback.pixel({ i, 0 });
-        //     }
-        // }
+            const auto fallback_layer1 = fallback_layer(fallback_layer0.id.parent());
+            if (fallback_layer1.id.zoom_level < 200) {
+                array_index_raster_fallback.pixel({ i, 0 }) = { fallback_layer0.index, fallback_layer1.index };
+            } else {
+                array_index_raster_fallback.pixel({ i, 0 }) = { 0, 0 };
+            }
 
-        zoom_level_raster_fallback.pixel({ i, 0 }) = layer0.id.zoom_level;
-        array_index_raster_fallback.pixel({ i, 0 }) = layer0.index1;
-        array_index_raster_fallback.pixel({ i, 1 }) = layer0.index1;
+            const auto fallback_layer2 = fallback_layer(fallback_layer1.id.parent());
+            if (fallback_layer2.id.zoom_level < 200) {
+                array_index_raster_fallback.pixel({ i, 1 }) = { fallback_layer1.index, fallback_layer2.index };
+            } else {
+                array_index_raster_fallback.pixel({ i, 1 }) = array_index_raster_fallback.pixel({ i, 0 });
+            }
+
+            const auto fallback_layer3 = fallback_layer(fallback_layer2.id.parent());
+            if (fallback_layer3.id.zoom_level < 200) {
+                array_index_raster_fallback.pixel({ i, 2 }) = { fallback_layer2.index, fallback_layer3.index };
+            } else {
+                array_index_raster_fallback.pixel({ i, 2 }) = array_index_raster_fallback.pixel({ i, 1 });
+            }
+
+            const auto fallback_layer4 = fallback_layer(fallback_layer3.id.parent());
+            if (fallback_layer4.id.zoom_level < 200) {
+                array_index_raster_fallback.pixel({ i, 3 }) = { fallback_layer3.index, fallback_layer4.index };
+            } else {
+                array_index_raster_fallback.pixel({ i, 3 }) = array_index_raster_fallback.pixel({ i, 2 });
+            }
+        }
     }
 
     m_instanced_array_index->bind(10);
@@ -321,7 +337,7 @@ void VectorLayer::draw(
 
     m_shader->set_uniform("max_vector_geometry", m_max_vector_geometry);
 
-    setup_buffers(m_shader, draw_list);
+    setup_buffers(m_shader, draw_list, true);
 
     constexpr uint8_t next_buffer_start = 15 + constants::array_layer_tile_amount.size();
     m_shader->set_uniform("fallback_texture_array", next_buffer_start);
@@ -395,7 +411,7 @@ void VectorLayer::update_fallback_textures(const std::vector<IdLayer>& tiles_to_
 
     m_fallback_shader->set_uniform("min_vector_geometry", m_max_vector_geometry);
 
-    setup_buffers(m_fallback_shader, bounds);
+    setup_buffers(m_fallback_shader, bounds, false);
 
     const GLfloat clearAlbedoColor[] = { (242.0f * 0.7f) / 255.0f, (239.0f * 0.7f) / 255.0f, (233.0f * 0.7f) / 255.0f, 255.0f / 255.0f };
     int mipmap_levels = 1 + static_cast<int>(std::floor(std::log2(m_fallback_resolution)));

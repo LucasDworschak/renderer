@@ -200,4 +200,40 @@ void main() {
 #endif
 
 
+    // DEBUG VIEWS to determine which fallback zoom level is used
+    // if(meta.tile_zoom == 18u)
+    //     texout_albedo = vec4(1.0,0.0,0.0,1.0); // RED
+    // if(meta.tile_zoom == 17u)
+    //     texout_albedo = vec4(0.5,0.0,0.0,1.0); // DARK RED
+    // if(meta.tile_zoom == 16u)
+    //     texout_albedo = vec4(0.5,0.5,0.0,1.0); // DARK YELLOW
+    // if(meta.tile_zoom == 15u)
+    //     texout_albedo = vec4(0.0,0.5,0.0,1.0); // DARK GREEN
+    // if(meta.tile_zoom == 14u)
+    //     texout_albedo = vec4(0.0,1.0,0.0,1.0); // GREEN
+    // if(meta.tile_zoom == 13u)
+    //     texout_albedo = vec4(1.0,1.0,0.0,1.0); // YELLOW
+    // if(meta.tile_zoom == 12u)
+    //     texout_albedo = vec4(0.0,1.0,1.0,1.0); // CYAN
+    // if(meta.tile_zoom == 11u)
+    //     texout_albedo = vec4(0.0,0.5,0.5,1.0); // dark cyan
+    // if(meta.tile_zoom == 10u)
+    //     texout_albedo = vec4(0.0,0.0,0.5,1.0); // dark blue
+    // if(meta.tile_zoom == 9u)
+    //     texout_albedo = vec4(0.0,0.0,1.0,1.0); // blue
+
+    // color ramp from yellow to red
+    // 18u is green to see if it is reached and if blending is done
+    // if(meta.tile_zoom == 13u)
+    //     texout_albedo = vec4(254.0/255.0,240.0/255.0,217.0/255.0, 1.0);
+    // if(meta.tile_zoom == 14u)
+    //     texout_albedo = vec4(253.0/255.0,212.0/255.0,158.0/255.0, 1.0);
+    // if(meta.tile_zoom == 15u)
+    //     texout_albedo = vec4(253.0/255.0,187.0/255.0,132.0/255.0, 1.0);
+    // if(meta.tile_zoom == 16u)
+    //     texout_albedo = vec4(252.0/255.0,141.0/255.0,89.0/255.0, 1.0);
+    // if(meta.tile_zoom == 17u)
+    //     texout_albedo = vec4(227.0/255.0,74.0/255.0,51.0/255.0, 1.0);
+    // if(meta.tile_zoom == 18u)
+    //     texout_albedo = vec4(0.0,1.0,0.0, 1.0);
 }

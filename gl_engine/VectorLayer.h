@@ -124,6 +124,6 @@ private:
 
     nucleus::tile::GpuArrayHelper::LayerInfo fallback_layer(nucleus::tile::Id tile_id) const;
     void update_fallback_textures(const std::vector<IdLayer>& tiles_to_render);
-    void setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list) const;
+    void setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list, bool draw_parent) const;
 };
 } // namespace gl_engine
