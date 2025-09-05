@@ -25,7 +25,7 @@
 #include "tile_id.glsl"
 #include "hashing.glsl" // DEBUG
 
-#line 30030
+#line 30029
 
 uniform lowp sampler2DArray texture_sampler;
 uniform lowp sampler2DArray fallback_texture_array;
@@ -137,6 +137,11 @@ void main() {
     offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(grid_cell.x, grid_cell.y, texture_layer.x & layer_mask),0).r);
 
 
+    // We draw every geometry if the tile_zoom is lower than the designated zoom level (defined in step function).
+    // otherwise we have some holes in our geometry, that most likely were created by the new way we calculate the geometry intersection
+    // Problem described in issue #221
+    lowp uint min_vector_geometry_zoom_dependent = uint(step(16u, meta.tile_zoom) * min_vector_geometry);
+    // lowp uint min_vector_geometry_zoom_dependent = uint(min_vector_geometry);
 
     /////////////////////////
     // anti-alialing
@@ -177,7 +182,7 @@ void main() {
 
         highp uint intersections = 0u;
 
-        for(highp uint i = offset_size.x + min(offset_size.y, uint(min_vector_geometry)); i < offset_size.x + min(max_vector_geometry,offset_size.y); i++) // show only x layers
+        for(highp uint i = offset_size.x + min(offset_size.y, uint(min_vector_geometry_zoom_dependent)); i < offset_size.x + min(max_vector_geometry,offset_size.y); i++) // show only x layers
         {
             debug_draw_calls++;
             if(draw_layer(pixel_color, intersections, style, uv, i, meta))
