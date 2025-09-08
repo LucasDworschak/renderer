@@ -140,7 +140,7 @@ void main() {
     // We draw every geometry if the tile_zoom is lower than the designated zoom level (defined in step function).
     // otherwise we have some holes in our geometry, that most likely were created by the new way we calculate the geometry intersection
     // Problem described in issue #221
-    lowp uint min_vector_geometry_zoom_dependent = uint(step(16u, meta.tile_zoom) * min_vector_geometry);
+    lowp uint min_vector_geometry_zoom_dependent = uint(step(16u, meta.tile_zoom) * float(min_vector_geometry));
     // lowp uint min_vector_geometry_zoom_dependent = uint(min_vector_geometry);
 
     /////////////////////////

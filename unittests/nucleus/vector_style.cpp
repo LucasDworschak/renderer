@@ -242,65 +242,70 @@ TEST_CASE("nucleus/vector_style")
 
         constexpr auto z_per_style = 19;
 
-        CHECK(style_buffer[(z_per_style * 0) + 0].x == 0); // z 0
-        CHECK(style_buffer[(z_per_style * 0) + 1].x == 0); // z 1
-        CHECK(style_buffer[(z_per_style * 0) + 2].x == 0); // z 2
-        CHECK(style_buffer[(z_per_style * 0) + 3].x == 0); // z 3
-        CHECK(style_buffer[(z_per_style * 0) + 4].x == 0); // z 4
-        CHECK(style_buffer[(z_per_style * 0) + 5].x == 0); // z 5
-        CHECK(style_buffer[(z_per_style * 0) + 6].x == 0); // z 6
-        CHECK(style_buffer[(z_per_style * 0) + 7].x == 0); // z 7
-        CHECK(style_buffer[(z_per_style * 0) + 8].x == 0); // z 8
-        CHECK(style_buffer[(z_per_style * 0) + 9].x == 0); // z 9
-        CHECK(style_buffer[(z_per_style * 0) + 10].x == 0); // z 10
-        CHECK(style_buffer[(z_per_style * 0) + 11].x == 0); // z 11
-        CHECK(style_buffer[(z_per_style * 0) + 12].x == 0); // z 12
-        CHECK(style_buffer[(z_per_style * 0) + 13].x == 0xbbbbbbff); // z 13
-        CHECK(style_buffer[(z_per_style * 0) + 14].x == 0xbbbbbbff); // z 14
-        CHECK(style_buffer[(z_per_style * 0) + 15].x == 0xbbbbbbff); // z 15
-        CHECK(style_buffer[(z_per_style * 0) + 16].x == 0); // z 16
-        CHECK(style_buffer[(z_per_style * 0) + 17].x == 0); // z 17
-        CHECK(style_buffer[(z_per_style * 0) + 18].x == 0); // z 18
+        // there are slight os differences in this test -> we do not care on the order in the style -> but we want to test if a style is handled correctly
+        const auto index_a = (style_buffer[(z_per_style * 0) + 14].x == 0xaaaaaaff) ? 0 : ((style_buffer[(z_per_style * 1) + 14].x == 0xaaaaaaff) ? 1 : 2);
+        const auto index_b = (style_buffer[(z_per_style * 0) + 14].x == 0xbbbbbbff) ? 0 : ((style_buffer[(z_per_style * 1) + 14].x == 0xbbbbbbff) ? 1 : 2);
+        const auto index_c = (style_buffer[(z_per_style * 0) + 14].x == 0xccccccff) ? 0 : ((style_buffer[(z_per_style * 1) + 14].x == 0xccccccff) ? 1 : 2);
 
-        CHECK(style_buffer[(z_per_style * 1) + 0].x == 0); // z 0
-        CHECK(style_buffer[(z_per_style * 1) + 1].x == 0); // z 1
-        CHECK(style_buffer[(z_per_style * 1) + 2].x == 0); // z 2
-        CHECK(style_buffer[(z_per_style * 1) + 3].x == 0); // z 3
-        CHECK(style_buffer[(z_per_style * 1) + 4].x == 0); // z 4
-        CHECK(style_buffer[(z_per_style * 1) + 5].x == 0); // z 5
-        CHECK(style_buffer[(z_per_style * 1) + 6].x == 0); // z 6
-        CHECK(style_buffer[(z_per_style * 1) + 7].x == 0); // z 7
-        CHECK(style_buffer[(z_per_style * 1) + 8].x == 0); // z 8
-        CHECK(style_buffer[(z_per_style * 1) + 9].x == 0); // z 9
-        CHECK(style_buffer[(z_per_style * 1) + 10].x == 0); // z 10
-        CHECK(style_buffer[(z_per_style * 1) + 11].x == 0); // z 11
-        CHECK(style_buffer[(z_per_style * 1) + 12].x == 0); // z 12
-        CHECK(style_buffer[(z_per_style * 1) + 13].x == 0); // z 13
-        CHECK(style_buffer[(z_per_style * 1) + 14].x == 0xaaaaaaff); // z 14
-        CHECK(style_buffer[(z_per_style * 1) + 15].x == 0xaaaaaaff); // z 15
-        CHECK(style_buffer[(z_per_style * 1) + 16].x == 0xaaaaaaff); // z 16
-        CHECK(style_buffer[(z_per_style * 1) + 17].x == 0xaaaaaaff); // z 17
-        CHECK(style_buffer[(z_per_style * 1) + 18].x == 0xaaaaaaff); // z 18
+        CHECK(style_buffer[(z_per_style * index_a) + 0].x == 0); // z 0
+        CHECK(style_buffer[(z_per_style * index_a) + 1].x == 0); // z 1
+        CHECK(style_buffer[(z_per_style * index_a) + 2].x == 0); // z 2
+        CHECK(style_buffer[(z_per_style * index_a) + 3].x == 0); // z 3
+        CHECK(style_buffer[(z_per_style * index_a) + 4].x == 0); // z 4
+        CHECK(style_buffer[(z_per_style * index_a) + 5].x == 0); // z 5
+        CHECK(style_buffer[(z_per_style * index_a) + 6].x == 0); // z 6
+        CHECK(style_buffer[(z_per_style * index_a) + 7].x == 0); // z 7
+        CHECK(style_buffer[(z_per_style * index_a) + 8].x == 0); // z 8
+        CHECK(style_buffer[(z_per_style * index_a) + 9].x == 0); // z 9
+        CHECK(style_buffer[(z_per_style * index_a) + 10].x == 0); // z 10
+        CHECK(style_buffer[(z_per_style * index_a) + 11].x == 0); // z 11
+        CHECK(style_buffer[(z_per_style * index_a) + 12].x == 0); // z 12
+        CHECK(style_buffer[(z_per_style * index_a) + 13].x == 0); // z 13
+        CHECK(style_buffer[(z_per_style * index_a) + 14].x == 0xaaaaaaff); // z 14
+        CHECK(style_buffer[(z_per_style * index_a) + 15].x == 0xaaaaaaff); // z 15
+        CHECK(style_buffer[(z_per_style * index_a) + 16].x == 0xaaaaaaff); // z 16
+        CHECK(style_buffer[(z_per_style * index_a) + 17].x == 0xaaaaaaff); // z 17
+        CHECK(style_buffer[(z_per_style * index_a) + 18].x == 0xaaaaaaff); // z 18
 
-        CHECK(style_buffer[(z_per_style * 2) + 0].x == 0); // z 0
-        CHECK(style_buffer[(z_per_style * 2) + 1].x == 0); // z 1
-        CHECK(style_buffer[(z_per_style * 2) + 2].x == 0); // z 2
-        CHECK(style_buffer[(z_per_style * 2) + 3].x == 0); // z 3
-        CHECK(style_buffer[(z_per_style * 2) + 4].x == 0); // z 4
-        CHECK(style_buffer[(z_per_style * 2) + 5].x == 0); // z 5
-        CHECK(style_buffer[(z_per_style * 2) + 6].x == 0); // z 6
-        CHECK(style_buffer[(z_per_style * 2) + 7].x == 0); // z 7
-        CHECK(style_buffer[(z_per_style * 2) + 8].x == 0); // z 8
-        CHECK(style_buffer[(z_per_style * 2) + 9].x == 0); // z 9
-        CHECK(style_buffer[(z_per_style * 2) + 10].x == 0); // z 10
-        CHECK(style_buffer[(z_per_style * 2) + 11].x == 0); // z 11
-        CHECK(style_buffer[(z_per_style * 2) + 12].x == 0); // z 12
-        CHECK(style_buffer[(z_per_style * 2) + 13].x == 0xccccccff); // z 13
-        CHECK(style_buffer[(z_per_style * 2) + 14].x == 0xccccccff); // z 14
-        CHECK(style_buffer[(z_per_style * 2) + 15].x == 0xccccccff); // z 15
-        CHECK(style_buffer[(z_per_style * 2) + 16].x == 0xccccccff); // z 16
-        CHECK(style_buffer[(z_per_style * 2) + 17].x == 0xccccccff); // z 17
-        CHECK(style_buffer[(z_per_style * 2) + 18].x == 0xccccccff); // z 18
+        CHECK(style_buffer[(z_per_style * index_b) + 0].x == 0); // z 0
+        CHECK(style_buffer[(z_per_style * index_b) + 1].x == 0); // z 1
+        CHECK(style_buffer[(z_per_style * index_b) + 2].x == 0); // z 2
+        CHECK(style_buffer[(z_per_style * index_b) + 3].x == 0); // z 3
+        CHECK(style_buffer[(z_per_style * index_b) + 4].x == 0); // z 4
+        CHECK(style_buffer[(z_per_style * index_b) + 5].x == 0); // z 5
+        CHECK(style_buffer[(z_per_style * index_b) + 6].x == 0); // z 6
+        CHECK(style_buffer[(z_per_style * index_b) + 7].x == 0); // z 7
+        CHECK(style_buffer[(z_per_style * index_b) + 8].x == 0); // z 8
+        CHECK(style_buffer[(z_per_style * index_b) + 9].x == 0); // z 9
+        CHECK(style_buffer[(z_per_style * index_b) + 10].x == 0); // z 10
+        CHECK(style_buffer[(z_per_style * index_b) + 11].x == 0); // z 11
+        CHECK(style_buffer[(z_per_style * index_b) + 12].x == 0); // z 12
+        CHECK(style_buffer[(z_per_style * index_b) + 13].x == 0xbbbbbbff); // z 13
+        CHECK(style_buffer[(z_per_style * index_b) + 14].x == 0xbbbbbbff); // z 14
+        CHECK(style_buffer[(z_per_style * index_b) + 15].x == 0xbbbbbbff); // z 15
+        CHECK(style_buffer[(z_per_style * index_b) + 16].x == 0); // z 16
+        CHECK(style_buffer[(z_per_style * index_b) + 17].x == 0); // z 17
+        CHECK(style_buffer[(z_per_style * index_b) + 18].x == 0); // z 18
+
+        CHECK(style_buffer[(z_per_style * index_c) + 0].x == 0); // z 0
+        CHECK(style_buffer[(z_per_style * index_c) + 1].x == 0); // z 1
+        CHECK(style_buffer[(z_per_style * index_c) + 2].x == 0); // z 2
+        CHECK(style_buffer[(z_per_style * index_c) + 3].x == 0); // z 3
+        CHECK(style_buffer[(z_per_style * index_c) + 4].x == 0); // z 4
+        CHECK(style_buffer[(z_per_style * index_c) + 5].x == 0); // z 5
+        CHECK(style_buffer[(z_per_style * index_c) + 6].x == 0); // z 6
+        CHECK(style_buffer[(z_per_style * index_c) + 7].x == 0); // z 7
+        CHECK(style_buffer[(z_per_style * index_c) + 8].x == 0); // z 8
+        CHECK(style_buffer[(z_per_style * index_c) + 9].x == 0); // z 9
+        CHECK(style_buffer[(z_per_style * index_c) + 10].x == 0); // z 10
+        CHECK(style_buffer[(z_per_style * index_c) + 11].x == 0); // z 11
+        CHECK(style_buffer[(z_per_style * index_c) + 12].x == 0); // z 12
+        CHECK(style_buffer[(z_per_style * index_c) + 13].x == 0xccccccff); // z 13
+        CHECK(style_buffer[(z_per_style * index_c) + 14].x == 0xccccccff); // z 14
+        CHECK(style_buffer[(z_per_style * index_c) + 15].x == 0xccccccff); // z 15
+        CHECK(style_buffer[(z_per_style * index_c) + 16].x == 0xccccccff); // z 16
+        CHECK(style_buffer[(z_per_style * index_c) + 17].x == 0xccccccff); // z 17
+        CHECK(style_buffer[(z_per_style * index_c) + 18].x == 0xccccccff); // z 18
 
         CHECK(style_buffer[(z_per_style * 3) + 0].x == -1u); // no data
         CHECK(style_buffer[(z_per_style * 3) + 1].x == -1u); // no data

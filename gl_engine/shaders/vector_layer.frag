@@ -121,7 +121,7 @@ void debug_calculate_cell_size(out lowp vec3 debug_cell_size, mediump uint offse
         debug_cell_size = vec3(1,0,1); // purple -> should never happen -> unrecognized index
 }
 
-lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallback_uv, DrawMeta meta, float float_zoom)
+lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallback_uv, DrawMeta meta, highp float float_zoom)
 {
     // decrease tiles to zoom level given by c++ code (tile is guaranteed fetched)
     decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, texelFetch(instanced_texture_zoom_sampler_vector_fallback, ivec2(instance_id, 0), 0).x);

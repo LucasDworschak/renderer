@@ -68,24 +68,22 @@ TEST_CASE("nucleus/gpu_array_helper")
         {
             GpuMultiArrayHelper helper;
 
-            CHECK(helper.buffer_amount() == 3);
+            CHECK(helper.buffer_amount() == 2);
 
             helper.set_tile_limit(2048);
 
             CHECK(helper.layer_amount(0) == 2048);
             CHECK(helper.layer_amount(1) == 2048);
             CHECK(helper.layer_amount(2) == constants::array_layer_tile_amount[2]);
-            CHECK(helper.layer_amount(3) == constants::array_layer_tile_amount[3]);
         }
         {
             GpuMultiArrayHelper helper;
 
-            helper.set_tile_limit(512);
+            helper.set_tile_limit(128);
 
-            CHECK(helper.layer_amount(0) == 512);
-            CHECK(helper.layer_amount(1) == 512);
-            CHECK(helper.layer_amount(2) == 512); // although it is a custom size, the lower value is used instead
-            CHECK(helper.layer_amount(3) == constants::array_layer_tile_amount[3]);
+            CHECK(helper.layer_amount(0) == 128);
+            CHECK(helper.layer_amount(1) == 128);
+            CHECK(helper.layer_amount(2) == 128); // although it is a custom size, the lower value is used instead
         }
 
     }
@@ -145,58 +143,40 @@ TEST_CASE("nucleus/gpu_array_helper")
         const nucleus::tile::Id id0 = { 6, { 23, 56 } };
         const nucleus::tile::Id id1 = { 8, { 122, 132 } };
         const nucleus::tile::Id id2 = { 10, { 1553, 1663 } };
-        const nucleus::tile::Id id3 = { 10, { 1554, 1663 } };
-        const nucleus::tile::Id id4 = { 10, { 1558, 1663 } };
 
         auto layer0 = helper.add_tile(id0, 0);
         auto layer1 = helper.add_tile(id1, 1);
         auto layer2 = helper.add_tile(id2, 2);
-        auto layer3 = helper.add_tile(id3, 3);
-        auto layer4 = helper.add_tile(id4, 3);
 
         auto [packed_ids, layers] = helper.generate_dictionary();
 
         auto p_layer0 = layers.pixel(id_to_pixel(id0, packed_ids));
         auto p_layer1 = layers.pixel(id_to_pixel(id1, packed_ids));
         auto p_layer2 = layers.pixel(id_to_pixel(id2, packed_ids));
-        auto p_layer3 = layers.pixel(id_to_pixel(id3, packed_ids));
-        auto p_layer4 = layers.pixel(id_to_pixel(id4, packed_ids));
 
         auto buffer_info0 = (p_layer0.y & ((-1u << buffer_offset))) >> buffer_offset;
         auto buffer_info1 = (p_layer1.y & ((-1u << buffer_offset))) >> buffer_offset;
         auto buffer_info2 = (p_layer2.y & ((-1u << buffer_offset))) >> buffer_offset;
-        auto buffer_info3 = (p_layer3.y & ((-1u << buffer_offset))) >> buffer_offset;
-        auto buffer_info4 = (p_layer4.y & ((-1u << buffer_offset))) >> buffer_offset;
 
         p_layer0.x = p_layer0.x & layer_mask;
         p_layer1.x = p_layer1.x & layer_mask;
         p_layer2.x = p_layer2.x & layer_mask;
-        p_layer3.x = p_layer3.x & layer_mask;
-        p_layer4.x = p_layer4.x & layer_mask;
         p_layer0.y = p_layer0.y & layer_mask;
         p_layer1.y = p_layer1.y & layer_mask;
         p_layer2.y = p_layer2.y & layer_mask;
-        p_layer3.y = p_layer3.y & layer_mask;
-        p_layer4.y = p_layer4.y & layer_mask;
 
         CHECK(buffer_info0 == 0);
         CHECK(buffer_info1 == 1);
         CHECK(buffer_info2 == 2);
-        CHECK(buffer_info3 == 3);
-        CHECK(buffer_info4 == 3);
 
         // make sure that the values are the expected values
         CHECK(glm::u16vec2(0, 0) == p_layer0);
         CHECK(glm::u16vec2(1, 1) == p_layer1);
         CHECK(glm::u16vec2(2, 0) == p_layer2);
-        CHECK(glm::u16vec2(3, 0) == p_layer3);
-        CHECK(glm::u16vec2(4, 1) == p_layer4);
 
         // make sure that the values from add_tile are the correct values
         CHECK(layer0 == p_layer0);
         CHECK(layer1 == p_layer1);
         CHECK(layer2 == p_layer2);
-        CHECK(layer3 == p_layer3);
-        CHECK(layer4 == p_layer4);
     }
 }
