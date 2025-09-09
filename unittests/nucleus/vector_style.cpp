@@ -201,8 +201,9 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[18].x == 0); // z 18
 
         // reuse style if no blending
+
         CHECK(style_buffer[19].x == 0); // z0 // make sure that we are in the right style instruction here (not using other style)
-        CHECK(style_buffer[19].z == 8 * line_multipliers); // z 0
+        CHECK(Style::get_style_width(style_buffer[19]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 0
         CHECK(style_buffer[20].x == 0); // z1
         CHECK(style_buffer[21].x == 0); // z2
         CHECK(style_buffer[22].x == 0); // z3
@@ -214,19 +215,19 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[28].x == 0); // z9
         CHECK(style_buffer[29].x == 0); // z10
         CHECK(style_buffer[30].x == 0xaaaaaaff); // z 11 // color
-        CHECK(style_buffer[30].z == 8 * line_multipliers); // z 11
-        CHECK(style_buffer[31].z == 8 * line_multipliers); // z 12
-        CHECK(style_buffer[32].z == 8 * line_multipliers); // z 13
-        CHECK(style_buffer[33].z == 9 * line_multipliers); // z 14
+        CHECK(Style::get_style_width(style_buffer[30]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 11
+        CHECK(Style::get_style_width(style_buffer[31]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 12
+        CHECK(Style::get_style_width(style_buffer[32]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 13
+        CHECK(Style::get_style_width(style_buffer[33]) == (9 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 14
         CHECK(style_buffer[34].x == 0xaaaaaaff); // z 15 color
-        CHECK(style_buffer[34].z == 10 * line_multipliers); // z 15
+        CHECK(Style::get_style_width(style_buffer[34]) == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 15
         CHECK(style_buffer[35].x == 0); // z 16
-        CHECK(style_buffer[35].z == 10 * line_multipliers); // z 16
+        CHECK(Style::get_style_width(style_buffer[35]) == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 16
         CHECK(style_buffer[36].x == 0); // z 17
         CHECK(style_buffer[37].x == 0); // z 18
 
         CHECK(style_buffer[38].x == -1u); // no data
-        CHECK(style_buffer[39].z == -1u); // no data
+        CHECK(style_buffer[39].y == -1u); // no data
     }
 
     SECTION("Simple style parsing - merge similar instructions")

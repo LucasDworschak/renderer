@@ -29,10 +29,14 @@
 namespace nucleus::vector_layer {
 
 struct LayerStyle {
+
     uint32_t fill_color; // fill-color or line-color
-    uint32_t outline_color; // fill-outline-color or
-    uint16_t outline_width; // line-width
-    uint16_t outline_dash; // line-dasharray
+    uint16_t width; // line-width -> only 15 bits can be used for storage
+    uint8_t dash; // line-dasharray (dash amount)
+    uint8_t gap; // line-dasharray (gap amount)
+    bool round_line_cap; // "layout"->"line-cap"
+
+    glm::u32vec2 buffer_alignment() const { return { fill_color, width << 17 | dash << 9 | gap << 1 | uint(round_line_cap) }; }
 
     bool operator==(const LayerStyle& other) const = default;
 };
@@ -43,9 +47,10 @@ struct StyleHasher {
         size_t seed = 0;
 
         radix::hasher::hash_combine<uint32_t>(seed, style.fill_color);
-        radix::hasher::hash_combine<uint32_t>(seed, style.outline_color);
-        radix::hasher::hash_combine<float>(seed, style.outline_width);
-        radix::hasher::hash_combine<uint32_t>(seed, style.outline_dash);
+        radix::hasher::hash_combine<uint16_t>(seed, style.width);
+        radix::hasher::hash_combine<uint8_t>(seed, style.dash);
+        radix::hasher::hash_combine<uint8_t>(seed, style.gap);
+        radix::hasher::hash_combine<bool>(seed, style.round_line_cap);
 
         return seed;
     }
@@ -108,6 +113,7 @@ public:
     uint16_t parse_line_width(const QJsonValue& value);
 
     static uint32_t get_style_index(const uint32_t style_index, const uint zoom_level);
+    static float get_style_width(const glm::u32vec2& style);
 
     static uint32_t premultiply_alpha(uint32_t color);
 
@@ -117,8 +123,8 @@ public:
         const mapbox::vector_tile::feature& feature,
         std::array<int, constants::max_style_expression_keys>* temp_values);
 
-    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles() const;
-    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> visible_styles() const;
+    std::shared_ptr<const nucleus::Raster<glm::u32vec2>> styles() const;
+    std::shared_ptr<const nucleus::Raster<glm::u32vec2>> visible_styles() const;
 
     bool update_visible_styles();
 
@@ -126,7 +132,7 @@ public slots:
     void load();
 
 signals:
-    void load_finished(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles);
+    void load_finished(std::shared_ptr<const nucleus::Raster<glm::u32vec2>> styles);
 
 private:
     // sets alpha to 0 on a 32 bit color
@@ -140,9 +146,9 @@ private:
     uint8_t linear2rgb(float linear);
 
     // contains the style info that was parsed from the stylesheet
-    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> m_styles;
+    std::shared_ptr<const nucleus::Raster<glm::u32vec2>> m_styles;
     // only contains that were encountered by the call of the indices function
-    std::shared_ptr<nucleus::Raster<glm::u32vec4>> m_visible_styles;
+    std::shared_ptr<nucleus::Raster<glm::u32vec2>> m_visible_styles;
 
     std::unordered_map<std::pair<std::string, int>, StyleFilter, StyleHasher> m_layer_to_style;
 

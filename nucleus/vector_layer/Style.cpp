@@ -71,7 +71,7 @@ void Style::load()
         return;
     }
 
-    std::vector<glm::u32vec4> style_values;
+    std::vector<glm::u32vec2> style_values;
 
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonArray layers = style_expander::expand(doc.object().value("layers").toArray());
@@ -106,19 +106,18 @@ void Style::load()
         // qDebug() << obj.toObject().value("id").toString();
 
         auto paint_object = obj.toObject().value("paint").toObject();
+        auto layout_object = obj.toObject().value("layout").toObject();
         auto filter_data = obj.toObject().value("filter").toArray();
         const bool is_line = obj.toObject().value("type").toString() == "line";
         const auto layer_name = std::make_pair(obj.toObject().value("source-layer").toString().toStdString(), is_line ? 0 : 1);
 
         std::vector<std::pair<uint8_t, uint32_t>> fill_colors;
-        std::vector<std::pair<uint8_t, uint32_t>> outline_colors;
         std::vector<std::pair<uint8_t, uint16_t>> widths;
         std::vector<std::pair<uint8_t, std::pair<uint8_t, uint8_t>>> dashes;
         std::vector<std::pair<uint8_t, uint8_t>> opacities;
 
         // "stop" expressions may have a "base" value. this base value is used to manipulate the interpolation between values
         float fill_color_interpolation_base = 1;
-        float outline_color_interpolation_base = 1;
         float width_interpolation_base = 1;
         float dash_interpolation_base = 1;
         float opacity_interpolation_base = 1;
@@ -147,6 +146,10 @@ void Style::load()
 
         bool invalid = false;
 
+        // default line-cap is butt (https://maplibre.org/maplibre-style-spec/layers/#line-cap)
+        // additionally we also currently do not support square line-caps (only one style uses this, and this style probably isn't worth the shader rewrite)
+        bool round_line_cap = layout_object.contains("line-cap") && layout_object.value("line-cap") == "round";
+
         for (const QString& key : paint_object.keys()) {
 
             // fill-antialias ?
@@ -156,8 +159,6 @@ void Style::load()
                 parse_colors(paint_object.value(key), fill_colors, fill_color_interpolation_base);
             } else if (key == "fill-opacity" || key == "line-opacity") {
                 parse_opacities(paint_object.value(key), opacities, opacity_interpolation_base);
-            } else if (key == "fill-outline-color") { // TODO visualize (only used for buildings)
-                parse_colors(paint_object.value(key), outline_colors, outline_color_interpolation_base);
             } else if (key == "line-width") { //  "line-gap-width"
                 parse_line_widths(paint_object.value(key), widths, width_interpolation_base);
             } else if (key == "line-dasharray") {
@@ -169,8 +170,9 @@ void Style::load()
             } else if (key == "fill-pattern") {
                 // currently not supported -> causes errors when parsed
                 invalid = true;
-            } else if (key == "icon-color" || key == "circle-color" || key == "circle-radius" || key == "circle-stroke-color" || key == "circle-stroke-width" || key == "text-color"
-                || key == "text-halo-color" || key == "text-halo-width" || key == "fill-antialias" || key == "line-gap-width") {
+            } else if (key == "fill-outline-color" || key == "icon-color" || key == "circle-color" || key == "circle-radius" || key == "circle-stroke-color"
+                || key == "circle-stroke-width" || key == "text-color" || key == "text-halo-color" || key == "text-halo-width" || key == "fill-antialias"
+                || key == "line-gap-width") {
                 // not used
             } else {
                 qDebug() << "new unhandled style key detected: " << key.toStdString();
@@ -191,8 +193,6 @@ void Style::load()
         // fill arrays with default (max zoom, 0 value) if they are empty
         if (fill_colors.empty())
             fill_colors.push_back({ 255, 0 });
-        if (outline_colors.empty())
-            outline_colors.push_back({ 255, 0 });
         if (widths.empty())
             widths.push_back({ 255, 0 });
         if (dashes.empty())
@@ -202,19 +202,16 @@ void Style::load()
 
         // use the first value of each array to determine the prev/current values
         std::pair<uint8_t, uint32_t> fill_colors_previous_value = fill_colors.front();
-        std::pair<uint8_t, uint32_t> outline_colors_previous_value = outline_colors.front();
         std::pair<uint8_t, uint16_t> widths_previous_value = widths.front();
         std::pair<uint8_t, std::pair<uint8_t, uint8_t>> dashes_previous_value = dashes.front();
         std::pair<uint8_t, uint8_t> opacities_previous_value = opacities.front();
 
         std::pair<uint8_t, uint32_t> fill_colors_current_value = fill_colors.front();
-        std::pair<uint8_t, uint32_t> outline_colors_current_value = outline_colors.front();
         std::pair<uint8_t, uint16_t> widths_current_value = widths.front();
         std::pair<uint8_t, std::pair<uint8_t, uint8_t>> dashes_current_value = dashes.front();
         std::pair<uint8_t, uint8_t> opacities_current_value = opacities.front();
 
         uint8_t fill_colors_index = 0;
-        uint8_t outline_colors_index = 0;
         uint8_t widths_index = 0;
         uint8_t dashes_index = 0;
         uint8_t opacities_index = 0;
@@ -227,10 +224,6 @@ void Style::load()
             while (fill_colors_current_value.first < zoom) {
                 fill_colors_previous_value = fill_colors_current_value;
                 fill_colors_current_value = fill_colors[++fill_colors_index];
-            }
-            while (outline_colors_current_value.first < zoom) {
-                outline_colors_previous_value = outline_colors_current_value;
-                outline_colors_current_value = outline_colors[++outline_colors_index];
             }
             while (widths_current_value.first < zoom) {
                 widths_previous_value = widths_current_value;
@@ -247,15 +240,12 @@ void Style::load()
 
             // interpolate between previous and current values
             auto interpolation_factor_fill_color = 1.0;
-            auto interpolation_factor_outline_color = 1.0;
             auto interpolation_factor_width = 1.0;
             auto interpolation_factor_dash = 1.0;
             auto interpolation_factor_opacity = 1.0;
 
             if (fill_colors_previous_value.second != fill_colors_current_value.second)
                 interpolation_factor_fill_color = interpolation_factor(zoom, fill_color_interpolation_base, fill_colors_previous_value.first, fill_colors_current_value.first);
-            if (outline_colors_previous_value.second != outline_colors_current_value.second)
-                interpolation_factor_outline_color = interpolation_factor(zoom, outline_color_interpolation_base, outline_colors_previous_value.first, outline_colors_current_value.first);
             if (widths_previous_value.second != widths_current_value.second)
                 interpolation_factor_width = interpolation_factor(zoom, width_interpolation_base, widths_previous_value.first, widths_current_value.first);
             if (dashes_previous_value.second != dashes_current_value.second)
@@ -264,7 +254,6 @@ void Style::load()
                 interpolation_factor_opacity = interpolation_factor(zoom, opacity_interpolation_base, opacities_previous_value.first, opacities_current_value.first);
 
             uint32_t fill_color = interpolate_color(interpolation_factor_fill_color, fill_colors_previous_value.second, fill_colors_current_value.second);
-            uint32_t outline_color = interpolate_color(interpolation_factor_outline_color, outline_colors_previous_value.second, outline_colors_current_value.second);
             uint16_t width = widths_previous_value.second * (1.0 - interpolation_factor_width) + widths_current_value.second * interpolation_factor_width;
             std::pair<uint8_t, uint8_t> dash = { dashes_previous_value.second.first * (1.0 - interpolation_factor_dash) + dashes_current_value.second.first * interpolation_factor_dash,
                 dashes_previous_value.second.second * (1.0 - interpolation_factor_dash) + dashes_current_value.second.second * interpolation_factor_dash };
@@ -286,23 +275,16 @@ void Style::load()
 
                 fill_color &= remove_alpha_mask; // bit mask that zeros out the opacity bits
                 fill_color |= opacity;
-
-                outline_color &= remove_alpha_mask; // bit mask that zeros out the opacity bits
-                outline_color |= opacity;
             }
 
             // premultiply alpha
             // done outside of above if because opacity might be declared in fill_color only
             fill_color = premultiply_alpha(fill_color);
-            outline_color = premultiply_alpha(outline_color);
-
-            // dashes consist of gap / dash -> we combine them into one single value that is split again on the shader
-            const uint16_t merged_dash = (dash.first << 8) | dash.second;
 
             if (small_line) {
                 // this is a small line and we are not sure if we want to save this style for blending
                 // we only want to store the style if the next style is visible
-                previous_style = { fill_color, outline_color, width, merged_dash };
+                previous_style = { fill_color, width, dash.first, dash.second, round_line_cap };
                 previous_small_line = true;
             } else {
                 if (previous_small_line) {
@@ -311,7 +293,7 @@ void Style::load()
                     previous_small_line = false;
                 }
                 // store the current style
-                current_style_map[zoom] = { fill_color, outline_color, width, merged_dash };
+                current_style_map[zoom] = { fill_color, width, dash.first, dash.second, round_line_cap };
             }
 
             //  DEBUG -> style_index to layername
@@ -348,13 +330,13 @@ void Style::load()
             for (uint i = 0; i < first_zoom; i++) {
                 // duplicate first style with alpha 0
                 // since we premultiply alpha -> alpha: 0 = color: 0,0,0
-                style_values.push_back({ 0, 0, first_style.outline_width, first_style.outline_dash });
+                style_values.push_back({ 0, first_style.buffer_alignment().y });
             }
 
             for (const auto& [zoom, style] : style_map) {
 
                 // add a new style every loop iteration
-                style_values.push_back({ style.fill_color, style.outline_color, style.outline_width, style.outline_dash });
+                style_values.push_back({ style.buffer_alignment() });
 
                 // add the styles to the data structure where we later can find the relevant style_index
                 m_layer_to_style[key.first].add_filter({ { style_index, layer_index }, key.second }, zoom);
@@ -369,7 +351,7 @@ void Style::load()
             for (uint i = last_zoom + 1; i < constants::style_zoom_range.y + 1; i++) {
                 // duplicate last style with alpha 0 (if we are not yet at maxzoom)
                 // since we premultiply alpha -> alpha: 0 = color: 0,0,0
-                style_values.push_back({ 0, 0, last_style.z, last_style.w });
+                style_values.push_back({ 0, last_style.y });
                 if (i == last_zoom + 1)
                     m_layer_to_style[key.first].add_filter({ { style_index, layer_index }, key.second }, i);
             }
@@ -381,24 +363,23 @@ void Style::load()
         }
     }
 
-    auto visible_style_values = std::vector<glm::u32vec4>(style_values);
+    auto visible_style_values = std::vector<glm::u32vec2>(style_values);
     for (auto& v : visible_style_values) {
         // set color alpha to 0 for fadeout
         // since we premultiply alpha -> alpha: 0 = color: 0,0,0
         v.x = 0;
-        v.y = 0;
     }
 
     // qDebug() << "style_values: " << style_values.size();
 
     // make sure that the style values are within the buffer size; resize them to this size and create the raster images
     assert(style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
-    visible_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec4(-1u));
-    style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec4(-1u));
+    visible_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec2(-1u));
+    style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec2(-1u));
 
     m_visible_styles
-        = std::make_shared<nucleus::Raster<glm::u32vec4>>(nucleus::Raster<glm::u32vec4>(constants::style_buffer_size, std::move(visible_style_values)));
-    m_styles = std::make_shared<const nucleus::Raster<glm::u32vec4>>(nucleus::Raster<glm::u32vec4>(constants::style_buffer_size, std::move(style_values)));
+        = std::make_shared<nucleus::Raster<glm::u32vec2>>(nucleus::Raster<glm::u32vec2>(constants::style_buffer_size, std::move(visible_style_values)));
+    m_styles = std::make_shared<const nucleus::Raster<glm::u32vec2>>(nucleus::Raster<glm::u32vec2>(constants::style_buffer_size, std::move(style_values)));
 
     // qDebug() << "vectorlayer style loaded";
 }
@@ -429,8 +410,8 @@ std::vector<StyleLayerIndex> Style::indices(std::string layer_name,
     return indices;
 }
 
-std::shared_ptr<const nucleus::Raster<glm::u32vec4>> Style::styles() const { return m_styles; }
-std::shared_ptr<const nucleus::Raster<glm::u32vec4>> Style::visible_styles() const { return m_visible_styles; }
+std::shared_ptr<const nucleus::Raster<glm::u32vec2>> Style::styles() const { return m_styles; }
+std::shared_ptr<const nucleus::Raster<glm::u32vec2>> Style::visible_styles() const { return m_visible_styles; }
 
 bool Style::update_visible_styles()
 {
@@ -499,6 +480,8 @@ uint32_t Style::interpolate_color(float t, uint32_t color1, uint32_t color2)
 }
 
 uint32_t Style::get_style_index(const uint32_t style_index, const uint zoom_level) { return style_index * (constants::style_zoom_range.y + 1) + zoom_level; }
+
+float Style::get_style_width(const glm::u32vec2& style) { return float(style.y >> 17) / float(constants::style_precision); }
 
 // uses https://github.com/maplibre/maplibre-style-spec/blob/main/src/expression/definitions/interpolate.ts -> exponentialInterpolation()
 float Style::interpolation_factor(uint8_t zoom, float base, uint8_t zoom1, uint8_t zoom2)

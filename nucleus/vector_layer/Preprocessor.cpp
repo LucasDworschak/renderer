@@ -70,7 +70,7 @@ Preprocessor::Preprocessor(Style&& style)
     generate_preprocess_grid();
 }
 
-const std::shared_ptr<const nucleus::Raster<glm::u32vec4>> Preprocessor::style() { return m_style.visible_styles(); }
+const std::shared_ptr<const nucleus::Raster<glm::u32vec2>> Preprocessor::style() { return m_style.visible_styles(); }
 bool Preprocessor::update_visible_styles() { return m_style.update_visible_styles(); }
 
 size_t Preprocessor::processed_amount() { return m_processed_amount; }
@@ -114,7 +114,7 @@ GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vecto
 }
 
 std::vector<StyleLayerIndex> Preprocessor::simplify_styles(
-    std::vector<StyleLayerIndex>* style_and_layer_indices, const uint zoom_level, const std::vector<glm::u32vec4>& style_buffer)
+    std::vector<StyleLayerIndex>* style_and_layer_indices, const uint zoom_level, const std::vector<glm::u32vec2>& style_buffer)
 {
     // we get multiple styles that may have full opacity and the same width
     // creating render calls for both does not make sense -> we only want to draw the top layer
@@ -131,9 +131,9 @@ std::vector<StyleLayerIndex> Preprocessor::simplify_styles(
     for (const auto& indices : *style_and_layer_indices) {
         const auto style_data_lower = style_buffer[Style::get_style_index(indices.style_index, zoom_level) - 1];
         const auto style_data_higher = style_buffer[Style::get_style_index(indices.style_index, zoom_level)];
-        const float lower_width = float(style_data_lower.z) / float(constants::style_precision);
+        const float lower_width = Style::get_style_width(style_data_lower);
         const float lower_opacity = style_data_lower.x & 255;
-        const float higher_width = float(style_data_higher.z) / float(constants::style_precision);
+        const float higher_width = Style::get_style_width(style_data_higher);
         const float higher_opacity = style_data_higher.x & 255;
 
         // by mixing the lower and higher style -> we get a value that better represents a real world example
@@ -231,7 +231,18 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
     return data;
 }
 
-glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index) { return pack_triangle_data({ a, b, b, style_index, false }); }
+glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index, bool line_cap0, bool line_cap1)
+{
+
+    glm::u32vec2 data = pack_triangle_data({ a, b, b, style_index, false });
+
+    if (line_cap0)
+        data.y |= line_cap0_mask;
+    if (line_cap1)
+        data.y |= line_cap1_mask;
+
+    return data;
+}
 
 /*
  * in order to minimize the divergence between lines and polygons, we pack the data as follows:
@@ -247,10 +258,10 @@ glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16
  * line packing:
  * data:
  * x0_0 | y0_0 | x1_0 | y1_0
- * x0_1 | y0_1 | x1_1 | y1_1 | free | is_polygon | style_index
+ * x0_1 | y0_1 | x1_1 | y1_1 | free | line_cap0 | line_cap1 | is_polygon | style_index
  * bits:
  * 8 | 8 | 8 | 8
- * 4 | 4 | 4 | 4 | 3 | 1 | 12
+ * 4 | 4 | 4 | 4 | 1 | 1 | 1 | 1 | 12
  * NOTE: a line stores the data in two separate locations x0_0 x0_1
  *       coordinate "_0" are the 8 least significant bits, and "_1" are the more significant bits of the coordinate
  */
@@ -570,8 +581,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                 // use the line width of the previous style
 
                 line_width
-                    = float(m_style_buffer[Style::get_style_index(data[i].style_layer.style_index, zoom_level) - 1].z) / float(constants::style_precision)
-                    + constants::aa_lines;
+                    = Style::get_style_width(m_style_buffer[Style::get_style_index(data[i].style_layer.style_index, zoom_level) - 1]) + constants::aa_lines;
 
                 std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
 
@@ -582,11 +592,6 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                     }
                 };
 
-                // TODO: according to Task #151 -> we doubled the line width that goes into the acceleration structure because we are looking at tiles
-                // that are bigger
-                // Nevertheless, we artificially worsened the performance by introducing more cells where a line could be (although it is only there on
-                // specific zoom levels)
-                // This performance issue will be solved with Task #198 (mipmaps)
                 nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 1.0 * constants::scale_lines, scale);
 
                 const auto& style_layer = data[i].style_layer;
@@ -600,39 +605,18 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                         continue;
                     }
 
-                    auto shapes = ClipperPaths {};
                     for (const auto& index : indices) {
-
-                        // assert(data[i].vertices[0].size() > size_t(index + 1));
-                        shapes.emplace_back(ClipperPath { { long(vertices[index.x][index.y].x), long(vertices[index.x][index.y].y) },
-                            { long(vertices[index.x][index.y + 1].x), long(vertices[index.x][index.y + 1].y) } });
-                    }
-
-                    // TODO this would set cells to is_done if a line fully covers it. but:
-                    //  1) this does not fully work for some zoom levels -> investigate why we have some white cells in certain circumstances
-                    //      -> currently I think it has something to do with the * 2.0 multiplier when selecting cells, and/or the blending between 2 zooms
-                    //  2) this does not really work for the most troublesome zoom levels (like 13/14) since the lines are too small to be much of concern
-                    // there
-                    //      -> maybe more useful when we reduce the grid cell size and or for optimizing close cells
-
-                    // size_t full_cover_line_index = line_fully_covers(m_clipper_result, line_width, cell.rect);
-                    // if (full_cover_line_index != -1u) {
-                    //     cell.is_done = true;
-                    // }
-
-                    // TODO move translate before clipping and only clip with one single cell
-                    // anchor clipped paths to cell origin
-                    Clipper2Lib::TranslatePathsInPlace(&shapes,
-                        -cell.rect_lines.left - cell_width_lines * constants::aa_border,
-                        -cell.rect_lines.top - cell_width_lines * constants::aa_border);
-
-                    for (const auto& line : shapes) {
-
-                        const auto packed_data
-                            = nucleus::vector_layer::Preprocessor::pack_line_data({ line[0].x, line[0].y }, { line[1].x, line[1].y }, style_layer.style_index);
+                        const auto packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(
+                            { long(vertices[index.x][index.y].x) - cell.rect_lines.left - cell_width_lines * constants::aa_border,
+                                long(vertices[index.x][index.y].y) - cell.rect_lines.top - cell_width_lines * constants::aa_border },
+                            { long(vertices[index.x][index.y + 1].x) - cell.rect_lines.left - cell_width_lines * constants::aa_border,
+                                long(vertices[index.x][index.y + 1].y) - cell.rect_lines.top - cell_width_lines * constants::aa_border },
+                            style_layer.style_index,
+                            index.y == 0,
+                            index.y == vertices[index.x].size() - 2); // -2 because the index we get does not use the last element of a line segment
                         cell.cell_data.push_back(packed_data);
+                        m_processed_amount++;
                     }
-                    m_processed_amount += shapes.size();
                 }
             }
         }

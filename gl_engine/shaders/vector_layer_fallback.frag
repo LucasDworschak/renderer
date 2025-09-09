@@ -178,7 +178,7 @@ void main() {
         style.color = vec4(0.0);
         style.line_width = 0.0;
         style.dash_info = vec2(1.0, 0.0);
-        style.line_caps = 0;
+        style.round_line_caps = false;
 
         highp uint intersections = 0u;
 

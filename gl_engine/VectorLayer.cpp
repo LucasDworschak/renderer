@@ -120,7 +120,7 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
         m_geometry_buffer_texture[i]->allocate_array(constants::data_size[i], constants::data_size[i], layer_amount);
     }
 
-    m_styles_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RGBA32UI);
+    m_styles_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RG32UI);
     m_styles_texture->setParams(gl_engine::Texture::Filter::Nearest, gl_engine::Texture::Filter::Nearest);
 
     m_fallback_texture_array = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::RGBA8);
@@ -451,7 +451,7 @@ void VectorLayer::set_tile_limit(unsigned int new_limit)
     m_fallback_on_gpu.resize(new_limit, {});
 }
 
-void VectorLayer::update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles)
+void VectorLayer::update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec2>> styles)
 {
     // at this point we cannot be sure that the texture has been initialized -> save the pointer for now and upload after init
     m_styles = styles;

@@ -68,6 +68,9 @@ constexpr int geometry_offset_polygons = (max_cell_width_polygons - cell_width_p
 constexpr int max_cell_width_line = (1 << (constants::coordinate_bits_lines));
 constexpr int geometry_offset_line = (max_cell_width_line - cell_width_lines) / 2;
 
+constexpr uint line_cap0_mask = 1u << (constants::style_bits + 1);
+constexpr uint line_cap1_mask = 1u << (constants::style_bits + 2);
+
 //
 // end constants for data packing/unpacking
 /////////////////////////////////////////////
@@ -154,7 +157,7 @@ public:
     GpuVectorLayerTile create_gpu_tile();
 
     static glm::u32vec2 pack_triangle_data(VectorLayerData data);
-    static glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_layer);
+    static glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_layer, bool line_cap0, bool line_cap1);
     static VectorLayerData unpack_data(glm::uvec2 packed_data);
 
     static bool fully_covers(const ClipperPaths& solution, const ClipperRect& rect);
@@ -163,9 +166,9 @@ public:
     static GpuVectorLayerTile create_default_gpu_tile();
 
     static std::vector<StyleLayerIndex> simplify_styles(
-        std::vector<StyleLayerIndex>* styles, const uint zoom_level, const std::vector<glm::u32vec4>& style_buffer);
+        std::vector<StyleLayerIndex>* styles, const uint zoom_level, const std::vector<glm::u32vec2>& style_buffer);
 
-    const std::shared_ptr<const nucleus::Raster<glm::u32vec4>> style();
+    const std::shared_ptr<const nucleus::Raster<glm::u32vec2>> style();
     bool update_visible_styles();
     size_t processed_amount();
 
@@ -177,7 +180,7 @@ private:
     void generate_preprocess_grid();
 
     Style m_style;
-    const std::vector<glm::u32vec4> m_style_buffer;
+    const std::vector<glm::u32vec2> m_style_buffer;
 
     nucleus::Raster<PreprocessCell> m_preprocess_grid;
 

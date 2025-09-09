@@ -37,7 +37,7 @@ public:
 signals:
     void gpu_tiles_updated(const std::vector<tile::Id>& deleted_tiles, const std::vector<nucleus::tile::GpuVectorLayerTile>& new_tiles);
 
-    void style_updated(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> style_buffer);
+    void style_updated(std::shared_ptr<const nucleus::Raster<glm::u32vec2>> style_buffer);
 
 protected:
     void transform_and_emit(const std::vector<tile::DataQuad>& new_quads, const std::vector<tile::Id>& deleted_quads) override;

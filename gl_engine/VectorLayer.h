@@ -77,7 +77,7 @@ public:
 public slots:
     void update_gpu_tiles(const std::vector<nucleus::tile::Id>& deleted_tiles, const std::vector<nucleus::tile::GpuVectorLayerTile>& new_tiles);
     void set_tile_limit(unsigned new_limit);
-    void update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec4>> styles);
+    void update_style(std::shared_ptr<const nucleus::Raster<glm::u32vec2>> styles);
 
 private:
     bool m_initialized;
@@ -105,7 +105,7 @@ private:
 
     nucleus::vector_layer::GpuMultiArrayHelper m_gpu_multi_array_helper;
 
-    std::shared_ptr<const nucleus::Raster<glm::u32vec4>> m_styles;
+    std::shared_ptr<const nucleus::Raster<glm::u32vec2>> m_styles;
 
     std::unordered_map<QString, QString> m_defines;
 

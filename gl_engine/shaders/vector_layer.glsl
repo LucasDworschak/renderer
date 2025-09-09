@@ -18,6 +18,9 @@
 
 #line 10020
 
+// TODO only here for testing purposes -> remove the define again
+// #define SDF_MODE 0
+
 
 
 // SDF_MODE 0: naive multisample antialiasing (golden -> but worse performnace)
@@ -90,6 +93,9 @@ struct VectorLayerData{
 
     highp uint style_index;
     bool is_polygon;
+
+    bool line_cap0;
+    bool line_cap1;
 };
 
 #if SDF_MODE == 0
@@ -112,7 +118,7 @@ struct LayerStyle {
     lowp vec4 color;
     lowp float line_width;
     lowp vec2 dash_info;
-    lowp int line_caps;
+    lowp bool round_line_caps;
 };
 
 
@@ -159,6 +165,22 @@ const highp int max_cell_width_line = (1 << (coordinate_bits_lines));
 const highp int geometry_offset_line = (max_cell_width_line - cell_width_lines) / 2;
 
 const highp uint style_bitmask = ((1u << style_bits) - 1u);
+
+const highp uint line_cap0_mask = 1u << (style_bits + 1);
+const highp uint line_cap1_mask = 1u << (style_bits + 2);
+
+
+// Style unpacking
+const lowp uint style_width_offset = 17u;
+
+const lowp uint style_dash_offset = 9u;
+const lowp uint style_dash_mask = (1u << 17u) - 1u;
+
+const lowp uint style_gap_offset = 1u;
+const lowp uint style_gap_mask = (1u << 9u) - 1u;
+
+const lowp uint style_cap_mask = 1u;
+
 
 // end constants for data packing/unpacking
 /////////////////////////////////////////////
@@ -247,6 +269,9 @@ VectorLayerData unpack_data(highp uvec2 packed_data, lowp vec2 grid_cell)
 
         a -= geometry_offset_line;
         b -= geometry_offset_line;
+
+        unpacked_data.line_cap0 = (packed_data.y & line_cap0_mask) != 0u;
+        unpacked_data.line_cap1 = (packed_data.y & line_cap1_mask) != 0u;
     }
 
     highp float tile_scale = float(scale_lines) * (1.0-float(unpacked_data.is_polygon)) + float(scale_polygons) * float(unpacked_data.is_polygon);
@@ -301,6 +326,7 @@ void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples]
 
     highp vec2 grad_u = vec2(dFdx(uv.x), dFdy(uv.x));
     highp vec2 grad_v = vec2(dFdx(uv.y), dFdy(uv.y));
+
 
     highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols-1.0);
 
@@ -508,6 +534,80 @@ highp vec3 sdf_with_grad(VectorLayerData data, highp vec2 uv, highp float incomi
 }
 #endif
 
+highp float line_functions(highp vec2 p, VectorLayerData geom_data, highp float d, LayerStyle style)
+{
+    highp float ending_dash = 1.0 / 250.0;
+
+    highp float line_length = length(geom_data.a-geom_data.b);
+    highp vec2 e0 = normalize(geom_data.a-geom_data.b);
+    highp vec2 e1 = -e0;
+    highp vec2 v0 = p-geom_data.a;
+    highp vec2 v1 = p-geom_data.b;
+    highp vec2 v0_dashstart = v0 + e1 * ending_dash;
+    highp vec2 v1_dashstart = v1 + e0 * ending_dash;
+    highp vec2 nv0 = normalize(v0_dashstart);
+    highp vec2 nv1 = normalize(v1_dashstart);
+
+    // highp float thresh = 0.001;
+
+    // if(dot(v0,e0) < thresh || dot(v1, e1) < thresh)
+    //     return 1.0;
+
+
+
+    highp float line_frequency = 100.0;
+    highp float dash_offset = 100.0;
+
+    // return sin(length(v0-e0)*1000.0);
+
+
+    // float dash =  sin(length(v1-e0*dash_offset)*line_frequency)+sin(length(v0+e0*dash_offset)*line_frequency)/0.1;
+    // dash = sin(length(v0-e0*dash_offset)*line_frequency) + sin(length(v1-e1*dash_offset)*line_frequency);
+    // dash = clamp( .5 + .5*dash/fwidth(dash), 0., 1.);
+
+
+
+    // both ends have butt line-ending
+    highp float line_endings = 1.0;
+    if(!style.round_line_caps)
+    {
+        if(geom_data.line_cap0)
+            line_endings *= step(dot(e0, v0), 0.0);
+        if(geom_data.line_cap1)
+            line_endings *= step(dot(e1, v1), 0.0);
+    }
+
+    // alternative one liner: // TODO check if faster or not
+    // line_endings = mix(mix(1.0, step(dot(e0, v0), 0.0), float(geom_data.line_cap0)) * mix(1.0, step(dot(e1, v1), 0.0), float(geom_data.line_cap1)),1.0,float(style.round_line_caps));
+
+
+    // TODOs
+    // - dashes between dashstart and dashend
+    // - find tile border and change v0,v1 and *_dashstart values to start at border
+    // - line endings send from cpu as geometry data (as in is this the end of a line
+
+
+
+
+    // return max(dash,line);
+    // return max(line_endings,line);
+    return line_endings * d;
+
+
+    // return min(dash,d);
+    // return min(dash,d);
+
+
+
+    // 0-1 within line
+    // 0 if exceeds start, 1 if exceeding end
+    // highp float h = clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );
+    // highp vec2 pq0 = v0 - e0*h;
+    // return length( pq0 )-thickness;
+
+    // return d;
+}
+
 
 highp uvec2 to_offset_size(highp uint combined) {
     // note: offset (x coord) is 24 bit -> we have to use highp
@@ -570,8 +670,8 @@ void parse_style(out LayerStyle style, highp uint style_index, mediump float zoo
     mediump float zoomed_tile_extent_lower = inv_tile_extent * pow(0.5, float(zoom_offset_lower+1));
     mediump float zoomed_tile_extent_higher = inv_tile_extent * pow(0.5, float(zoom_offset_higher+1));
 
-    lowp float outline_width_lower = float(style_data_lower.b) * style_precision_mult * zoomed_tile_extent_lower;
-    lowp float outline_width_higher = float(style_data_higher.b) * style_precision_mult * zoomed_tile_extent_higher;
+    lowp float outline_width_lower = float(style_data_lower.g >> style_width_offset) * style_precision_mult * zoomed_tile_extent_lower;
+    lowp float outline_width_higher = float(style_data_higher.g >> style_width_offset) * style_precision_mult * zoomed_tile_extent_higher;
 
     ///////////////////////////////////////
     // actual mix lower and higher style and store info in layerstyle
@@ -581,8 +681,16 @@ void parse_style(out LayerStyle style, highp uint style_index, mediump float zoo
     style.color = mix(color_lower, color_higher, zoom_blend) * mix(vec4(cos_smoothing_factor), ortho_color, float(is_polygon));
 
     style.line_width = mix(outline_width_lower, outline_width_higher, zoom_blend);
+
+    // const lowp uint style_dash_offset = 9u;
+    // const lowp uint style_dash_mask = (1u << 17u) - 1u;
+
+    // const lowp uint style_gap_offset = 1u;
+    // const lowp uint style_gap_mask = (1u << 9u) - 1u;
     // style.dash_info; // TODO
-    // style.line_caps; // TODO
+
+    // for line caps we only really need one style since we assume that they do not change between zoom levels
+    style.round_line_caps = (style_data_higher.g & style_cap_mask) == 1u;
 }
 
 lowp float hit_percentage(highp uint intersections)
@@ -652,7 +760,6 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
         VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
 
         highp vec3 dist_and_grad = sdf_with_grad(geom_data, uv, 1.0);
-        highp float accumulated = 0.0;
 
         highp float dDist_dx = dot(dist_and_grad.yz, meta.duvdx);
         highp float dDist_dy = dot(dist_and_grad.yz, meta.duvdy);
@@ -674,10 +781,12 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
         VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
         SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data);
 
-        highp float accumulated = 0.0;
         for (lowp int j = 0; j < n_aa_samples; ++j)
         {
-            highp float d = sd_Line_Triangle(meta.aa_sample_positions[j], prepared_sdf_data, geom_data.is_polygon) - style.line_width;
+            highp float d = sd_Line_Triangle(meta.aa_sample_positions[j], prepared_sdf_data, geom_data.is_polygon) - style.line_width;            
+
+            if(!is_polygon(raw_geom_data))
+                d = line_functions(uv, geom_data, d, style);
 
             highp uint geometry_hit = uint(1.0 - step(0.0,d));
             intersections |= geometry_hit << j;

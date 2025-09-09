@@ -221,7 +221,7 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
         if (data.is_polygon)
             packed_data = nucleus::vector_layer::Preprocessor::pack_triangle_data(data);
         else
-            packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(data.a, data.b, data.style_index);
+            packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(data.a, data.b, data.style_index, false, false);
 
         ShaderProgram shader = create_debug_shader(QString(R"(
             #include "vector_layer.glsl"
@@ -231,7 +231,7 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
                 lowp vec2 grid_cell = vec2(0.0,0.0);
 
                 highp uvec2 cpp_packed_data = uvec2(%1u, %2u);
-                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), %9u, bool(%10));
+                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), %9u, bool(%10), false, false);
                 VectorLayerData unpacked_data = normalize_unpack_for_unittest(unpack_data(cpp_packed_data,grid_cell),grid_cell);
 
                 bool unpack_ok = data == unpacked_data;
@@ -268,7 +268,7 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
         if (data.is_polygon)
             packed_data = nucleus::vector_layer::Preprocessor::pack_triangle_data(data);
         else
-            packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(data.a, data.b, data.style_index);
+            packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(data.a, data.b, data.style_index, false, false);
 
         ShaderProgram shader = create_debug_shader(QString(R"(
             out lowp vec4 out_color;
@@ -286,7 +286,7 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
                 lowp vec2 grid_cell = vec2(0.0,0.0);
 
                 highp uvec2 cpp_packed_data = uvec2(%1u, %2u);
-                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), %9u, bool(%10));
+                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), %9u, bool(%10), false, false);
                 VectorLayerData unpacked_data = normalize_unpack_for_unittest(unpack_data(cpp_packed_data, grid_cell), grid_cell);
 
                 bool unpack_ok = data == unpacked_data;

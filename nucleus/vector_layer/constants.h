@@ -48,7 +48,7 @@ constexpr auto style_buffer_size = 128;
 // number is used to multiply float numbers in style to get int values for storage ( e.g. style_precision:100 means 1.253 -> 125 -> 1.250)
 constexpr uint16_t style_precision = 100;
 // ensure that we know how large a line can get
-constexpr uint16_t max_line_width = 48;
+constexpr uint16_t max_line_width = 48; // this value * style_precision should not use more than 15 bits (otherwise LayerStyle.buffer_alignment does not work)
 
 constexpr float line_width_multiplier = 1.56;
 constexpr glm::uvec2 style_zoom_range = glm::uvec2(0u, 18u);
