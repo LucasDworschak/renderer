@@ -134,6 +134,7 @@ std::vector<StyleLayerIndex> Preprocessor::simplify_styles(
         const float lower_width = Style::get_style_width(style_data_lower);
         const float lower_opacity = style_data_lower.x & 255;
         const float higher_width = Style::get_style_width(style_data_higher);
+        const bool uses_dashes = Style::uses_dashes(style_data_higher);
         const float higher_opacity = style_data_higher.x & 255;
 
         // by mixing the lower and higher style -> we get a value that better represents a real world example
@@ -152,10 +153,9 @@ std::vector<StyleLayerIndex> Preprocessor::simplify_styles(
             width = current_width;
         }
 
-        // TODO dashes
-
         if (accummulative_opacity < 255) {
-            accummulative_opacity += current_opacity;
+            if (!uses_dashes) // dashes do not count for accummulative opacity
+                accummulative_opacity += current_opacity;
             out_styles.push_back(indices);
         }
     }

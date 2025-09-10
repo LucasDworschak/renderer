@@ -113,7 +113,7 @@ void Style::load()
 
         std::vector<std::pair<uint8_t, uint32_t>> fill_colors;
         std::vector<std::pair<uint8_t, uint16_t>> widths;
-        std::vector<std::pair<uint8_t, std::pair<uint8_t, uint8_t>>> dashes;
+        std::vector<std::pair<uint8_t, std::pair<uint8_t, float>>> dashes;
         std::vector<std::pair<uint8_t, uint8_t>> opacities;
 
         // "stop" expressions may have a "base" value. this base value is used to manipulate the interpolation between values
@@ -196,19 +196,19 @@ void Style::load()
         if (widths.empty())
             widths.push_back({ 255, 0 });
         if (dashes.empty())
-            dashes.push_back({ 255, { 0, 0 } });
+            dashes.push_back({ 255, { 1 * constants::style_precision, 0.1 } });
         if (opacities.empty())
             opacities.push_back({ 255, 255 });
 
         // use the first value of each array to determine the prev/current values
         std::pair<uint8_t, uint32_t> fill_colors_previous_value = fill_colors.front();
         std::pair<uint8_t, uint16_t> widths_previous_value = widths.front();
-        std::pair<uint8_t, std::pair<uint8_t, uint8_t>> dashes_previous_value = dashes.front();
+        std::pair<uint8_t, std::pair<uint8_t, float>> dashes_previous_value = dashes.front();
         std::pair<uint8_t, uint8_t> opacities_previous_value = opacities.front();
 
         std::pair<uint8_t, uint32_t> fill_colors_current_value = fill_colors.front();
         std::pair<uint8_t, uint16_t> widths_current_value = widths.front();
-        std::pair<uint8_t, std::pair<uint8_t, uint8_t>> dashes_current_value = dashes.front();
+        std::pair<uint8_t, std::pair<uint8_t, float>> dashes_current_value = dashes.front();
         std::pair<uint8_t, uint8_t> opacities_current_value = opacities.front();
 
         uint8_t fill_colors_index = 0;
@@ -255,7 +255,8 @@ void Style::load()
 
             uint32_t fill_color = interpolate_color(interpolation_factor_fill_color, fill_colors_previous_value.second, fill_colors_current_value.second);
             uint16_t width = widths_previous_value.second * (1.0 - interpolation_factor_width) + widths_current_value.second * interpolation_factor_width;
-            std::pair<uint8_t, uint8_t> dash = { dashes_previous_value.second.first * (1.0 - interpolation_factor_dash) + dashes_current_value.second.first * interpolation_factor_dash,
+            std::pair<uint8_t, float> dash = { dashes_previous_value.second.first * (1.0 - interpolation_factor_dash)
+                    + dashes_current_value.second.first * interpolation_factor_dash,
                 dashes_previous_value.second.second * (1.0 - interpolation_factor_dash) + dashes_current_value.second.second * interpolation_factor_dash };
             uint8_t opacity = opacities_previous_value.second * (1.0 - interpolation_factor_opacity) + opacities_current_value.second * interpolation_factor_opacity;
 
@@ -281,10 +282,20 @@ void Style::load()
             // done outside of above if because opacity might be declared in fill_color only
             fill_color = premultiply_alpha(fill_color);
 
+            // make sure that dash_sum with style_precision is not bigger than available bits
+            uint8_t dash_sum = 255;
+            const float temp_dash_sum = dash.second * (width / constants::style_precision);
+            if (temp_dash_sum <= 255.0) {
+                dash_sum = temp_dash_sum;
+            } else {
+                qDebug() << "Style: dash sum needs more bits (" << temp_dash_sum << " should be < 255)";
+                assert(false);
+            }
+
             if (small_line) {
                 // this is a small line and we are not sure if we want to save this style for blending
                 // we only want to store the style if the next style is visible
-                previous_style = { fill_color, width, dash.first, dash.second, round_line_cap };
+                previous_style = { fill_color, width, dash.first, dash_sum, round_line_cap };
                 previous_small_line = true;
             } else {
                 if (previous_small_line) {
@@ -293,7 +304,7 @@ void Style::load()
                     previous_small_line = false;
                 }
                 // store the current style
-                current_style_map[zoom] = { fill_color, width, dash.first, dash.second, round_line_cap };
+                current_style_map[zoom] = { fill_color, width, dash.first, dash_sum, round_line_cap };
             }
 
             //  DEBUG -> style_index to layername
@@ -483,6 +494,8 @@ uint32_t Style::get_style_index(const uint32_t style_index, const uint zoom_leve
 
 float Style::get_style_width(const glm::u32vec2& style) { return float(style.y >> 17) / float(constants::style_precision); }
 
+bool Style::uses_dashes(const glm::u32vec2& style) { return float((style.y & ((1u << 17) - 1u)) >> 9) < constants::style_precision; }
+
 // uses https://github.com/maplibre/maplibre-style-spec/blob/main/src/expression/definitions/interpolate.ts -> exponentialInterpolation()
 float Style::interpolation_factor(uint8_t zoom, float base, uint8_t zoom1, uint8_t zoom2)
 {
@@ -541,7 +554,7 @@ void Style::parse_opacities(const QJsonValue& value, std::vector<std::pair<uint8
         opacities.push_back({ 255, parse_opacity(value) });
     }
 }
-void Style::parse_dashes(const QJsonValue& value, std::vector<std::pair<uint8_t, std::pair<uint8_t, uint8_t>>>& dashes, float& base)
+void Style::parse_dashes(const QJsonValue& value, std::vector<std::pair<uint8_t, std::pair<uint8_t, float>>>& dashes, float& base)
 {
     assert(dashes.size() == 0); // make sure that we only parse attribute once
     if (value.isObject() && value.toObject().contains("stops")) {
@@ -721,22 +734,28 @@ uint8_t Style::parse_opacity(const QJsonValue& value)
  * but we are also not quite clear about all the possible values
  * -> THEREFORE TODO veryfy the assumptions of this method
  */
-std::pair<uint8_t, uint8_t> Style::parse_dash(const QJsonValue&)
+std::pair<uint8_t, float> Style::parse_dash(const QJsonValue& dash_values)
 {
-
-    // TODO there are also values with more than two values
     // currently only 2 values are allowed here
-    // assert(dash_values.size() == 2);
+    // TODO qwant and osm-bright style with id "boundary-land-level-4" uses 4 values
+    // allows the following dash pattern: - . - . -
+    assert(dash_values.isArray());
+    const auto dash_array = dash_values.toArray();
+    if (dash_array.size() < 2) {
+        return { 1 * constants::style_precision, 1 };
+        qDebug() << dash_array; // TODO herehow are empty jsonarrays possible
+    }
+    assert(dash_array.size() >= 2);
 
-    // TODO implement
+    const auto dashes = dash_array[0].toDouble();
+    const auto gaps = dash_array[1].toDouble();
 
-    return { 0, 0 };
+    const auto sum = (dashes + gaps);
 
-    // double sum = dash_values[0].toDouble() + dash_values[1].toDouble();
+    // ratio between dashes and gaps
+    const uint8_t dash_gap_ratio = (dashes / sum) * constants::style_precision;
 
-    // uint16_t dash_gap_ratio = dash_values[0].toDouble() / sum * 65535.f;
-
-    // return dash_gap_ratio << 16 | uint16_t(sum);
+    return { dash_gap_ratio, sum };
 }
 
 uint16_t Style::parse_line_width(const QJsonValue& value)

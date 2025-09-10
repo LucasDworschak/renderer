@@ -19,7 +19,7 @@
 #line 10020
 
 // TODO only here for testing purposes -> remove the define again
-// #define SDF_MODE 0
+#define SDF_MODE 0
 
 
 
@@ -110,6 +110,9 @@ struct SDFData
     highp float dot_e0;
     highp float dot_e1;
     highp float dot_e2;
+
+    bool line_cap0;
+    bool line_cap1;
 };
 #endif
 
@@ -173,11 +176,11 @@ const highp uint line_cap1_mask = 1u << (style_bits + 2);
 // Style unpacking
 const lowp uint style_width_offset = 17u;
 
-const lowp uint style_dash_offset = 9u;
-const lowp uint style_dash_mask = (1u << 17u) - 1u;
+const lowp uint style_dash_ratio_offset = 9u;
+const lowp uint style_dash_ratio_mask = (1u << 17u) - 1u;
 
-const lowp uint style_gap_offset = 1u;
-const lowp uint style_gap_mask = (1u << 9u) - 1u;
+const lowp uint style_dash_sum_offset = 1u;
+const lowp uint style_dash_sum_mask = (1u << 9u) - 1u;
 
 const lowp uint style_cap_mask = 1u;
 
@@ -356,6 +359,9 @@ SDFData prepare_sd_Line_Triangle(VectorLayerData geom_data)
     data.e0 = data.vertices.b-data.vertices.a;
     data.dot_e0 = dot(data.e0,data.e0);
 
+    data.line_cap0 = geom_data.line_cap0;
+    data.line_cap1 = geom_data.line_cap1;
+
     if(geom_data.is_polygon)
     {
         data.e1 = data.vertices.c-data.vertices.b;
@@ -368,18 +374,20 @@ SDFData prepare_sd_Line_Triangle(VectorLayerData geom_data)
 }
 
 // https://iquilezles.org/articles/distfunctions2d/
-highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle )
+highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, highp float line_width, lowp vec2 dash_info, bool round_line_caps)
 {
-    highp vec2 v0 = uv-data.vertices.a;
-    highp vec2 pq0 = v0 - data.e0*clamp( dot(v0,data.e0)/data.dot_e0, 0.0, 1.0 );
+    highp vec2 v0 = uv - data.vertices.a;
+    highp vec2 v1 = uv - data.vertices.b;
+    highp float h = clamp( dot(v0,data.e0)/data.dot_e0, 0.0, 1.0 );
+    highp vec2 pq0 = v0 - data.e0*h;
 
     highp float poly_sign = 1.0;
+    highp float mask = 1.0;
     highp float result = 1.0;
 
     if(triangle)
     {
-        highp vec2 v1 = uv  - data.vertices.b;
-        highp vec2 v2 = uv  - data.vertices.c;
+        highp vec2 v2 = uv - data.vertices.c;
         highp vec2 pq1 = v1 - data.e1*clamp( dot(v1,data.e1)/data.dot_e1, 0.0, 1.0 );
         highp vec2 pq2 = v2 - data.e2*clamp( dot(v2,data.e2)/data.dot_e2, 0.0, 1.0 );
         highp float s = sign( data.e0.x*data.e2.y - data.e0.y*data.e2.x );
@@ -394,12 +402,29 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle )
 
     }
     else{
+
+        highp float line_length = length(data.e0);
+
+        highp float amount_dash_gap_pairs = ceil(line_length/dash_info.y);
+        // by moving the value in the fract by a constant style.dash_info.x/2.0 -> we make sure that half each segment starts with half a dash and ends with half a dash
+        highp float dashes = 1.0-step(dash_info.x,fract(h*amount_dash_gap_pairs+dash_info.x/2.0));
+
+        // both ends have butt line-ending
+        highp float line_endings = 1.0;
+        if(!round_line_caps)
+        {
+            if(data.line_cap0)
+                line_endings *= step(dot(normalize(-data.e0), v0), 0.0);
+            if(data.line_cap1)
+                line_endings *= step(dot(normalize(data.e0), v1), 0.0);
+        }
+
+        mask = line_endings*dashes;
         poly_sign = 1.0;
         result = dot(pq0,pq0);
-
     }
 
-    return sqrt(result)*poly_sign;
+    return (sqrt(result)*poly_sign-line_width) * mask;
 
 }
 #endif
@@ -534,81 +559,6 @@ highp vec3 sdf_with_grad(VectorLayerData data, highp vec2 uv, highp float incomi
 }
 #endif
 
-highp float line_functions(highp vec2 p, VectorLayerData geom_data, highp float d, LayerStyle style)
-{
-    highp float ending_dash = 1.0 / 250.0;
-
-    highp float line_length = length(geom_data.a-geom_data.b);
-    highp vec2 e0 = normalize(geom_data.a-geom_data.b);
-    highp vec2 e1 = -e0;
-    highp vec2 v0 = p-geom_data.a;
-    highp vec2 v1 = p-geom_data.b;
-    highp vec2 v0_dashstart = v0 + e1 * ending_dash;
-    highp vec2 v1_dashstart = v1 + e0 * ending_dash;
-    highp vec2 nv0 = normalize(v0_dashstart);
-    highp vec2 nv1 = normalize(v1_dashstart);
-
-    // highp float thresh = 0.001;
-
-    // if(dot(v0,e0) < thresh || dot(v1, e1) < thresh)
-    //     return 1.0;
-
-
-
-    highp float line_frequency = 100.0;
-    highp float dash_offset = 100.0;
-
-    // return sin(length(v0-e0)*1000.0);
-
-
-    // float dash =  sin(length(v1-e0*dash_offset)*line_frequency)+sin(length(v0+e0*dash_offset)*line_frequency)/0.1;
-    // dash = sin(length(v0-e0*dash_offset)*line_frequency) + sin(length(v1-e1*dash_offset)*line_frequency);
-    // dash = clamp( .5 + .5*dash/fwidth(dash), 0., 1.);
-
-
-
-    // both ends have butt line-ending
-    highp float line_endings = 1.0;
-    if(!style.round_line_caps)
-    {
-        if(geom_data.line_cap0)
-            line_endings *= step(dot(e0, v0), 0.0);
-        if(geom_data.line_cap1)
-            line_endings *= step(dot(e1, v1), 0.0);
-    }
-
-    // alternative one liner: // TODO check if faster or not
-    // line_endings = mix(mix(1.0, step(dot(e0, v0), 0.0), float(geom_data.line_cap0)) * mix(1.0, step(dot(e1, v1), 0.0), float(geom_data.line_cap1)),1.0,float(style.round_line_caps));
-
-
-    // TODOs
-    // - dashes between dashstart and dashend
-    // - find tile border and change v0,v1 and *_dashstart values to start at border
-    // - line endings send from cpu as geometry data (as in is this the end of a line
-
-
-
-
-    // return max(dash,line);
-    // return max(line_endings,line);
-    return line_endings * d;
-
-
-    // return min(dash,d);
-    // return min(dash,d);
-
-
-
-    // 0-1 within line
-    // 0 if exceeds start, 1 if exceeding end
-    // highp float h = clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );
-    // highp vec2 pq0 = v0 - e0*h;
-    // return length( pq0 )-thickness;
-
-    // return d;
-}
-
-
 highp uvec2 to_offset_size(highp uint combined) {
     // note: offset (x coord) is 24 bit -> we have to use highp
     return uvec2(uint(combined >> 8), uint(combined & 255u));
@@ -682,12 +632,13 @@ void parse_style(out LayerStyle style, highp uint style_index, mediump float zoo
 
     style.line_width = mix(outline_width_lower, outline_width_higher, zoom_blend);
 
-    // const lowp uint style_dash_offset = 9u;
-    // const lowp uint style_dash_mask = (1u << 17u) - 1u;
+    lowp float dash_ratio_lower = float((style_data_lower.g & style_dash_ratio_mask) >> style_dash_ratio_offset) * style_precision_mult;
+    lowp float dash_ratio_higher = float((style_data_higher.g & style_dash_ratio_mask) >> style_dash_ratio_offset) * style_precision_mult;
+    lowp float dash_sum_lower = float((style_data_lower.g & style_dash_sum_mask) >> style_dash_sum_offset) * style_precision_mult;
+    lowp float dash_sum_higher = float((style_data_higher.g & style_dash_sum_mask) >> style_dash_sum_offset) * style_precision_mult;
 
-    // const lowp uint style_gap_offset = 1u;
-    // const lowp uint style_gap_mask = (1u << 9u) - 1u;
-    // style.dash_info; // TODO
+    // TODO maybe one mix is faster?
+    style.dash_info = vec2(mix(dash_ratio_lower, dash_ratio_higher, zoom_blend), mix(dash_sum_lower, dash_sum_higher, zoom_blend));
 
     // for line caps we only really need one style since we assume that they do not change between zoom levels
     style.round_line_caps = (style_data_higher.g & style_cap_mask) == 1u;
@@ -783,10 +734,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
 
         for (lowp int j = 0; j < n_aa_samples; ++j)
         {
-            highp float d = sd_Line_Triangle(meta.aa_sample_positions[j], prepared_sdf_data, geom_data.is_polygon) - style.line_width;            
-
-            if(!is_polygon(raw_geom_data))
-                d = line_functions(uv, geom_data, d, style);
+            highp float d = sd_Line_Triangle(meta.aa_sample_positions[j], prepared_sdf_data, geom_data.is_polygon, style.line_width, style.dash_info, style.round_line_caps);
 
             highp uint geometry_hit = uint(1.0 - step(0.0,d));
             intersections |= geometry_hit << j;
