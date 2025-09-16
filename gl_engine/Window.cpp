@@ -100,6 +100,7 @@ void Window::initialise_gpu()
         else
             qDebug() << message;
     });
+    logger->disableMessages(QList<GLuint>({ 2 })); // GL_INVALID_OPERATION in glDrawBuffers(unsupported buffer GL_BACK_LEFT) -> caused by wayland
     logger->disableMessages(QList<GLuint>({ 131185 }));
     logger->disableMessages(QList<GLuint>({ 131218 }));
     logger->startLogging(QOpenGLDebugLogger::SynchronousLogging);

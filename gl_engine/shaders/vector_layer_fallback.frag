@@ -37,7 +37,7 @@ uniform highp usampler2DArray acceleration_grid_sampler;
 uniform highp usampler2D instanced_texture_array_index_sampler_vector;
 uniform highp usampler2D instanced_texture_zoom_sampler_vector;
 
-layout (location = 0) out lowp vec4 texout_albedo;
+layout (location = 0) out lowp vec3 texout_albedo;
 
 in highp vec2 var_uv;
 
@@ -152,7 +152,7 @@ void main() {
     calculate_sample_positions(meta.aa_sample_positions, uv, grid_cell);
 #endif
 #if SDF_MODE == 1
-    calculate_sample_multipliers(meta.aa_sample_multipliers, uv, meta.duvdx, meta.duvdy, meta.grid_cell_float);
+    calculate_sample_multipliers(meta.aa_sample_multipliers);
 #endif
 
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
@@ -197,11 +197,11 @@ void main() {
 
     // blend with background color and write pixel color to output
 #if VIEW_MODE == 0
-    texout_albedo = vec4(background_color * meta.ortho_color.rgb, 1.0);
+    texout_albedo = vec3(background_color * meta.ortho_color.rgb, 1.0);
 #else
     // the alpha value is 1 if we encountered a line (with at least 0.2 percentage summed up) or 0 if only polygons have been encountered
     // -> important for ortho color mixing
-    texout_albedo = vec4(pixel_color.rgb + ((1.0-pixel_color.a)*background_color * meta.ortho_color.rgb), 1.0);
+    texout_albedo = vec3(pixel_color.rgb + ((1.0-pixel_color.a)*background_color * meta.ortho_color.rgb)).rgb;
 #endif
 
 

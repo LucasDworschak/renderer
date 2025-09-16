@@ -248,7 +248,7 @@ void main() {
     calculate_sample_positions(meta.aa_sample_positions, uv, grid_cell);
 #endif
 #if SDF_MODE == 1
-    calculate_sample_multipliers(meta.aa_sample_multipliers, uv, meta.duvdx, meta.duvdy, meta.grid_cell_float);
+    calculate_sample_multipliers(meta.aa_sample_multipliers);
 #endif
 
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.

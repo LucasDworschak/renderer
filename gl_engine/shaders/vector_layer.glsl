@@ -429,7 +429,7 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, hig
 }
 #endif
 #if SDF_MODE == 1
-void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samples], highp vec2 uv, highp vec2 duvdx, highp vec2 duvdy, lowp vec2 grid_cell)
+void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samples])
 {
     if(n_aa_samples <= 1)
     {
@@ -638,7 +638,8 @@ void parse_style(out LayerStyle style, highp uint style_index, mediump float zoo
     lowp float dash_sum_higher = float((style_data_higher.g & style_dash_sum_mask) >> style_dash_sum_offset) * style_precision_mult;
 
     // TODO maybe one mix is faster?
-    style.dash_info = vec2(mix(dash_ratio_lower, dash_ratio_higher, zoom_blend), mix(dash_sum_lower, dash_sum_higher, zoom_blend));
+    // TODO move /2.5 to style.cpp
+    style.dash_info = vec2(mix(dash_ratio_lower, dash_ratio_higher, zoom_blend), mix(dash_sum_lower, dash_sum_higher, zoom_blend) / 2.5);
 
     // for line caps we only really need one style since we assume that they do not change between zoom levels
     style.round_line_caps = (style_data_higher.g & style_cap_mask) == 1u;
@@ -720,9 +721,10 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
             highp float d = dist_and_grad.x + meta.aa_sample_multipliers[j].x * dDist_dx + meta.aa_sample_multipliers[j].y * dDist_dy;
 
             // for lines use the abs(d) -> lines should not be able to be negative -> but it is possible with derivative -> we have to correct this
-            d = mix(abs(d), d, geom_data.is_polygon) - style.line_width;
+            d = mix(abs(d), d, float(geom_data.is_polygon)) - style.line_width;
 
-            highp uint geometry_hit = uint(1.0 - step(0.0,d));
+            // highp uint geometry_hit = uint(1.0 - step(0.0,d));
+            highp uint geometry_hit = uint(d<0.0);// TODO check if faster
             intersections |= geometry_hit << j;
         }
     }

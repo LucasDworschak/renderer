@@ -48,6 +48,8 @@ GlParams gl_tex_params(gl_engine::Texture::Format format)
         return { GLint(gl_engine::Texture::compressed_texture_format()), 0, 0, 0, 0, true };
     case F::RGBA8:
         return { GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, 4, 1, true };
+    case F::RGB565:
+        return { GL_RGB565, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, 1, 2, true };
     case F::RGBA8UI:
         return { GL_RGBA8UI, GL_RGBA_INTEGER, GL_UNSIGNED_BYTE, 4, 1 };
     case F::RGBA32F:
