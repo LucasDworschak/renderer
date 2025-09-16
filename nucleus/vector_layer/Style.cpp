@@ -216,9 +216,6 @@ void Style::load()
         uint8_t dashes_index = 0;
         uint8_t opacities_index = 0;
 
-        bool previous_small_line = false;
-        LayerStyle previous_style;
-
         for (unsigned zoom = zoom_range.x; zoom < zoom_range.y + 1; zoom++) {
             // determine if we have to change current / prev values
             while (fill_colors_current_value.first < zoom) {
@@ -260,16 +257,6 @@ void Style::load()
                 dashes_previous_value.second.second * (1.0 - interpolation_factor_dash) + dashes_current_value.second.second * interpolation_factor_dash };
             uint8_t opacity = opacities_previous_value.second * (1.0 - interpolation_factor_opacity) + opacities_current_value.second * interpolation_factor_opacity;
 
-            // we are not interested in very small lines below a certain zoom level
-            constexpr float small_line_scale = constants::tile_extent / 256.0;
-            bool small_line
-                = (is_line && zoom < constants::small_line_zoom_threshold && width < constants::small_line_px * small_line_scale * constants::style_precision);
-            if (small_line) {
-                // we want to slowly blend the new line in
-                opacity = 0u;
-                width = 0u;
-            }
-
             // merge opacity with colors
             if (opacity != 255u) {
                 // if opacity is set it overrides any opacity from the color
@@ -284,28 +271,16 @@ void Style::load()
 
             // make sure that dash_sum with style_precision is not bigger than available bits
             uint8_t dash_sum = 255;
-            const float temp_dash_sum = dash.second * (width / constants::style_precision);
+            const uint temp_dash_sum = dash.second * (width / constants::style_precision);
             if (temp_dash_sum <= 255.0) {
-                dash_sum = temp_dash_sum;
+                dash_sum = std::max(1u, temp_dash_sum); // guarantee that dash_sum is not 0
             } else {
                 qDebug() << "Style: dash sum needs more bits (" << temp_dash_sum << " should be < 255)";
                 assert(false);
             }
 
-            if (small_line) {
-                // this is a small line and we are not sure if we want to save this style for blending
-                // we only want to store the style if the next style is visible
-                previous_style = { fill_color, width, dash.first, dash_sum, round_line_cap };
-                previous_small_line = true;
-            } else {
-                if (previous_small_line) {
-                    // this is no small line anymore -> we want to store the previous style for blending
-                    current_style_map[zoom - 1] = previous_style;
-                    previous_small_line = false;
-                }
-                // store the current style
-                current_style_map[zoom] = { fill_color, width, dash.first, dash_sum, round_line_cap };
-            }
+            // store the current style
+            current_style_map[zoom] = { fill_color, width, dash.first, dash_sum, round_line_cap };
 
             //  DEBUG -> style_index to layername
             // auto id = obj.toObject().value("id").toString();
@@ -751,11 +726,12 @@ std::pair<uint8_t, float> Style::parse_dash(const QJsonValue& dash_values)
     const auto gaps = dash_array[1].toDouble();
 
     const auto sum = (dashes + gaps);
+    assert(sum > 0); // sum=0 is very bad -> but also shouldnt happen
 
     // ratio between dashes and gaps
     const uint8_t dash_gap_ratio = (dashes / sum) * constants::style_precision;
 
-    return { dash_gap_ratio, sum };
+    return { dash_gap_ratio, sum * constants::dash_multiplier };
 }
 
 uint16_t Style::parse_line_width(const QJsonValue& value)

@@ -51,10 +51,8 @@ constexpr uint16_t style_precision = 100;
 constexpr uint16_t max_line_width = 48; // this value * style_precision should not use more than 15 bits (otherwise LayerStyle.buffer_alignment does not work)
 
 constexpr float line_width_multiplier = 1.56;
+constexpr float dash_multiplier = 1.0 / 2.0;
 constexpr glm::uvec2 style_zoom_range = glm::uvec2(0u, 18u);
-
-constexpr float small_line_px = 0.5; // how many px on a 256x256 resolution
-constexpr unsigned small_line_zoom_threshold = 4; // until what zoom level do we use the small line simplification
 
 // there is only a limited amount of style expressions that are tested by the StyleExpression code
 // -> we can store all the values in a map and have an even faster comparison between values

@@ -18,6 +18,8 @@
 
 #line 10020
 
+#define PI 3.1415926535
+
 // TODO only here for testing purposes -> remove the define again
 #define SDF_MODE 0
 
@@ -404,27 +406,33 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, hig
     else{
 
         highp float line_length = length(data.e0);
+        highp float round_factor = 1.0 + 450.0*float(!round_line_caps);
+        const highp float round_factor_dashes = 5000.0;
 
         highp float amount_dash_gap_pairs = ceil(line_length/dash_info.y);
-        // by moving the value in the fract by a constant style.dash_info.x/2.0 -> we make sure that half each segment starts with half a dash and ends with half a dash
-        highp float dashes = 1.0-step(dash_info.x,fract(h*amount_dash_gap_pairs+dash_info.x/2.0));
+        // + 0.01 -> small delta to remove artifacts if there shouldn't be any dashes
+        highp float dash_period = cos(PI*h*amount_dash_gap_pairs*2.0)+cos((1.0-dash_info.x)*PI)+0.01;
+        highp float dashes = tanh((dash_period)*round_factor_dashes);
 
-        // both ends have butt line-ending
-        highp float line_endings = 1.0;
+
+        float line_endings = 1.0;
         if(!round_line_caps)
         {
             if(data.line_cap0)
-                line_endings *= step(dot(normalize(-data.e0), v0), 0.0);
+                line_endings *= dot(normalize(data.e0), v0);
             if(data.line_cap1)
-                line_endings *= step(dot(normalize(data.e0), v1), 0.0);
+                line_endings *= dot(normalize(-data.e0), v1);
         }
+        line_endings = (sign(line_endings)+1.0) / 2.0;
+        // line_endings = 1.0;
+
 
         mask = line_endings*dashes;
         poly_sign = 1.0;
         result = dot(pq0,pq0);
     }
 
-    return (sqrt(result)*poly_sign-line_width) * mask;
+    return sqrt(result)*poly_sign - (line_width * mask);
 
 }
 #endif
@@ -638,8 +646,7 @@ void parse_style(out LayerStyle style, highp uint style_index, mediump float zoo
     lowp float dash_sum_higher = float((style_data_higher.g & style_dash_sum_mask) >> style_dash_sum_offset) * style_precision_mult;
 
     // TODO maybe one mix is faster?
-    // TODO move /2.5 to style.cpp
-    style.dash_info = vec2(mix(dash_ratio_lower, dash_ratio_higher, zoom_blend), mix(dash_sum_lower, dash_sum_higher, zoom_blend) / 2.5);
+    style.dash_info = vec2(mix(dash_ratio_lower, dash_ratio_higher, zoom_blend), mix(dash_sum_lower, dash_sum_higher, zoom_blend));
 
     // for line caps we only really need one style since we assume that they do not change between zoom levels
     style.round_line_caps = (style_data_higher.g & style_cap_mask) == 1u;
