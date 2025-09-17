@@ -20,10 +20,6 @@
 
 #define PI 3.1415926535
 
-// TODO only here for testing purposes -> remove the define again
-#define SDF_MODE 0
-
-
 
 // SDF_MODE 0: naive multisample antialiasing (golden -> but worse performnace)
 // SDF_MODE 1: derivative multisample antialiasing
@@ -404,18 +400,16 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, hig
 
     }
     else{
-
         highp float line_length = length(data.e0);
-        highp float round_factor = 1.0 + 450.0*float(!round_line_caps);
-        const highp float round_factor_dashes = 5000.0;
 
         highp float amount_dash_gap_pairs = ceil(line_length/dash_info.y);
         // + 0.01 -> small delta to remove artifacts if there shouldn't be any dashes
         highp float dash_period = cos(PI*h*amount_dash_gap_pairs*2.0)+cos((1.0-dash_info.x)*PI)+0.01;
-        highp float dashes = tanh((dash_period)*round_factor_dashes);
+        // tanh is used as a differentiable step function -> all values above 0 are mapped to +1, all below to -1
+        // multiplication by big value ensures a quick transition at 0 +/- small delta
+        highp float dashes = tanh((dash_period)*500000.0);
 
-
-        float line_endings = 1.0;
+        highp float line_endings = 1.0;
         if(!round_line_caps)
         {
             if(data.line_cap0)
@@ -423,12 +417,9 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, hig
             if(data.line_cap1)
                 line_endings *= dot(normalize(-data.e0), v1);
         }
-        line_endings = (sign(line_endings)+1.0) / 2.0;
-        // line_endings = 1.0;
-
+        line_endings = (tanh(line_endings*500000.0)+1.0) / 2.0;
 
         mask = line_endings*dashes;
-        poly_sign = 1.0;
         result = dot(pq0,pq0);
     }
 
@@ -471,25 +462,27 @@ highp float grad_clamp_fun(highp float v, highp float min, highp float max, high
 }
 
 
-highp vec3 sdf_with_grad(VectorLayerData data, highp vec2 uv, highp float incoming_grad)
+highp vec4 sdf_with_grad(VectorLayerData data, highp vec2 uv, highp float incoming_grad, lowp vec2 dash_info, bool round_line_caps)
 {
     highp vec2 e0 = data.b - data.a;
     highp vec2 v0 = uv - data.a;
+    highp vec2 v1 = uv - data.b;
     highp float dot0 = dot(v0, e0);
     highp float one_over_dot0 = 1.0 / dot(e0, e0);
     highp float div0 = dot0 * one_over_dot0;
-    highp vec2 pq0 = v0 - e0 * clamp(div0, 0.0, 1.0);
+    highp float h = clamp(div0, 0.0, 1.0);
+    highp vec2 pq0 = v0 - e0 * h;
     highp float dot_pq0_pq0 = dot(pq0, pq0);
 
     highp float poly_sign = 1.0;
     highp float distance_sq = 1.0;
+    highp float mask = 1.0;
 
     highp vec2 grad_uv = vec2(0.0);
     highp vec2 grad_pq0 = vec2(0.0);
     if (data.is_polygon) {
         highp vec2 e1 = data.c - data.b;
         highp vec2 e2 = data.a - data.c;
-        highp vec2 v1 = uv - data.b;
         highp vec2 v2 = uv - data.c;
         highp float dot1 = dot(v1, e1);
         highp float dot2 = dot(v2, e2);
@@ -551,6 +544,28 @@ highp vec3 sdf_with_grad(VectorLayerData data, highp vec2 uv, highp float incomi
         grad_uv += grad_v1 + grad_v2;
 
     } else {
+
+        highp float line_length = length(e0);
+
+        highp float amount_dash_gap_pairs = ceil(line_length/dash_info.y);
+        // + 0.01 -> small delta to remove artifacts if there shouldn't be any dashes
+        highp float dash_period = cos(PI*h*amount_dash_gap_pairs*2.0)+cos((1.0-dash_info.x)*PI)+0.01;
+        // tanh is used as a differentiable step function -> all values above 0 are mapped to +1, all below to -1
+        // multiplication by big value ensures a quick transition at 0 +/- small delta
+        highp float dashes = tanh(dash_period*500000.0);
+
+        float line_endings = 1.0;
+        if(!round_line_caps)
+        {
+            if(data.line_cap0)
+                line_endings *= dot(normalize(e0), v0);
+            if(data.line_cap1)
+                line_endings *= dot(normalize(-e0), v1);
+        }
+        line_endings = (tanh(line_endings*500000.0)+1.0) / 2.0;
+
+        mask = line_endings*dashes;
+
         grad_pq0 += 2.0 * pq0 * incoming_grad;
         distance_sq = dot_pq0_pq0;
     }
@@ -563,7 +578,7 @@ highp vec3 sdf_with_grad(VectorLayerData data, highp vec2 uv, highp float incomi
     grad_uv += grad_v0;
     highp float sdf_val = sqrt(distance_sq) * poly_sign;
 
-    return vec3(sdf_val, grad_uv / (2.0 * sdf_val));
+    return vec4(sdf_val, grad_uv / (2.0 * sdf_val), mask);
 }
 #endif
 
@@ -718,7 +733,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
     { // derivative aa
         VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
 
-        highp vec3 dist_and_grad = sdf_with_grad(geom_data, uv, 1.0);
+        highp vec4 dist_and_grad = sdf_with_grad(geom_data, uv, 1.0, style.dash_info, style.round_line_caps);
 
         highp float dDist_dx = dot(dist_and_grad.yz, meta.duvdx);
         highp float dDist_dy = dot(dist_and_grad.yz, meta.duvdy);
@@ -728,7 +743,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
             highp float d = dist_and_grad.x + meta.aa_sample_multipliers[j].x * dDist_dx + meta.aa_sample_multipliers[j].y * dDist_dy;
 
             // for lines use the abs(d) -> lines should not be able to be negative -> but it is possible with derivative -> we have to correct this
-            d = mix(abs(d), d, float(geom_data.is_polygon)) - style.line_width;
+            d = mix(abs(d), d, float(geom_data.is_polygon)) - (style.line_width * dist_and_grad.w);
 
             // highp uint geometry_hit = uint(1.0 - step(0.0,d));
             highp uint geometry_hit = uint(d<0.0);// TODO check if faster
