@@ -119,7 +119,7 @@ struct LayerStyle {
     lowp vec4 color;
     lowp float line_width;
     lowp vec2 dash_info;
-    lowp bool round_line_caps;
+    bool round_line_caps;
 };
 
 
@@ -554,7 +554,7 @@ highp vec4 sdf_with_grad(VectorLayerData data, highp vec2 uv, highp float incomi
         // multiplication by big value ensures a quick transition at 0 +/- small delta
         highp float dashes = tanh(dash_period*500000.0);
 
-        float line_endings = 1.0;
+        highp float line_endings = 1.0;
         if(!round_line_caps)
         {
             if(data.line_cap0)

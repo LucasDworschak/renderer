@@ -32,11 +32,13 @@ class AppSettings : public QObject {
     Q_OBJECT
     Q_PROPERTY(QDateTime datetime READ datetime WRITE set_datetime NOTIFY datetime_changed)
     Q_PROPERTY(float render_quality READ render_quality WRITE set_render_quality NOTIFY render_quality_changed)
+    Q_PROPERTY(unsigned int max_vector_geometry READ max_vector_geometry WRITE set_max_vector_geometry NOTIFY max_vector_geometry_changed)
 
 signals:
     void datetime_changed(const QDateTime& new_datetime);
     void gl_sundir_date_link_changed(bool new_value);
     void render_quality_changed(float new_value);
+    void max_vector_geometry_changed(unsigned int new_max_vector_geometry);
 
 public:
 
@@ -50,11 +52,17 @@ public:
     float render_quality() const { return m_render_quality; }
     void set_render_quality(float new_value);
 
+    unsigned int max_vector_geometry() const { return m_max_vector_geometry; }
+    void set_max_vector_geometry(unsigned int new_max_vector_geometry);
+
 private:
     // Stores date and time for the current rendering (in use for eg. Shadows)
     QDateTime m_datetime = QDateTime::currentDateTime();
     // Value which defines the quality of tiles being fetched (values from [0.1-2.0] make sense)
     float m_render_quality = 0.5;
+
+    unsigned int m_max_vector_geometry = 8u;
+    QTimer* m_trigger_max_vector_geometry_changed_timer = nullptr;
 
     // Parents instance of UrlModififer
     std::shared_ptr<nucleus::utils::UrlModifier> m_url_modifier;

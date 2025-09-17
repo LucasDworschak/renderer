@@ -102,7 +102,7 @@ SettingsPanel {
         Label { text: qsTr("Max Vector Geometry") }
         LabledSlider {
             from: 0; to: 255; stepSize: 1;
-            ModelBinding on value { target: map; property: "max_vector_geometry"; }
+            ModelBinding on value { target: map.settings; property: "max_vector_geometry"; }
         }
     }
 

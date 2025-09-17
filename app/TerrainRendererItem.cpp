@@ -69,7 +69,7 @@ overloaded(Ts...) -> overloaded<Ts...>;
 TerrainRendererItem::TerrainRendererItem(QQuickItem* parent)
     : QQuickFramebufferObject(parent)
     , m_update_timer(new QTimer(this))
-    , m_trigger_max_vector_geometry_changed_timer(new QTimer(this))
+
 {
 #ifdef ALP_ENABLE_TRACK_OBJECT_LIFECYCLE
     qDebug("TerrainRendererItem()");
@@ -92,14 +92,11 @@ TerrainRendererItem::TerrainRendererItem(QQuickItem* parent)
     setAcceptTouchEvents(true);
     setAcceptedMouseButtons(Qt::MouseButton::AllButtons);
 
-    m_trigger_max_vector_geometry_changed_timer->setSingleShot(true);
-
     connect(m_update_timer, &QTimer::timeout, this, [this]() {
         emit update_camera_requested();
         RenderThreadNotifier::instance()->notify();
     });
 
-    connect(m_trigger_max_vector_geometry_changed_timer, &QTimer::timeout, this, [this]() { emit max_vector_geometry_changed(m_max_vector_geometry); });
 
     connect(this, &TerrainRendererItem::init_after_creation, this, &TerrainRendererItem::init_after_creation_slot);
 }
@@ -156,7 +153,7 @@ QQuickFramebufferObject::Renderer* TerrainRendererItem::createRenderer() const
     // connect glWindow to forward key events.
     connect(this, &TerrainRendererItem::shared_config_changed, r->glWindow(), &gl_engine::Window::shared_config_changed);
     connect(this, &TerrainRendererItem::max_zoom_changed, r->glWindow(), &gl_engine::Window::update_max_zoom);
-    connect(this, &TerrainRendererItem::max_vector_geometry_changed, r->glWindow(), &gl_engine::Window::update_max_vector_geometry);
+    connect(m_settings, &AppSettings::max_vector_geometry_changed, r->glWindow(), &gl_engine::Window::update_max_vector_geometry);
 
     // connect glWindow for shader hotreload by frontend button
     connect(this, &TerrainRendererItem::reload_shader, r->glWindow(), &gl_engine::Window::reload_shader);
@@ -298,19 +295,6 @@ void TerrainRendererItem::set_max_zoom(unsigned int new_max_zoom)
         return;
     m_max_zoom = new_max_zoom;
     emit max_zoom_changed(m_max_zoom);
-}
-
-unsigned int TerrainRendererItem::max_vector_geometry() const { return m_max_vector_geometry; }
-void TerrainRendererItem::set_max_vector_geometry(unsigned int new_max_vector_geometry)
-{
-    new_max_vector_geometry = std::clamp(new_max_vector_geometry, 0u, 255u);
-    if (m_max_vector_geometry == new_max_vector_geometry)
-        return;
-
-    m_max_vector_geometry = new_max_vector_geometry;
-
-    m_trigger_max_vector_geometry_changed_timer->stop();
-    m_trigger_max_vector_geometry_changed_timer->start(200);
 }
 
 nucleus::camera::Definition TerrainRendererItem::camera() const

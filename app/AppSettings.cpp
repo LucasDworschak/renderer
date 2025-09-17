@@ -21,7 +21,9 @@
 #include "AppSettings.h"
 
 AppSettings::AppSettings(QObject* parent, std::shared_ptr<nucleus::utils::UrlModifier> url_modifier)
-    :QObject(parent), m_url_modifier(url_modifier)
+    : QObject(parent)
+    , m_trigger_max_vector_geometry_changed_timer(new QTimer(this))
+    , m_url_modifier(url_modifier)
 {
 #ifdef ALP_ENABLE_TRACK_OBJECT_LIFECYCLE
     qDebug() << "AppSettings()";
@@ -31,6 +33,10 @@ AppSettings::AppSettings(QObject* parent, std::shared_ptr<nucleus::utils::UrlMod
     m_datetime = settings.value("app/datetime", QDateTime::currentDateTime()).toDateTime();
     m_gl_sundir_date_link = settings.value("app/gl_sundir_date_link", true).toBool();
     m_render_quality = settings.value("app/render_quality", 0.5f).toFloat();*/
+
+    m_trigger_max_vector_geometry_changed_timer->setSingleShot(true);
+    connect(m_trigger_max_vector_geometry_changed_timer, &QTimer::timeout, this, [this]() { emit max_vector_geometry_changed(m_max_vector_geometry); });
+
     load_from_url();
 }
 
@@ -56,6 +62,11 @@ void AppSettings::load_from_url() {
     if (!option_string.isEmpty()) {
         m_render_quality = option_string.toFloat();
     }
+
+    option_string = m_url_modifier->get_query_item(URL_PARAMETER_KEY_NUM_VECTOR);
+    if (!option_string.isEmpty()) {
+        m_max_vector_geometry = option_string.toInt();
+    }
 }
 
 void AppSettings::set_datetime(const QDateTime& new_datetime) {
@@ -74,4 +85,16 @@ void AppSettings::set_render_quality(float new_value) {
     m_render_quality = new_value;
     m_url_modifier->set_query_item(URL_PARAMETER_KEY_QUALITY, QString::number(m_render_quality));
     emit render_quality_changed(m_render_quality);
+}
+
+void AppSettings::set_max_vector_geometry(unsigned int new_max_vector_geometry)
+{
+    new_max_vector_geometry = std::clamp(new_max_vector_geometry, 0u, 255u);
+    if (m_max_vector_geometry == new_max_vector_geometry)
+        return;
+
+    m_max_vector_geometry = new_max_vector_geometry;
+
+    m_trigger_max_vector_geometry_changed_timer->stop();
+    m_trigger_max_vector_geometry_changed_timer->start(200);
 }
