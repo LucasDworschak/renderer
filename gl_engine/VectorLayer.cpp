@@ -108,7 +108,7 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_instanced_zoom_fallback = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::R8UI);
     m_instanced_zoom_fallback->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
 
-    m_instanced_array_index_fallback = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RG16UI);
+    m_instanced_array_index_fallback = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::R16UI);
     m_instanced_array_index_fallback->setParams(Texture::Filter::Nearest, Texture::Filter::Nearest);
 
     m_geometry_buffer_texture.resize(constants::array_layer_tile_amount.size());
@@ -123,9 +123,14 @@ void gl_engine::VectorLayer::init(ShaderRegistry* shader_registry)
     m_styles_texture = std::make_unique<Texture>(Texture::Target::_2d, Texture::Format::RG32UI);
     m_styles_texture->setParams(gl_engine::Texture::Filter::Nearest, gl_engine::Texture::Filter::Nearest);
 
-    m_fallback_texture_array = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::RGB565);
-    m_fallback_texture_array->setParams(Texture::Filter::MipMapLinear, Texture::Filter::Linear, true);
-    m_fallback_texture_array->allocate_array(m_fallback_resolution, m_fallback_resolution, unsigned(m_gpu_multi_array_helper.layer_amount(0)));
+    m_fallback_texture_array_higher = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::RGB565);
+    m_fallback_texture_array_higher->setParams(Texture::Filter::MipMapLinear, Texture::Filter::Linear, true);
+    m_fallback_texture_array_higher->allocate_array(m_fallback_resolution, m_fallback_resolution, unsigned(m_gpu_multi_array_helper.layer_amount(0)));
+
+    m_fallback_texture_array_lower = std::make_unique<Texture>(Texture::Target::_2dArray, Texture::Format::RGB565);
+    m_fallback_texture_array_lower->setParams(Texture::Filter::MipMapLinear, Texture::Filter::Linear, true);
+    m_fallback_texture_array_lower->allocate_array(
+        m_fallback_resolution / 2.0, m_fallback_resolution / 2.0, unsigned(m_gpu_multi_array_helper.layer_amount(0)));
 
     m_initialized = true;
     if (m_styles) {
@@ -211,7 +216,7 @@ nucleus::tile::GpuArrayHelper::LayerInfo VectorLayer::fallback_layer(nucleus::ti
     return { tile_id, m_gpu_fallback_map.at(tile_id) };
 }
 
-void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list, bool draw_parent) const
+void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list, bool draw_fallback) const
 {
     shader->set_uniform("acceleration_grid_sampler", 9);
     m_acceleration_grid_texture->bind(9);
@@ -230,14 +235,12 @@ void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std
     nucleus::Raster<glm::u16vec2> array_index_raster = { glm::uvec2 { 1024, 4 } };
 
     nucleus::Raster<uint8_t> zoom_level_raster_fallback = { glm::uvec2 { 1024, 1 } };
-    nucleus::Raster<glm::u16vec2> array_index_raster_fallback = { glm::uvec2 { 1024, 4 } };
+    nucleus::Raster<uint16_t> array_index_raster_fallback = { glm::uvec2 { 1024, 4 } };
     for (unsigned i = 0; i < std::min(unsigned(draw_list.size()), 1024u); ++i) {
 
         GpuMultiArrayHelper::MultiLayerInfo layer0;
-        if (draw_parent)
-            layer0 = m_gpu_multi_array_helper.layer(draw_list[i].id.parent());
-        else
-            layer0 = m_gpu_multi_array_helper.layer(draw_list[i].id);
+
+        layer0 = m_gpu_multi_array_helper.layer(draw_list[i].id);
 
         if (layer0.id.zoom_level > 200)
             continue; // invalid zoom_level -> go to next
@@ -264,37 +267,32 @@ void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std
             array_index_raster.pixel({ i, 3 }) = array_index_raster.pixel({ i, 2 });
         }
 
-        { // fallback texture meta
-            const auto fallback_layer0 = fallback_layer(draw_list[i].id);
+        // fallback texture meta
+        if (!draw_fallback) {
+            // we only want to use the fallback texture when we render the sdf version (when drawing fallback we write to this texture and do not read from it)
+
+            const auto fallback_layer0 = fallback_layer(layer0.id);
             if (fallback_layer0.id.zoom_level > 200)
                 continue; // invalid zoom_level -> go to next
 
             zoom_level_raster_fallback.pixel({ i, 0 }) = fallback_layer0.id.zoom_level;
+            array_index_raster_fallback.pixel({ i, 0 }) = fallback_layer0.index;
 
             const auto fallback_layer1 = fallback_layer(fallback_layer0.id.parent());
             if (fallback_layer1.id.zoom_level < 200) {
-                array_index_raster_fallback.pixel({ i, 0 }) = { fallback_layer0.index, fallback_layer1.index };
-            } else {
-                array_index_raster_fallback.pixel({ i, 0 }) = { 0, 0 };
-            }
-
-            const auto fallback_layer2 = fallback_layer(fallback_layer1.id.parent());
-            if (fallback_layer2.id.zoom_level < 200) {
-                array_index_raster_fallback.pixel({ i, 1 }) = { fallback_layer1.index, fallback_layer2.index };
+                array_index_raster_fallback.pixel({ i, 1 }) = fallback_layer1.index;
             } else {
                 array_index_raster_fallback.pixel({ i, 1 }) = array_index_raster_fallback.pixel({ i, 0 });
             }
-
-            const auto fallback_layer3 = fallback_layer(fallback_layer2.id.parent());
-            if (fallback_layer3.id.zoom_level < 200) {
-                array_index_raster_fallback.pixel({ i, 2 }) = { fallback_layer2.index, fallback_layer3.index };
+            const auto fallback_layer2 = fallback_layer(fallback_layer0.id.parent().parent());
+            if (fallback_layer2.id.zoom_level < 200) {
+                array_index_raster_fallback.pixel({ i, 2 }) = fallback_layer2.index;
             } else {
                 array_index_raster_fallback.pixel({ i, 2 }) = array_index_raster_fallback.pixel({ i, 1 });
             }
-
-            const auto fallback_layer4 = fallback_layer(fallback_layer3.id.parent());
-            if (fallback_layer4.id.zoom_level < 200) {
-                array_index_raster_fallback.pixel({ i, 3 }) = { fallback_layer3.index, fallback_layer4.index };
+            const auto fallback_layer3 = fallback_layer(fallback_layer0.id.parent().parent().parent());
+            if (fallback_layer3.id.zoom_level < 200) {
+                array_index_raster_fallback.pixel({ i, 3 }) = fallback_layer3.index;
             } else {
                 array_index_raster_fallback.pixel({ i, 3 }) = array_index_raster_fallback.pixel({ i, 2 });
             }
@@ -330,11 +328,13 @@ void VectorLayer::draw(
 
     m_shader->set_uniform("max_vector_geometry", m_max_vector_geometry);
 
-    setup_buffers(m_shader, draw_list, true);
+    setup_buffers(m_shader, draw_list, false);
 
     constexpr uint8_t next_buffer_start = 15 + constants::array_layer_tile_amount.size();
-    m_shader->set_uniform("fallback_texture_array", next_buffer_start);
-    m_fallback_texture_array->bind(next_buffer_start);
+    m_shader->set_uniform("fallback_texture_array_higher", next_buffer_start);
+    m_fallback_texture_array_higher->bind(next_buffer_start);
+    m_shader->set_uniform("fallback_texture_array_lower", next_buffer_start + 1);
+    m_fallback_texture_array_lower->bind(next_buffer_start + 1);
 
     tile_geometry.draw(m_shader.get(), camera, draw_list);
 }
@@ -404,13 +404,14 @@ void VectorLayer::update_fallback_textures(const std::vector<IdLayer>& tiles_to_
 
     m_fallback_shader->set_uniform("min_vector_geometry", m_max_vector_geometry);
 
-    setup_buffers(m_fallback_shader, bounds, false);
+    setup_buffers(m_fallback_shader, bounds, true);
 
-    const GLfloat clearAlbedoColor[] = { (242.0f * 0.7f) / 255.0f, (239.0f * 0.7f) / 255.0f, (233.0f * 0.7f) / 255.0f, 255.0f / 255.0f };
-    int mipmap_levels = 1 + static_cast<int>(std::floor(std::log2(m_fallback_resolution)));
+    constexpr GLfloat clearAlbedoColor[] = { (242.0f * 0.7f) / 255.0f, (239.0f * 0.7f) / 255.0f, (233.0f * 0.7f) / 255.0f, 255.0f / 255.0f };
+    const int mipmap_levels = 1 + static_cast<int>(std::floor(std::log2(m_fallback_resolution)));
 
     for (unsigned i = 0; i < tiles_to_render.size(); i++) {
 
+        m_fallback_shader->set_uniform("lower_zoom", false);
         m_fallback_shader->set_uniform("instance_id", int(i));
         m_fallback_shader->set_uniform(
             "tile_id", glm::vec3(tiles_to_render[i].bounds.id.coords.x, tiles_to_render[i].bounds.id.coords.y, tiles_to_render[i].bounds.id.zoom_level));
@@ -418,7 +419,20 @@ void VectorLayer::update_fallback_textures(const std::vector<IdLayer>& tiles_to_
         for (int level = 0; level < mipmap_levels; level++) {
             int mipmapped_resolution = m_fallback_resolution >> level;
             f->glViewport(0, 0, mipmapped_resolution, mipmapped_resolution);
-            m_fallback_texture_array->bind_layer_to_frame_buffer(0, tiles_to_render[i].layer, level);
+            m_fallback_texture_array_higher->bind_layer_to_frame_buffer(0, tiles_to_render[i].layer, level);
+
+            f->glClearBufferfv(GL_COLOR, 0, clearAlbedoColor);
+
+            // it is possible to render 4 or 8 tiles at once (using different color attachments) -> but not sure if really performance relevant
+            m_screen_quad_geometry.draw();
+        }
+
+        // lower -> one zoom level lower and with half the resolution of the higher
+        m_fallback_shader->set_uniform("lower_zoom", true);
+        for (int level = 1; level < mipmap_levels; level++) {
+            int mipmapped_resolution = m_fallback_resolution >> level;
+            f->glViewport(0, 0, mipmapped_resolution, mipmapped_resolution);
+            m_fallback_texture_array_lower->bind_layer_to_frame_buffer(0, tiles_to_render[i].layer, level - 1);
 
             f->glClearBufferfv(GL_COLOR, 0, clearAlbedoColor);
 

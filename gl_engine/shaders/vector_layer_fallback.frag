@@ -20,6 +20,8 @@
 
 #define n_multisamples 4
 
+#define SDF_MODE 0
+
 #include "vector_layer.glsl"
 #include "shared_config.glsl"
 #include "tile_id.glsl"
@@ -44,6 +46,8 @@ in highp vec2 var_uv;
 uniform highp int instance_id;
 // uniform highp int tile_zoom;
 uniform highp vec3 tile_id;
+
+uniform bool lower_zoom;
 
 uniform highp int min_vector_geometry;
 const lowp uint max_vector_geometry = 255u;
@@ -115,8 +119,6 @@ void main() {
 
     /////////////////////////
     // VECTOR color
-    mediump int tile_zoom = int(tile_id.z);
-    mediump float float_zoom = tile_id.z;
 
     // calculate uv derivatives before we apply mipmapping -> otherwise we have discontinous areas at border
     meta.duvdx = dFdx(uv);
@@ -124,8 +126,8 @@ void main() {
 
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, 0), 0).xy;
 
-    meta.zoom_offset = float_zoom-float(tile_zoom);
-    meta.zoom_blend = 0.0;
+    meta.zoom_offset = 0.0;
+    meta.zoom_blend = mix(0.99999,0.0, float(lower_zoom));
     meta.tile_zoom = uint(tile_id.z);
 
 
@@ -136,12 +138,6 @@ void main() {
     meta.grid_cell_float = vec2(grid_cell);
     offset_size = to_offset_size(texelFetch(acceleration_grid_sampler, ivec3(grid_cell.x, grid_cell.y, texture_layer.x & layer_mask),0).r);
 
-
-    // We draw every geometry if the tile_zoom is lower than the designated zoom level (defined in step function).
-    // otherwise we have some holes in our geometry, that most likely were created by the new way we calculate the geometry intersection
-    // Problem described in issue #221
-    lowp uint min_vector_geometry_zoom_dependent = uint(step(16u, meta.tile_zoom) * float(min_vector_geometry));
-    // lowp uint min_vector_geometry_zoom_dependent = uint(min_vector_geometry);
 
     /////////////////////////
     // anti-alialing
@@ -182,7 +178,7 @@ void main() {
 
         highp uint intersections = 0u;
 
-        for(highp uint i = offset_size.x + min(offset_size.y, uint(min_vector_geometry_zoom_dependent)); i < offset_size.x + min(max_vector_geometry,offset_size.y); i++) // show only x layers
+        for(highp uint i = offset_size.x + min(offset_size.y, uint(min_vector_geometry)); i < offset_size.x + min(max_vector_geometry,offset_size.y); i++) // show only x layers
         {
             debug_draw_calls++;
             if(draw_layer(pixel_color, intersections, style, uv, i, meta))
@@ -227,18 +223,18 @@ void main() {
     // if(meta.tile_zoom == 9u)
     //     texout_albedo = vec4(0.0,0.0,1.0,1.0); // blue
 
-    // color ramp from yellow to red
-    // 18u is green to see if it is reached and if blending is done
-    // if(meta.tile_zoom == 13u)
-    //     texout_albedo = vec4(254.0/255.0,240.0/255.0,217.0/255.0, 1.0);
-    // if(meta.tile_zoom == 14u)
-    //     texout_albedo = vec4(253.0/255.0,212.0/255.0,158.0/255.0, 1.0);
-    // if(meta.tile_zoom == 15u)
-    //     texout_albedo = vec4(253.0/255.0,187.0/255.0,132.0/255.0, 1.0);
-    // if(meta.tile_zoom == 16u)
-    //     texout_albedo = vec4(252.0/255.0,141.0/255.0,89.0/255.0, 1.0);
-    // if(meta.tile_zoom == 17u)
-    //     texout_albedo = vec4(227.0/255.0,74.0/255.0,51.0/255.0, 1.0);
-    // if(meta.tile_zoom == 18u)
-    //     texout_albedo = vec4(0.0,1.0,0.0, 1.0);
+    // // color ramp from yellow to red
+    // // 18u is green to see if it is reached and if blending is done
+    // if(int(meta.tile_zoom)-float(lower_zoom) == 13)
+    //     texout_albedo = vec3(254.0/255.0,240.0/255.0,217.0/255.0);
+    // if(int(meta.tile_zoom)-float(lower_zoom) == 14)
+    //     texout_albedo = vec3(253.0/255.0,212.0/255.0,158.0/255.0);
+    // if(int(meta.tile_zoom)-float(lower_zoom) == 15)
+    //     texout_albedo = vec3(253.0/255.0,187.0/255.0,132.0/255.0);
+    // if(int(meta.tile_zoom)-float(lower_zoom) == 16)
+    //     texout_albedo = vec3(252.0/255.0,141.0/255.0,89.0/255.0);
+    // if(int(meta.tile_zoom)-float(lower_zoom) == 17)
+    //     texout_albedo = vec3(227.0/255.0,74.0/255.0,51.0/255.0);
+    // if(int(meta.tile_zoom)-float(lower_zoom) == 18)
+    //     texout_albedo = vec3(0.0,1.0,0.0);
 }

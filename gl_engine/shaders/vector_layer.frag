@@ -30,7 +30,8 @@
 #line 20031
 
 uniform lowp sampler2DArray texture_sampler;
-uniform lowp sampler2DArray fallback_texture_array;
+uniform lowp sampler2DArray fallback_texture_array_higher;
+uniform lowp sampler2DArray fallback_texture_array_lower;
 
 uniform highp usampler2D instanced_texture_array_index_sampler;
 uniform highp usampler2D instanced_texture_zoom_sampler;
@@ -81,7 +82,7 @@ mediump float float_zoom_interpolation()
     highp float static_factors = camera_factors * sqrt2 * cEarthCircumference / tile_size;
     highp float z = log2(static_factors / dist_camera / camera.error_threshold_px)+1.0;
 
-    return clamp(z, 0.0, float(max_zoom));
+    return clamp(z, 0.0, float(max_zoom+1)-0.001);
 }
 
 
@@ -93,18 +94,18 @@ mediump float calculate_cos_smoothing()
     return mix(0.0, sqrt(sqrt(abs(cos_angle))), smoothstep(0.0,0.15,abs(cos_angle))) * (1.0-dist) + dist;
 }
 
-void debug_calculate_cascade_layer(out lowp vec3 debug_cacscade_layer, lowp uint sampler_buffer_index)
+void debug_visualize_index(out lowp vec3 color, lowp uint index)
 {
-    if(sampler_buffer_index == 0u)
-        debug_cacscade_layer = vec3(0,1,0); // green
-    else if(sampler_buffer_index == 1u)
-        debug_cacscade_layer = vec3(1,1,0); // yellow
-    else if(sampler_buffer_index == 2u)
-        debug_cacscade_layer = vec3(1,0.5,0); // orange
-    else if(sampler_buffer_index == 3u)
-        debug_cacscade_layer = vec3(1,0,0); // red
+    if(index == 0u)
+        color = vec3(0,1,0); // green
+    else if(index == 1u)
+        color = vec3(1,1,0); // yellow
+    else if(index == 2u)
+        color = vec3(1,0.5,0); // orange
+    else if(index == 3u)
+        color = vec3(1,0,0); // red
     else
-        debug_cacscade_layer = vec3(1,0,1); // purple -> should never happen -> unrecognized index
+        color = vec3(1,0,1); // purple -> should never happen -> unrecognized index
 }
 
 void debug_calculate_cell_size(out lowp vec3 debug_cell_size, mediump uint offset_size)
@@ -123,32 +124,28 @@ void debug_calculate_cell_size(out lowp vec3 debug_cell_size, mediump uint offse
 
 lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallback_uv, DrawMeta meta, highp float float_zoom)
 {
+    highp vec2 duvdx = dFdx(fallback_uv);
+    highp vec2 duvdy = dFdy(fallback_uv);
+
     // decrease tiles to zoom level given by c++ code (tile is guaranteed fetched)
     decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, texelFetch(instanced_texture_zoom_sampler_vector_fallback, ivec2(instance_id, 0), 0).x);
 
-    lowp uint fallback_mipmap_level = uint(floor(float(temp_tile_id_fallback.z)-float_zoom));
+    lowp uint fallback_mipmap_level = uint(ceil(float(temp_tile_id_fallback.z)-float_zoom));
 
     highp float fallback_interpolation = meta.zoom_blend;
-    // if our float zoom is higher than max_zoom -> we have to make sure that only fallback_color0 is used
-    if(float_zoom >= float(max_zoom))
-        fallback_interpolation = 1.0;
 
-
-    highp uvec2 texture_layer_fallback = texelFetch(instanced_texture_array_index_sampler_vector_fallback, ivec2(instance_id, fallback_mipmap_level), 0).xy;
+    highp uint texture_layer_fallback = texelFetch(instanced_texture_array_index_sampler_vector_fallback, ivec2(instance_id, fallback_mipmap_level), 0).x;
 
     // we are using textureGrad and manually half duvdx/y for each mipmap_level
     // -> if we are not doing this we would get a ring when changing the mipmap level
-    highp vec2 duvdx = dFdx(fallback_uv) * pow(0.5, float(fallback_mipmap_level));
-    highp vec2 duvdy = dFdy(fallback_uv) * pow(0.5, float(fallback_mipmap_level));
+    duvdx = duvdx * pow(0.5, float(fallback_mipmap_level));
+    duvdy = duvdy * pow(0.5, float(fallback_mipmap_level));
 
     decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, temp_tile_id_fallback.z - fallback_mipmap_level);
-    lowp vec4 fallback_color0 = vec4(textureGrad(fallback_texture_array, vec3(fallback_uv, texture_layer_fallback.x & layer_mask),duvdx, duvdy));
 
-    decrease_zoom_level_by_one(temp_tile_id_fallback, fallback_uv);
-    // half duvdx/y again since we went one mipmap_level further
-    duvdx *= 0.5;
-    duvdy *= 0.5;
-    lowp vec4 fallback_color1 = vec4(textureGrad(fallback_texture_array, vec3(fallback_uv, texture_layer_fallback.y & layer_mask),duvdx, duvdy));
+    lowp vec3 fallback_color0 = textureGrad(fallback_texture_array_higher, vec3(fallback_uv, texture_layer_fallback & layer_mask), duvdx, duvdy).rgb;
+    lowp vec3 fallback_color1 = textureGrad(fallback_texture_array_lower, vec3(fallback_uv, texture_layer_fallback & layer_mask), duvdx, duvdy).rgb;
+
     return mix(fallback_color1, fallback_color0, fallback_interpolation).rgb;
 }
 
@@ -195,8 +192,8 @@ void main() {
 #endif
 
     // hold uv and tile_id values for later (we do not want mipmap to influence it directly
-   highp vec2 fallback_uv = uv;
-   highp uvec3 temp_tile_id_fallback = uvec3(tile_id);
+    highp vec2 fallback_uv = uv;
+    highp uvec3 temp_tile_id_fallback = uvec3(tile_id);
 
 
     /////////////////////////
@@ -227,6 +224,9 @@ void main() {
 
     /////////////////////////
     // FALLBACK COLOR
+    // lowp vec3 fallback_color0 = textureGrad(fallback_texture_array_higher, vec3(uv, texture_layer.x & layer_mask), meta.duvdx, meta.duvdy).rgb;
+    // lowp vec3 fallback_color1 = textureGrad(fallback_texture_array_lower, vec3(uv, texture_layer.x & layer_mask), meta.duvdx, meta.duvdy).rgb;
+    //  lowp vec3 fallback_color = mix(fallback_color1, fallback_color0, fract(float_zoom)).rgb;
     lowp vec3 fallback_color = get_fallback_color(temp_tile_id_fallback, fallback_uv, meta, float_zoom);
 
 
@@ -263,7 +263,7 @@ void main() {
 
         { // DEBUG
             debug_texture_layer = color_from_id_hash(texture_layer.y);
-            debug_calculate_cascade_layer(debug_cacscade_layer, sampler_buffer_index);
+            debug_visualize_index(debug_cacscade_layer, sampler_buffer_index);
             debug_calculate_cell_size(debug_cell_size, offset_size.y);
             debug_index_buffer_start = color_from_id_hash(offset_size.x);
             debug_index_buffer_size = color_from_id_hash(offset_size.y);

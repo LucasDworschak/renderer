@@ -96,7 +96,8 @@ private:
     std::vector<std::unique_ptr<Texture>> m_geometry_buffer_texture;
     std::unique_ptr<Texture> m_styles_texture;
 
-    std::unique_ptr<Texture> m_fallback_texture_array;
+    std::unique_ptr<Texture> m_fallback_texture_array_higher;
+    std::unique_ptr<Texture> m_fallback_texture_array_lower;
 
     std::unique_ptr<Texture> m_instanced_zoom;
     std::unique_ptr<Texture> m_instanced_array_index;
@@ -124,6 +125,6 @@ private:
 
     nucleus::tile::GpuArrayHelper::LayerInfo fallback_layer(nucleus::tile::Id tile_id) const;
     void update_fallback_textures(const std::vector<IdLayer>& tiles_to_render);
-    void setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list, bool draw_parent) const;
+    void setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list, bool draw_fallback) const;
 };
 } // namespace gl_engine
