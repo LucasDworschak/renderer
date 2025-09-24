@@ -143,13 +143,7 @@ void main() {
     // anti-alialing
     meta.cos_smoothing_factor = 1.0;
 
-
-#if SDF_MODE == 0
-    calculate_sample_positions(meta.aa_sample_positions, uv, grid_cell);
-#endif
-#if SDF_MODE == 1
-    calculate_sample_multipliers(meta.aa_sample_multipliers);
-#endif
+    calculate_samples(meta, uv);
 
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
     if(offset_size.y != uint(0)) // only if we have data here

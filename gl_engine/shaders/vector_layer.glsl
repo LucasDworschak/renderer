@@ -34,6 +34,11 @@
 #define VIEW_MODE 1
 #endif
 
+// SAMPLE_DISTRIBUTION 0: UNIFORM SAMPLES
+// SAMPLE_DISTRIBUTION 1: RANDOM SAMPLES
+#ifndef VIEW_MODE
+#define SAMPLE_DISTRIBUTION 1
+#endif
 
 uniform highp usampler2D styles_sampler;
 
@@ -120,6 +125,23 @@ struct LayerStyle {
     lowp float line_width;
     lowp vec2 dash_info;
     bool round_line_caps;
+};
+
+
+struct DrawMeta
+{
+    lowp uint sampler_buffer_index;
+    highp uint texture_layer;
+    highp uint tile_zoom;
+    lowp vec4 ortho_color;
+    lowp vec2 grid_cell_float;
+    highp vec2 aa_sample_multipliers[n_aa_samples];
+    highp vec2 aa_sample_positions[n_aa_samples];
+    mediump float cos_smoothing_factor;
+    highp vec2 duvdx;
+    highp vec2 duvdy;
+    mediump float zoom_offset;
+    mediump float zoom_blend;
 };
 
 
@@ -307,47 +329,49 @@ VectorLayerData normalize_unpack_for_unittest(VectorLayerData unpacked_data, low
 }
 
 
-
-
-
-#if SDF_MODE == 0
-void calculate_sample_positions(out highp vec2 aa_sample_positions[n_aa_samples], highp vec2 uv, highp ivec2 grid_cell)
+void calculate_samples(inout DrawMeta meta, highp vec2 uv)
 {
     if(n_aa_samples <= 1)
     {
-        aa_sample_positions[0] = uv;
+#if SDF_MODE == 0
+        meta.aa_sample_positions[0] = uv;
+#else
+        meta.aa_sample_multipliers[0] = vec2(0.0);
+#endif
         return;
     }
-
-    highp vec2 min_cell = vec2(grid_cell) * cell_size_uv;
+#if SDF_MODE == 0
+    highp vec2 min_cell = meta.grid_cell_float * cell_size_uv;
     highp vec2 max_cell = min_cell + cell_size_uv;
     min_cell -= vec2(aa_cell_overlap_uv);
     max_cell += vec2(aa_cell_overlap_uv);
 
+    highp vec2 grad_u = vec2(meta.duvdx.x, meta.duvdy.x);
+    highp vec2 grad_v = vec2(meta.duvdx.y, meta.duvdy.y);
+#endif
 
-    highp vec2 grad_u = vec2(dFdx(uv.x), dFdy(uv.x));
-    highp vec2 grad_v = vec2(dFdx(uv.y), dFdy(uv.y));
+    highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols);
+    highp vec2 start = vec2(-aa_sample_dist / 2.0 + aa_sample_dist_increments / 2.0);
 
-
-    highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols-1.0);
 
     for (int x = 0; x < n_aa_samples_row_cols; ++x) {
         for (int y = 0; y < n_aa_samples_row_cols; ++y) {
             lowp int index = x*n_aa_samples_row_cols + y;
 
-            highp vec2 aa_sample_multiplier = vec2(-aa_sample_dist / 2.0) + vec2(x,y) * vec2(aa_sample_dist_increments);
+            meta.aa_sample_multipliers[index] = start + vec2(x,y) * vec2(aa_sample_dist_increments);
 
-            aa_sample_positions[index].x = uv.x + dot(grad_u, aa_sample_multiplier);
-            aa_sample_positions[index].y = uv.y + dot(grad_v, aa_sample_multiplier);
+#if SDF_MODE == 0
+            meta.aa_sample_positions[index].x = uv.x + dot(grad_u, meta.aa_sample_multipliers[index]);
+            meta.aa_sample_positions[index].y = uv.y + dot(grad_v, meta.aa_sample_multipliers[index]);
 
             // clip to current cell
-            aa_sample_positions[index] = min(max_cell, max(min_cell, aa_sample_positions[index]));
-
+            meta.aa_sample_positions[index] = min(max_cell, max(min_cell, meta.aa_sample_positions[index]));
+#endif
         }
     }
-
 }
 
+#if SDF_MODE == 0
 SDFData prepare_sd_Line_Triangle(VectorLayerData geom_data)
 {
     SDFData data;
@@ -428,27 +452,6 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, hig
 }
 #endif
 #if SDF_MODE == 1
-void calculate_sample_multipliers(out highp vec2 aa_sample_multipliers[n_aa_samples])
-{
-    if(n_aa_samples <= 1)
-    {
-        aa_sample_multipliers[0] = vec2(0.0);
-        return;
-    }
-
-
-    highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols);
-
-    highp vec2 start = vec2(-aa_sample_dist / 2.0 + aa_sample_dist_increments / 2.0);
-    for (int x = 0; x < n_aa_samples_row_cols; ++x) {
-        for (int y = 0; y < n_aa_samples_row_cols; ++y) {
-            lowp int index = x*n_aa_samples_row_cols + y;
-            aa_sample_multipliers[index] = start + vec2(x,y) * vec2(aa_sample_dist_increments);
-        }
-    }
-
-}
-
 highp float grad_clamp_fun(highp float v, highp float min, highp float max, highp float incoming_grad)
 {
     // return incoming_grad * // TODO convert to * instead of if
@@ -694,21 +697,6 @@ void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp uint inter
 }
 
 
-struct DrawMeta
-{
-    lowp uint sampler_buffer_index;
-    highp uint texture_layer;
-    highp uint tile_zoom;
-    lowp vec4 ortho_color;
-    lowp vec2 grid_cell_float;
-    highp vec2 aa_sample_multipliers[n_aa_samples];
-    highp vec2 aa_sample_positions[n_aa_samples];
-    mediump float cos_smoothing_factor;
-    highp vec2 duvdx;
-    highp vec2 duvdy;
-    mediump float zoom_offset;
-    mediump float zoom_blend;
-};
 
 
 bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
