@@ -36,7 +36,7 @@
 
 // SAMPLE_DISTRIBUTION 0: UNIFORM SAMPLES
 // SAMPLE_DISTRIBUTION 1: RANDOM SAMPLES
-#ifndef VIEW_MODE
+#ifndef SAMPLE_DISTRIBUTION
 #define SAMPLE_DISTRIBUTION 1
 #endif
 
@@ -328,6 +328,18 @@ VectorLayerData normalize_unpack_for_unittest(VectorLayerData unpacked_data, low
     return unpacked_data;
 }
 
+// https://thebookofshaders.com/10/
+float random (vec2 st) {
+    return fract(sin(dot(st.xy,vec2(12.9898,78.233))) * 43758.5453123);
+}
+
+highp vec2 random_gaussian_point(vec2 offset, highp vec2 uv)
+{
+    float r = random(uv + vec2(10.432823*offset.x, 30.282*offset.y))*aa_sample_dist;
+    float angle = random(uv + vec2(50.5484523*offset.x, 40.81054*offset.y)) * PI;
+
+    return vec2(r*cos(angle), r*sin(angle));
+}
 
 void calculate_samples(inout DrawMeta meta, highp vec2 uv)
 {
@@ -350,15 +362,20 @@ void calculate_samples(inout DrawMeta meta, highp vec2 uv)
     highp vec2 grad_v = vec2(meta.duvdx.y, meta.duvdy.y);
 #endif
 
+#if SAMPLE_DISTRIBUTION == 0
     highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols);
     highp vec2 start = vec2(-aa_sample_dist / 2.0 + aa_sample_dist_increments / 2.0);
-
+#endif
 
     for (int x = 0; x < n_aa_samples_row_cols; ++x) {
         for (int y = 0; y < n_aa_samples_row_cols; ++y) {
             lowp int index = x*n_aa_samples_row_cols + y;
 
+#if SAMPLE_DISTRIBUTION == 0
             meta.aa_sample_multipliers[index] = start + vec2(x,y) * vec2(aa_sample_dist_increments);
+#else
+            meta.aa_sample_multipliers[index] = random_gaussian_point(vec2(x,y), uv);
+#endif
 
 #if SDF_MODE == 0
             meta.aa_sample_positions[index].x = uv.x + dot(grad_u, meta.aa_sample_multipliers[index]);
