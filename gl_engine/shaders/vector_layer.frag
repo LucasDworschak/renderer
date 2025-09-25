@@ -130,9 +130,15 @@ lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallb
     // decrease tiles to zoom level given by c++ code (tile is guaranteed fetched)
     decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, texelFetch(instanced_texture_zoom_sampler_vector_fallback, ivec2(instance_id, 0), 0).x);
 
-    lowp uint fallback_mipmap_level = uint(ceil(float(temp_tile_id_fallback.z)-float_zoom));
+    //fallback mipmap level -> only calculate if float_zoom is less than tile zoom
+    // otherwise undefined behaviour -> since we expect a value between 0 and mipmap levels
+    // sets mipmap to 0 if float zoom is higher -> highest available tile zoom is used
+    lowp uint fallback_mipmap_level = 0u;
+    if(float_zoom<=float(temp_tile_id_fallback.z))
+        fallback_mipmap_level = min(uint(mipmap_levels)-1u, uint(ceil(float(temp_tile_id_fallback.z)-float_zoom)));
 
-    highp float fallback_interpolation = meta.zoom_blend;
+    // for the case that tiles haven't been loaded yet, we only render the highest zoom level available -> there will be no interpolation
+    highp float fallback_interpolation = mix(meta.zoom_blend, 1.0, float(float_zoom>float(temp_tile_id_fallback.z+1u)));
 
     highp uint texture_layer_fallback = texelFetch(instanced_texture_array_index_sampler_vector_fallback, ivec2(instance_id, fallback_mipmap_level), 0).x;
 
