@@ -150,8 +150,55 @@ lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallb
 }
 
 
+void decrease_zoom_level_until_TEST(inout highp uvec3 id, in lowp uint zoom_level) {
+    if(id.z <= zoom_level)
+        return;
+    id.z = id.z - 1u;
+}
 
 void main() {
+
+    texout_albedo = vec3(0.0, 0.0,0.0);
+
+    highp uvec3 test = uvec3(0u,0u,8u);
+
+    // HERE: switching between zoom_level from texture and zoom_level by hardcoded value behaves differently, although both are the same
+    lowp uint zoom_level = texelFetch(instanced_texture_zoom_sampler_vector_fallback, ivec2(instance_id, 0), 0).x;
+    // lowp uint zoom_level = 8u;
+    // cause of this error: we are using a function with an if statement
+    decrease_zoom_level_until_TEST(test, zoom_level);
+
+    lowp uint mipmap = uint(ceil(float(test.z)-14.0));
+
+    float zoom_ok = float(zoom_level == 8u); // to confirm that what is written in the texture and the hardcoded value are the same
+    float tile_z_ok = float(test.z == 8u); // to confirm if the decrease_zoom_level_until_TEST does anything other than immediately return
+    float mipmap_ok = float(mipmap > 0u); // this is what we care about -> we expect a value bigger than 0 -> since a negative uint wraps around
+
+    // white all three were ok
+    // yellow -> mipmap not ok -> zoom and tile_zoom ok
+    // black -> all were not ok
+    texout_albedo = vec3(zoom_ok,tile_z_ok,mipmap_ok);
+
+    // WHAT I GET:
+    // zoom_level from texture -> yellow
+    // zoom_level hardcoded -> white
+
+
+
+    highp float dist = length(var_pos_cws);
+    texout_position = vec4(var_pos_cws, dist);
+
+    // Write and encode normal in gbuffer
+    highp vec3 normal = vec3(0.0);
+    if (conf.normal_mode == 0u) normal = normal_by_fragment_position_interpolation();
+    else normal = var_normal;
+    texout_normal = octNormalEncode2u16(normal);
+
+    // Write and encode distance for readback
+    texout_depth = vec4(depthWSEncode2n8(dist), 0.0, 0.0);
+}
+
+void main2() {
 #if CURTAIN_DEBUG_MODE == 2
     if (is_curtain == 0.0) {
         discard;

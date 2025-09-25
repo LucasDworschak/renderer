@@ -111,7 +111,7 @@ private:
     QString m_debug_text;
     QString m_debug_scheduler_stats;
 
-    unsigned int m_max_zoom = 19u;
+    unsigned int m_max_zoom = 8u;
 
     std::unique_ptr<nucleus::timing::TimerManager> m_timer;
 
