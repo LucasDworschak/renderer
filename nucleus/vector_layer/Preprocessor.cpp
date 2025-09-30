@@ -673,6 +673,8 @@ GpuVectorLayerTile Preprocessor::create_gpu_tile()
             // if (cell_size > max)
             //     max = cell_size;
 
+            // TODO if we stay with 512x512 geometry buffer size -> we can add two bits to size and remove those from offset
+            // -> this way there is no need to artificially cap the geometries to 255
             // TODO enable assert again
             // assert(cell_size< 256); // make sure that we are not removing indices we want to draw
             if (cell_size > 255)

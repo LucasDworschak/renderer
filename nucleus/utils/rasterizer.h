@@ -469,6 +469,7 @@ namespace details {
         // middle bottom
         render_line(pixel_writer, line_index, enlarged_middle_origin, edge, fill_direction, enlarged_top_origin, edge, enlarged_middle_end, normal);
 
+        // TODO in theory we shouldn't need the code below. but for some reason the code fails for (SECTION("Line rasterization - big line width"))
         // we need to reevaluate fill_direction for the bottom part
         x_middle_of_top_bottom_line = get_x_for_y_on_line(enlarged_middle_origin, edge, enlarged_middle_end.y);
         fill_direction = (enlarged_middle_end.x < x_middle_of_top_bottom_line) ? 1 : -1;

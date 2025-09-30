@@ -66,7 +66,8 @@ const lowp int n_aa_samples_row_cols = 4;
 const lowp int n_aa_samples_row_cols = n_multisamples;
 #endif
 const lowp int n_aa_samples = n_aa_samples_row_cols*n_aa_samples_row_cols;
-const lowp float aa_sample_dist = 1.0; // 0.5 goes from -0.25 to +0.25 of the current uv coordinate
+// determined at compilation of the shader from cpp side
+// const lowp float aa_sample_dist = 1.0; // 0.5 goes from -0.25 to +0.25 of the current uv coordinate
 
 const mediump float division_by_n_samples = 1.0 / float(n_aa_samples);
 const lowp float style_precision_mult = 1.0 / float(style_precision);
@@ -333,12 +334,45 @@ float random (vec2 st) {
     return fract(sin(dot(st.xy,vec2(12.9898,78.233))) * 43758.5453123);
 }
 
-highp vec2 random_gaussian_point(vec2 offset, highp vec2 uv)
-{
-    float r = random(uv + vec2(10.432823*offset.x, 30.282*offset.y))*aa_sample_dist;
-    float angle = random(uv + vec2(50.5484523*offset.x, 40.81054*offset.y)) * PI;
+highp vec2 hash(highp vec2 p) {
+    uvec2 res = uvec2(p*4294967296.0);
+    res.x ^= res.x >> 16;
+    res.y ^= res.y >> 16;
+    res.x *= 0x7feb352dU;
+    res.y *= 0x7feb352dU;
+    res.x ^= res.x >> 15;
+    res.y ^= res.y >> 15;
+    res.x *= 0x846ca68bU;
+    res.y *= 0x846ca68bU;
+    res.x ^= res.x >> 16;
+    res.y ^= res.y >> 16;
 
-    return vec2(r*cos(angle), r*sin(angle));
+    return vec2(res) / 4294967296.0;
+
+}
+
+highp vec2 random_gaussian_point(ivec2 offset, highp vec2 uv)
+{
+    // float r = random(uv + vec2(0.432823*offset.x, 0.282*offset.y))*aa_sample_dist;
+    // float angle = random(uv + vec2(0.5484523*offset.x, 0.81054*offset.y)) * PI*2.0;
+
+    // return vec2(r*cos(angle), r*sin(angle));
+
+
+    vec2 rand = hash(uv);
+
+    // how many different samples can we create from the random samples provided by cpp
+    const lowp int sample_splits = num_random_samples / n_aa_samples;
+    // get a random start_index
+    lowp int start_index = n_aa_samples*int(sample_splits*rand.x);
+
+    // get the index using start_index and the current x,y position
+    lowp int index = (start_index + int(offset.x * n_aa_samples_row_cols + offset.y));
+
+    // randomly mirror in both x and y direction
+    // NOTE: step(0.5,rand.y)-0.5 -> provides either -0.5 or + 0.5
+    return vec2((step(0.5,rand.y)-0.5))*random_samples[index];
+
 }
 
 void calculate_samples(inout DrawMeta meta, highp vec2 uv)
@@ -369,12 +403,12 @@ void calculate_samples(inout DrawMeta meta, highp vec2 uv)
 
     for (int x = 0; x < n_aa_samples_row_cols; ++x) {
         for (int y = 0; y < n_aa_samples_row_cols; ++y) {
-            lowp int index = x*n_aa_samples_row_cols + y;
+            lowp int index = x * n_aa_samples_row_cols + y;
 
 #if SAMPLE_DISTRIBUTION == 0
             meta.aa_sample_multipliers[index] = start + vec2(x,y) * vec2(aa_sample_dist_increments);
 #else
-            meta.aa_sample_multipliers[index] = random_gaussian_point(vec2(x,y), uv);
+            meta.aa_sample_multipliers[index] = random_gaussian_point(ivec2(x,y), uv);
 #endif
 
 #if SDF_MODE == 0

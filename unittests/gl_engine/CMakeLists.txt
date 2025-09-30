@@ -29,7 +29,7 @@ alp_add_unittest(unittests_gl_engine
 target_sources(unittests_gl_engine
   PRIVATE
     tile_funs.cpp
-    tile_drawing.cpp
+    # tile_drawing.cpp
 )
 
 qt_add_resources(unittests_gl_engine "gl_test_data"

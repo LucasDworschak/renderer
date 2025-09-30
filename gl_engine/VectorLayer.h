@@ -126,5 +126,7 @@ private:
     nucleus::tile::GpuArrayHelper::LayerInfo fallback_layer(nucleus::tile::Id tile_id) const;
     void update_fallback_textures(const std::vector<IdLayer>& tiles_to_render);
     void setup_buffers(std::shared_ptr<ShaderProgram> shader, const std::vector<nucleus::tile::TileBounds>& draw_list, bool draw_fallback) const;
+    static std::vector<glm::vec2> gaussian2d(float sigma, int num_points);
+    static QString vec2_arr_to_glsl_string(const std::vector<glm::vec2>& points);
 };
 } // namespace gl_engine

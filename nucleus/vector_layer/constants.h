@@ -76,4 +76,9 @@ constexpr int aa_lines = 0;
 constexpr int array_helper_all_bits = 16;
 constexpr int array_helper_buffer_info_bits = 2;
 
+// shader sampling
+static constexpr int num_random_samples = 32 * 4;
+// 0.5 goes from -0.25 to +0.25 of the current uv coordinate
+static constexpr float aa_sample_dist = 1.0;
+
 } // namespace nucleus::vector_layer::constants
