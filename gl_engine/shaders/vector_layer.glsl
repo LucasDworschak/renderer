@@ -330,7 +330,7 @@ VectorLayerData normalize_unpack_for_unittest(VectorLayerData unpacked_data, low
 }
 
 // https://thebookofshaders.com/10/
-float random (vec2 st) {
+highp float random (highp vec2 st) {
     return fract(sin(dot(st.xy,vec2(12.9898,78.233))) * 43758.5453123);
 }
 
@@ -359,12 +359,12 @@ highp vec2 random_gaussian_point(ivec2 offset, highp vec2 uv)
     // return vec2(r*cos(angle), r*sin(angle));
 
 
-    vec2 rand = hash(uv);
+    mediump vec2 rand = hash(uv);
 
     // how many different samples can we create from the random samples provided by cpp
-    const lowp int sample_splits = num_random_samples / n_aa_samples;
+    const lowp float sample_splits = float(num_random_samples / n_aa_samples);
     // get a random start_index
-    lowp int start_index = n_aa_samples*int(sample_splits*rand.x);
+    lowp int start_index = int(n_aa_samples)*int(sample_splits*rand.x);
 
     // get the index using start_index and the current x,y position
     lowp int index = (start_index + int(offset.x * n_aa_samples_row_cols + offset.y));

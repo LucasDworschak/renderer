@@ -92,7 +92,7 @@ std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
     const auto random_samples = vec2_arr_to_glsl_string(gaussian2d(constants::aa_sample_dist, constants::num_random_samples));
     defines[QString("random_samples")] = random_samples;
 
-    qDebug() << "random samples: " << random_samples;
+    // qDebug() << "random samples: " << random_samples;
 
     defines[QString("all_bits")] = QString::number(constants::all_bits);
     defines[QString("coordinate_bits_polygons")] = QString::number(constants::coordinate_bits_polygons);
