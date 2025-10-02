@@ -30,8 +30,6 @@
 
 #include "nucleus/vector_layer/constants.h"
 
-#include <glm/gtc/random.hpp>
-
 namespace gl_engine {
 
 using namespace nucleus::vector_layer;
@@ -44,33 +42,6 @@ VectorLayer::VectorLayer(unsigned int fallback_resolution, QObject* parent)
 
 {
     m_defines = default_defines();
-}
-
-std::vector<glm::vec2> gl_engine::VectorLayer::gaussian2d(float sigma, int num_points)
-{
-    std::srand(1);
-    std::vector<glm::vec2> points;
-    for (int i = 0; i < num_points; i++) {
-        points.push_back(glm::gaussRand(glm::vec2(0.0), glm::vec2(sigma)));
-    }
-    return points;
-}
-
-QString gl_engine::VectorLayer::vec2_arr_to_glsl_string(const std::vector<glm::vec2>& points)
-{
-    // QString out = "vec3["+ 2 + "](";
-    auto out = QString("vec2[%1](").arg(points.size());
-
-    constexpr int precision = 4;
-
-    for (const auto p : points) {
-        out += QString("vec2(%1,%2),").arg(QString::number(p.x, 'f', precision), QString::number(p.y, 'f', precision));
-    }
-
-    out.chop(1); // remove last char
-    out += ")";
-
-    return out;
 }
 
 std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
@@ -86,13 +57,6 @@ std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
     defines[QString("grid_size")] = QString("vec2(%1,%1)").arg(constants::grid_size);
     defines[QString("mipmap_levels")] = QString::number(constants::mipmap_levels);
     defines[QString("aa_sample_dist")] = QString("float(%1)").arg(constants::aa_sample_dist);
-    defines[QString("num_random_samples")] = QString::number(constants::num_random_samples);
-    // NOTE: normally we would want half of the aa_sample_dist as the sigma for the gaussian
-    // but if we double the sigma here, we save a calculation in the shader
-    const auto random_samples = vec2_arr_to_glsl_string(gaussian2d(constants::aa_sample_dist, constants::num_random_samples));
-    defines[QString("random_samples")] = random_samples;
-
-    // qDebug() << "random samples: " << random_samples;
 
     defines[QString("all_bits")] = QString::number(constants::all_bits);
     defines[QString("coordinate_bits_polygons")] = QString::number(constants::coordinate_bits_polygons);

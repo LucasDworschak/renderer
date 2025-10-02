@@ -61,12 +61,12 @@ void decrease_zoom_level_until(inout highp uvec3 id, inout highp vec2 uv, in low
         return;
     highp uint z_delta = id.z - zoom_level;
     highp uint border_mask = (1u << z_delta) - 1u;
-    highp float x_border = float(id.x & border_mask) / float(1u << z_delta);
-    highp float y_border = float((id.y ^ border_mask) & border_mask) / float(1u << z_delta);
+    highp float x_border = float(id.x & border_mask);
+    highp float y_border = float((id.y ^ border_mask) & border_mask);
     id.z = id.z - z_delta;
     id.x = id.x >> z_delta;
     id.y = id.y >> z_delta;
-    uv = uv / float(1u << z_delta) + vec2(x_border, y_border);
+    uv = (uv + vec2(x_border, y_border)) / float(1u << z_delta);
 }
 
 void decrease_zoom_level_until(inout highp uvec3 id, in lowp uint zoom_level) {

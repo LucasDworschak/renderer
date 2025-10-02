@@ -128,7 +128,9 @@ lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallb
     highp vec2 duvdy = dFdy(fallback_uv);
 
     // decrease tiles to zoom level given by c++ code (tile is guaranteed fetched)
-    decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, texelFetch(instanced_texture_zoom_sampler_vector_fallback, ivec2(instance_id, 0), 0).x);
+    lowp uint target_zoom = texelFetch(instanced_texture_zoom_sampler_vector_fallback, ivec2(instance_id, 0), 0).x;
+    lowp uint geometry_zoom = temp_tile_id_fallback.z;
+    decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, target_zoom);
 
     //fallback mipmap level -> only calculate if float_zoom is less than tile zoom
     // otherwise undefined behaviour -> since we expect a value between 0 and mipmap levels
@@ -144,8 +146,8 @@ lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallb
 
     // we are using textureGrad and manually half duvdx/y for each mipmap_level
     // -> if we are not doing this we would get a ring when changing the mipmap level
-    duvdx = duvdx * pow(0.5, float(fallback_mipmap_level));
-    duvdy = duvdy * pow(0.5, float(fallback_mipmap_level));
+    duvdx = duvdx * pow(0.5, float(fallback_mipmap_level + geometry_zoom - target_zoom));
+    duvdy = duvdy * pow(0.5, float(fallback_mipmap_level + geometry_zoom - target_zoom));
 
     decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, temp_tile_id_fallback.z - fallback_mipmap_level);
 

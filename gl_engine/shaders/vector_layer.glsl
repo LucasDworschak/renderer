@@ -60,6 +60,9 @@ uniform highp usampler2DArray geometry_buffer_sampler_2;
 
 ///////////////////////////////////////////////
 
+// NOTE: n_aa_samples_row_cols defines how many samples per uniform row -> they will be squared
+// This is also currently married to the random samples -> e.g. setting it to 4 will result in 16 random samples
+// the random samples are also currently limited to 16 -> if we want to increase the samples we would also need to increase the random_samples variable
 #ifndef n_multisamples
 const lowp int n_aa_samples_row_cols = 4;
 #else
@@ -88,6 +91,8 @@ const lowp vec3 background_color = vec3(242.0f/255.0f, 239.0f/255.0f, 233.0f/255
 // const lowp vec3 background_color = vec3(248.0f/255.0f, 248.0f/255.0f, 248.0f/255.0f);
 // osm-bright
 // const lowp vec3 background_color = vec3(248.0f/255.0f, 244.0f/255.0f, 240.0f/255.0f);
+
+const vec2[16] random_samples = vec2[16](vec2(-0.12781827,-0.07746551),vec2(-0.56825564,-0.50103748),vec2(0.21763546,0.22721745),vec2(0.06014171,0.00090832),vec2(0.38402289,0.78174722),vec2(0.40367972,-0.20728750),vec2(0.72827647,-0.75817493),vec2(-0.55837659,-0.06544222),vec2(-0.51244102,0.36216960),vec2(-0.19719190,0.25865584),vec2(-0.06226554,-0.12613159),vec2(-0.10024053,0.68217920),vec2(0.39563396,0.31162355),vec2(0.40185253,-0.29009449),vec2(0.32805709,-0.38292970),vec2(-0.92934095,0.41766199));
 
 
 struct VectorLayerData{
@@ -348,30 +353,45 @@ highp vec2 hash(highp vec2 p) {
     res.y ^= res.y >> 16;
 
     return vec2(res) / 4294967296.0;
-
 }
 
 highp vec2 random_gaussian_point(ivec2 offset, highp vec2 uv)
 {
+    ////////////////////////////////
+    // Random disk with polar coordinates
+    ////////////////////////////////
+    // performance worsens by ~1-2 ms (in vienna) but prevents Moiré patterns
+    // {
     // float r = random(uv + vec2(0.432823*offset.x, 0.282*offset.y))*aa_sample_dist;
     // float angle = random(uv + vec2(0.5484523*offset.x, 0.81054*offset.y)) * PI*2.0;
 
     // return vec2(r*cos(angle), r*sin(angle));
+    // }
 
+    ////////////////////////////////
+    // Gaussian distribution with random start_index+mirrors
+    ////////////////////////////////
+    // performance worsens by ~1-2 ms (in vienna) but prevents Moiré patterns
+    // {
+    //     mediump vec2 rand = hash(uv);
+    //     // how many different samples can we create from the random samples provided by cpp
+    //     const lowp float sample_splits = float(num_random_samples / n_aa_samples);
+    //     // get a random start_index
+    //     lowp int start_index = int(n_aa_samples)*int(sample_splits*rand.x);
 
-    mediump vec2 rand = hash(uv);
+    //     // get the index using start_index and the current x,y position
+    //     lowp int index = (start_index + int(offset.x * n_aa_samples_row_cols + offset.y));
 
-    // how many different samples can we create from the random samples provided by cpp
-    const lowp float sample_splits = float(num_random_samples / n_aa_samples);
-    // get a random start_index
-    lowp int start_index = int(n_aa_samples)*int(sample_splits*rand.x);
+    //     // randomly mirror in both x and y direction
+    //     return vec2((step(0.5,rand.y)-0.5)*2.0)*random_samples[index];
+    // }
 
-    // get the index using start_index and the current x,y position
-    lowp int index = (start_index + int(offset.x * n_aa_samples_row_cols + offset.y));
-
-    // randomly mirror in both x and y direction
-    // NOTE: step(0.5,rand.y)-0.5 -> provides either -0.5 or + 0.5
-    return vec2((step(0.5,rand.y)-0.5))*random_samples[index];
+    ////////////////////////////////
+    // Gaussian distribution that stays the same over all pixels
+    ////////////////////////////////
+    // -> similar performance to uniform grids, but advantages of prefering the pixel center
+    lowp int index = int(offset.x * n_aa_samples_row_cols + offset.y);
+    return random_samples[index];
 
 }
 
