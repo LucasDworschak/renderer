@@ -32,11 +32,11 @@ struct LayerStyle {
 
     uint32_t fill_color; // fill-color or line-color
     uint16_t width; // line-width -> only 15 bits can be used for storage
-    uint8_t dash; // line-dasharray (dash amount)
-    uint8_t gap; // line-dasharray (gap amount)
+    uint8_t dash_gap_ratio; // line-dasharray
+    uint8_t dash_sum; // line-dasharray
     bool round_line_cap; // "layout"->"line-cap"
 
-    glm::u32vec2 buffer_alignment() const { return { fill_color, width << 17 | dash << 9 | gap << 1 | uint(round_line_cap) }; }
+    glm::u32vec2 buffer_alignment() const { return { fill_color, width << 17 | dash_gap_ratio << 9 | dash_sum << 1 | uint(round_line_cap) }; }
 
     bool operator==(const LayerStyle& other) const = default;
 };
@@ -48,8 +48,8 @@ struct StyleHasher {
 
         radix::hasher::hash_combine<uint32_t>(seed, style.fill_color);
         radix::hasher::hash_combine<uint16_t>(seed, style.width);
-        radix::hasher::hash_combine<uint8_t>(seed, style.dash);
-        radix::hasher::hash_combine<uint8_t>(seed, style.gap);
+        radix::hasher::hash_combine<uint8_t>(seed, style.dash_gap_ratio);
+        radix::hasher::hash_combine<uint8_t>(seed, style.dash_sum);
         radix::hasher::hash_combine<bool>(seed, style.round_line_cap);
 
         return seed;

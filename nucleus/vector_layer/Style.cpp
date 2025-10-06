@@ -126,6 +126,7 @@ void Style::load()
 
         const auto current_layer_filter = std::make_pair(layer_name, filter);
 
+        // TODO is this still necessary? I think this is deprecated and was only used previously for merging similar styles/filters
         if (previous_layer_filter.first.first.empty()) {
             // first time -> only set the previous_layer_filter
             previous_layer_filter = current_layer_filter;
