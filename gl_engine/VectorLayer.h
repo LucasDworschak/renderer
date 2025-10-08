@@ -112,6 +112,7 @@ private:
 
     helpers::ScreenQuadGeometry m_screen_quad_geometry;
 
+    // TODO i think we can move tile id into fallbackmeta
     std::vector<nucleus::tile::Id> m_vector_on_gpu;
     std::vector<FallbackMeta> m_fallback_on_gpu;
 

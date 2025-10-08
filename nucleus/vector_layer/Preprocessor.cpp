@@ -113,6 +113,22 @@ GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vecto
     return tile;
 }
 
+// calculates the area using the shoelace formula (surveyors formula) (https://en.wikipedia.org/wiki/Shoelace_formula)
+// NOTE: as we are using this formula to determine the winding order of the polygon -> the area might be negative
+float Preprocessor::polygon_area(const ClipperPath& vertices)
+{
+    float area = 0.0f;
+
+    for (size_t i = 0; i < vertices.size() - 1; ++i) {
+        const ClipperPoint& current = vertices[i];
+        const ClipperPoint& next = vertices[i + 1];
+
+        area += current.x * next.y - next.x * current.y;
+    }
+
+    return area * 0.5f;
+}
+
 std::vector<StyleLayerIndex> Preprocessor::simplify_styles(
     std::vector<StyleLayerIndex>* style_and_layer_indices, const uint zoom_level, const std::vector<glm::u32vec2>& style_buffer)
 {
@@ -196,26 +212,36 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
                 continue;
 
             const auto is_polygon = feature.getType() == mapbox::vector_tile::GeomType::POLYGON;
+
             const auto scale = (is_polygon) ? constants::scale_polygons : constants::scale_lines;
             const auto cell_scale = float(constants::grid_size) / (float(constants::tile_extent) * scale);
             PointCollectionVec2 geom = feature.getGeometries<PointCollectionVec2>(scale);
 
-            radix::geometry::Aabb2i aabb({ constants::grid_size * 2 * scale, constants::grid_size * 2 * scale },
-                { -constants::grid_size * 2 * scale, -constants::grid_size * 2 * scale });
-            // calculate bounds
-            std::vector<ClipperRect> bounds;
+            std::vector<GeometryData> all_geometry_data;
+            GeometryData* current_geom_data = nullptr;
             if (is_polygon) {
-                // only needed for polygons
-                bounds.reserve(geom.size());
                 for (size_t j = 0; j < geom.size(); j++) {
+
+                    bool exterior_ring = polygon_area(geom[j]) > 0.0;
+
+                    if (exterior_ring || j == 0) {
+                        // reset the current_geom_data for every exterior ring we find
+                        current_geom_data = &all_geometry_data.emplace_back();
+                        current_geom_data->aabb = radix::geometry::Aabb2i({ constants::grid_size * 2 * scale, constants::grid_size * 2 * scale },
+                            { -constants::grid_size * 2 * scale, -constants::grid_size * 2 * scale });
+                    }
+
                     const auto bound = Clipper2Lib::GetBounds(geom[j]);
 
-                    aabb.expand_by({ std::floor(float(bound.left) * cell_scale), std::floor(float(bound.top) * cell_scale) });
-                    aabb.expand_by({ std::ceil(float(bound.right) * cell_scale), std::ceil(float(bound.bottom) * cell_scale) });
-                    bounds.push_back(bound);
-                }
+                    current_geom_data->aabb.expand_by({ std::floor(float(bound.left) * cell_scale), std::floor(float(bound.top) * cell_scale) });
+                    current_geom_data->aabb.expand_by({ std::ceil(float(bound.right) * cell_scale), std::ceil(float(bound.bottom) * cell_scale) });
+                    current_geom_data->bounds.push_back(bound);
 
-                // TODO if aabb does not intersect with grid at all -> continue;
+                    current_geom_data->vertices.push_back(ClipperPath(geom[j].begin(), geom[j].end()));
+                }
+            } else {
+                current_geom_data = &all_geometry_data.emplace_back();
+                current_geom_data->vertices = ClipperPaths(geom.begin(), geom.end());
             }
 
             for (const auto& style_layer : style_and_layer_indices) {
@@ -223,7 +249,9 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
                 const auto opacity_higher = m_style_buffer[Style::get_style_index(style_layer.style_index, id.zoom_level)].x & 255;
                 const auto full_opaque = opacity_lower + opacity_higher == (255 + 255);
 
-                data[style_layer.layer_index].emplace_back(ClipperPaths(geom.begin(), geom.end()), bounds, aabb, style_layer, is_polygon, full_opaque);
+                for (const auto& geom_data : all_geometry_data) {
+                    data[style_layer.layer_index].emplace_back(geom_data.vertices, geom_data.bounds, geom_data.aabb, style_layer, is_polygon, full_opaque);
+                }
             }
         }
     }

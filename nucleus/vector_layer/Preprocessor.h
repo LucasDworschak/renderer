@@ -156,6 +156,8 @@ public:
     void preprocess_geometry(const VectorLayers& layers, const uint zoom_level);
     GpuVectorLayerTile create_gpu_tile();
 
+    static float polygon_area(const ClipperPath& vertices);
+
     static glm::u32vec2 pack_triangle_data(VectorLayerData data);
     static glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_layer, bool line_cap0, bool line_cap1);
     static VectorLayerData unpack_data(glm::uvec2 packed_data);

@@ -264,6 +264,8 @@ bool is_polygon(highp uvec2 packed_data)
     return (packed_data.y & is_polygon_bitmask) != 0u;
 }
 
+// TODO we are converting every geometry to uv space and also all the line widths are converted to uv space
+// is it possible to stay in tile space and only convert the uv coordinate to tile space? -> this can be done before the loop
 VectorLayerData unpack_data(highp uvec2 packed_data, lowp vec2 grid_cell)
 {
     VectorLayerData unpacked_data;
@@ -692,6 +694,7 @@ mediump ivec2 to_dict_pixel_128(mediump uint hash) {
 void parse_style(out LayerStyle style, highp uint style_index, mediump float zoom_offset, mediump float zoom_blend, lowp vec4 ortho_color, mediump float cos_smoothing_factor, bool is_polygon)
 {
     // calculate an integer zoom offset for lower and higher style indices and clamp
+    // TODO I think it should not be necessary to clamp the zoom offset anymore
     lowp int zoom_offset_lower = max(int(floor(zoom_offset-1.0)), -mipmap_levels+1);
     lowp int zoom_offset_higher = max(int(floor(zoom_offset-0.0)), -mipmap_levels+1);
 
