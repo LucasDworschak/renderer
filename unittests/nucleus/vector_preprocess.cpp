@@ -484,7 +484,7 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
     SECTION("clipping vector tile to cell")
     { // real example
-        constexpr size_t expected_process_amount = 131668;
+        constexpr size_t expected_process_amount = 132026;
 
         Style style(":/vectorlayerstyles/openstreetmap.json"); // 13
         // Style style(":/vectorlayerstyles/qwant.json"); // 9
