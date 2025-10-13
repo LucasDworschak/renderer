@@ -131,6 +131,12 @@ float Preprocessor::polygon_area(const ClipperPath& vertices)
     return area * 0.5f;
 }
 
+// goes over all the vertices and detects if a polygon is an exterior or interior(hole) polygon
+// if it is an exterior polygon and is not the first polygon checked, this polygon and the following interior polygons are separated.
+// the exterior/interior check is done using the polygon_area
+// example: e=exterior polygon; i=interior(hole) polygon; paranthesis ()=ClipperPaths
+// input: (e i i e e i e i)
+// output: (e i i), (e), (e i), (e i)
 std::vector<ClipperPaths> Preprocessor::separate_vertex_groups(const ClipperPaths& vertices)
 {
     std::vector<ClipperPaths> output;
