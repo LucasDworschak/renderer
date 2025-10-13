@@ -115,6 +115,8 @@ GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vecto
 
 // calculates the area using the shoelace formula (surveyors formula) (https://en.wikipedia.org/wiki/Shoelace_formula)
 // NOTE: as we are using this formula to determine the winding order of the polygon -> the area might be negative
+// positive area -> exterior polygon ring
+// negative area -> interior polygon ring (a hole in the polygon)
 float Preprocessor::polygon_area(const ClipperPath& vertices)
 {
     float area = 0.0f;
@@ -127,6 +129,25 @@ float Preprocessor::polygon_area(const ClipperPath& vertices)
     }
 
     return area * 0.5f;
+}
+
+std::vector<ClipperPaths> Preprocessor::separate_vertex_groups(const ClipperPaths& vertices)
+{
+    std::vector<ClipperPaths> output;
+    ClipperPaths* current_path;
+
+    for (const auto& polygon : vertices) {
+
+        if (output.size() == 0 || polygon_area(polygon) > 0) {
+            // we got an exterior polygon
+            // create a new entry
+            // note the first polygon should always be an exterior
+            current_path = &output.emplace_back();
+        }
+        current_path->push_back(polygon);
+    }
+
+    return output;
 }
 
 std::vector<StyleLayerIndex> Preprocessor::simplify_styles(
@@ -598,7 +619,10 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                             -cell.rect_polygons.left - cell_width_polygons * constants::aa_border,
                             -cell.rect_polygons.top - cell_width_polygons * constants::aa_border);
 
-                        m_processed_amount += triangulize_earcut(m_clipper_result, &cell.cell_data, style_layer);
+                        const auto vertex_groups = separate_vertex_groups(m_clipper_result);
+
+                        for (const auto& vertices : vertex_groups)
+                            m_processed_amount += triangulize_earcut(vertices, &cell.cell_data, style_layer);
                     }
                 });
 

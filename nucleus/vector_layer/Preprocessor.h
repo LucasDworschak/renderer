@@ -157,6 +157,7 @@ public:
     GpuVectorLayerTile create_gpu_tile();
 
     static float polygon_area(const ClipperPath& vertices);
+    static std::vector<ClipperPaths> separate_vertex_groups(const ClipperPaths& vertices);
 
     static glm::u32vec2 pack_triangle_data(VectorLayerData data);
     static glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_layer, bool line_cap0, bool line_cap1);
