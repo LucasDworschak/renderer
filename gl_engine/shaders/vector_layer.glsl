@@ -23,15 +23,16 @@
 
 // SDF_MODE 0: naive multisample antialiasing (golden -> but worse performnace)
 // SDF_MODE 1: derivative multisample antialiasing
+// SDF_MODE 2: screenspace transformation -> smoothstep
 #ifndef SDF_MODE
-#define SDF_MODE 1
+#define SDF_MODE 0
 #endif
 
 // 0 ortho only
 // 1 mixed
 // 2 vector only
 #ifndef VIEW_MODE
-#define VIEW_MODE 1
+#define VIEW_MODE 2
 #endif
 
 // SAMPLE_DISTRIBUTION 0: UNIFORM SAMPLES
@@ -148,6 +149,7 @@ struct DrawMeta
     highp vec2 duvdy;
     mediump float zoom_offset;
     mediump float zoom_blend;
+    highp mat2 screenspace_transform_matrix;
 };
 
 
@@ -523,6 +525,44 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, hig
     return sqrt(result)*poly_sign - (line_width * mask);
 
 }
+
+highp vec2 sd_Line_Triangle_screenspace( in highp vec2 uv, SDFData data, bool triangle, highp float line_width, lowp vec2 dash_info, bool round_line_caps)
+{
+    highp vec2 v0 = uv - data.vertices.a;
+    highp vec2 v1 = uv - data.vertices.b;
+    highp float h = clamp( dot(v0,data.e0)/data.dot_e0, 0.0, 1.0 );
+    highp vec2 pq0 = v0 - data.e0*h;
+
+    highp float poly_sign = 1.0;
+    highp float mask = 1.0;
+    highp float result = 1.0;
+
+    if(triangle)
+    {
+        highp vec2 v2 = uv - data.vertices.c;
+        highp vec2 pq1 = v1 - data.e1*clamp( dot(v1,data.e1)/data.dot_e1, 0.0, 1.0 );
+        highp vec2 pq2 = v2 - data.e2*clamp( dot(v2,data.e2)/data.dot_e2, 0.0, 1.0 );
+        highp float s = sign( data.e0.x*data.e2.y - data.e0.y*data.e2.x );
+        highp vec2 d0 = vec2(dot(pq0,pq0), s*(v0.x*data.e0.y-v0.y*data.e0.x));
+        highp vec2 d1 = vec2(dot(pq1,pq1), s*(v1.x*data.e1.y-v1.y*data.e1.x));
+        highp vec2 d = min(d0,d1);
+        highp vec2 d2 = vec2(dot(pq2,pq2), s*(v2.x*data.e2.y-v2.y*data.e2.x));
+        d = min(d,d2);
+
+        poly_sign = -sign(d.y);
+        result = d.x;
+
+        // return vec3(0.0);
+
+    }
+    else{
+
+        return pq0;
+    }
+
+    return vec2(1000.0,1000.0);
+
+}
 #endif
 #if SDF_MODE == 1
 highp float grad_clamp_fun(highp float v, highp float min, highp float max, highp float incoming_grad)
@@ -695,8 +735,8 @@ void parse_style(out LayerStyle style, highp uint style_index, mediump float zoo
 {
     // calculate an integer zoom offset for lower and higher style indices and clamp
     // TODO I think it should not be necessary to clamp the zoom offset anymore
-    lowp int zoom_offset_lower = max(int(floor(zoom_offset-1.0)), -mipmap_levels+1);
-    lowp int zoom_offset_higher = max(int(floor(zoom_offset-0.0)), -mipmap_levels+1);
+    lowp int zoom_offset_lower = max(int(floor(zoom_offset-1.0)), -max_offset_levels+1);
+    lowp int zoom_offset_higher = max(int(floor(zoom_offset-0.0)), -max_offset_levels+1);
 
     highp uint style_index_lower = uint(int(style_index) + zoom_offset_lower);
     highp uint style_index_higher = uint(int(style_index) + zoom_offset_higher);
@@ -760,7 +800,7 @@ lowp float hit_percentage(highp uint intersections)
     return float(bits_hit) / float(n_aa_samples);
 }
 
-
+ #if DRAW_MODE == 0
 void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp uint intersections)
 {
     // we store which sample has hit the geometry -> if two geometries hit the same sample we only store one hit
@@ -769,10 +809,21 @@ void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp uint inter
 
     pixel_color = pixel_color + ((1.0-pixel_color.a) * style.color * intersection_percentage);
 }
+#else
+void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp float intersection_percentage)
+{
 
 
+    pixel_color = pixel_color + ((1.0-pixel_color.a) * style.color * intersection_percentage);
+}
+#endif
 
+void create_screenspace_transform_matrix(inout DrawMeta meta)
+{
+    meta.screenspace_transform_matrix = inverse(mat2(meta.duvdx, meta.duvdy));
+}
 
+#if DRAW_MODE == 0
 bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
 {
     highp uvec2 raw_geom_data = fetch_raw_geometry_data(meta.sampler_buffer_index, i, meta.texture_layer);
@@ -831,5 +882,60 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
      return false;
 
 }
+#endif
 
+
+#if DRAW_MODE == 1
+bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_percentage, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
+{
+    highp uvec2 raw_geom_data = fetch_raw_geometry_data(meta.sampler_buffer_index, i, meta.texture_layer);
+    highp uint style_index = unpack_style_index(raw_geom_data) + meta.tile_zoom;
+
+    if (style_index != style.index) {
+        // we changed style -> blend previous style, reset layer infos and parse the new style
+
+        alpha_blend(pixel_color, style, intersection_percentage);
+        // smallest_v = vec2(10000.0);
+        intersection_percentage = 0.0;
+        if (pixel_color.a > full_threshold) {
+            return true;
+        }
+
+        parse_style(style, style_index, meta.zoom_offset, meta.zoom_blend, meta.ortho_color, meta.cos_smoothing_factor, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
+    }
+
+
+    { // screenspace transformation
+        VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
+        SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data);
+        if(geom_data.is_polygon)
+            return false;
+
+
+        highp vec2 v = sd_Line_Triangle_screenspace(uv, prepared_sdf_data, geom_data.is_polygon, style.line_width, style.dash_info, style.round_line_caps);
+
+        // save the smallest_v -> smaller vector length -> will be saved
+        // smallest_v = mix(smallest_v, v, step(length(v),length(smallest_v)));
+
+
+
+        highp vec2 smallest_v_screen = meta.screenspace_transform_matrix * v;
+
+        highp float v_length_screen = length(smallest_v_screen);
+        highp float scaling = v_length_screen / max(length(v),0.0000001); // prevent division by 0 if length is 0
+        highp float line_width_screen = style.line_width * scaling;
+
+        highp float d_near = v_length_screen - line_width_screen;
+        highp float d_far = v_length_screen + line_width_screen;
+
+        float kernel_size = sqrt(2.0);
+
+        intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
+        // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
+        // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
+
+    }
+     return false;
+}
+#endif
 

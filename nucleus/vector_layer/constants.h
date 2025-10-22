@@ -39,7 +39,9 @@ constexpr auto array_layer_tile_amount = std::array<uint32_t, 3> { -1u, -1u, 256
 constexpr auto tile_extent = 1024;
 constexpr auto scale_polygons = 4.0;
 constexpr auto scale_lines = 1.0;
-constexpr auto mipmap_levels = 4;
+
+// we provide the address to this many tile parents to the gpu -> used to select the correct tile level for the floating zoom
+constexpr auto max_offset_levels = 4;
 
 // if you change one of the following setting you also need to change the other (that they match is asserted in style.cpp)
 constexpr auto style_bits = 12;

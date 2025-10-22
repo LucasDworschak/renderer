@@ -120,7 +120,7 @@ void main() {
     /////////////////////////
     // VECTOR color
 
-    // calculate uv derivatives before we apply mipmapping -> otherwise we have discontinous areas at border
+    // calculate uv derivatives
     meta.duvdx = dFdx(uv);
     meta.duvdy = dFdy(uv);
 

@@ -18,6 +18,8 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *****************************************************************************/
 
+#define DRAW_MODE 1
+#define n_multisamples 4
 
 #include "shared_config.glsl"
 #include "camera_config.glsl"
@@ -27,7 +29,7 @@
 
 #include "hashing.glsl" // DEBUG
 
-#line 20031
+#line 20033
 
 uniform lowp sampler2DArray texture_sampler;
 uniform lowp sampler2DArray fallback_texture_array_higher;
@@ -132,24 +134,24 @@ lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallb
     lowp uint geometry_zoom = temp_tile_id_fallback.z;
     decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, target_zoom);
 
-    //fallback mipmap level -> only calculate if float_zoom is less than tile zoom
-    // otherwise undefined behaviour -> since we expect a value between 0 and mipmap levels
-    // sets mipmap to 0 if float zoom is higher -> highest available tile zoom is used
-    lowp uint fallback_mipmap_level = 0u;
+    //fallback level offset -> only calculate if float_zoom is less than tile zoom
+    // otherwise undefined behaviour -> since we expect a value between 0 and max offset levels
+    // sets offset to 0 if float zoom is higher -> highest available tile zoom is used
+    lowp uint fallback_level_offset = 0u;
     if(float_zoom<=float(temp_tile_id_fallback.z))
-        fallback_mipmap_level = min(uint(mipmap_levels)-1u, uint(ceil(float(temp_tile_id_fallback.z)-float_zoom)));
+        fallback_level_offset= min(uint(max_offset_levels)-1u, uint(ceil(float(temp_tile_id_fallback.z)-float_zoom)));
 
     // for the case that tiles haven't been loaded yet, we only render the highest zoom level available -> there will be no interpolation
     highp float fallback_interpolation = mix(meta.zoom_blend, 1.0, float(float_zoom>float(temp_tile_id_fallback.z+1u)));
 
-    highp uint texture_layer_fallback = texelFetch(instanced_texture_array_index_sampler_vector_fallback, ivec2(instance_id, fallback_mipmap_level), 0).x;
+    highp uint texture_layer_fallback = texelFetch(instanced_texture_array_index_sampler_vector_fallback, ivec2(instance_id, fallback_level_offset), 0).x;
 
-    // we are using textureGrad and manually half duvdx/y for each mipmap_level
-    // -> if we are not doing this we would get a ring when changing the mipmap level
-    duvdx = duvdx * pow(0.5, float(fallback_mipmap_level + geometry_zoom - target_zoom));
-    duvdy = duvdy * pow(0.5, float(fallback_mipmap_level + geometry_zoom - target_zoom));
+    // we are using textureGrad and manually half duvdx/y for each offset_level
+    // -> if we are not doing this we would get a ring when changing the offset level
+    duvdx = duvdx * pow(0.5, float(fallback_level_offset + geometry_zoom - target_zoom));
+    duvdy = duvdy * pow(0.5, float(fallback_level_offset + geometry_zoom - target_zoom));
 
-    decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, temp_tile_id_fallback.z - fallback_mipmap_level);
+    decrease_zoom_level_until(temp_tile_id_fallback, fallback_uv, temp_tile_id_fallback.z - fallback_level_offset);
 
     lowp vec3 fallback_color0 = textureGrad(fallback_texture_array_higher, vec3(fallback_uv, texture_layer_fallback & layer_mask), duvdx, duvdy).rgb;
     lowp vec3 fallback_color1 = textureGrad(fallback_texture_array_lower, vec3(fallback_uv, texture_layer_fallback & layer_mask), duvdx, duvdy).rgb;
@@ -199,7 +201,7 @@ void main() {
     meta.ortho_color = vec4(1.0);
 #endif
 
-    // hold uv and tile_id values for later (we do not want mipmap to influence it directly
+    // hold uv and tile_id values for later (we do not want the level offset calculation to influence it directly)
     highp vec2 fallback_uv = uv;
     highp uvec3 temp_tile_id_fallback = uvec3(tile_id);
 
@@ -211,30 +213,32 @@ void main() {
 
     mediump float float_zoom = float_zoom_interpolation();
     // float_zoom = tile_id.z;     // DEBUG
-    // calculate mipmap_level depending on floating zoom level
-    lowp uint mipmap_level = uint(clamp(int(ceil(float(tile_id.z)-float_zoom)), 0,mipmap_levels-1));
+    // calculate tile_level_offset depending on floating zoom level
+    lowp uint tile_level_offset = uint(clamp(int(ceil(float(tile_id.z)-float_zoom)), 0,max_offset_levels-1));
 
-    // calculate uv derivatives before we apply mipmapping -> otherwise we have discontinous areas at border
-    // and correct uv derivatives scaling with mipmaplevel
-    meta.duvdx = dFdx(uv) * pow(0.5, float(mipmap_level));
-    meta.duvdy = dFdy(uv) * pow(0.5, float(mipmap_level));
+    // calculate uv derivatives before we apply level offsets -> otherwise we have discontinous areas at border
+    // and correct uv derivatives scaling with level offsets
+    // TODO instead of pow we could use bitshifting and than only divide once
+    meta.duvdx = dFdx(uv) * pow(0.5, float(tile_level_offset));
+    meta.duvdy = dFdy(uv) * pow(0.5, float(tile_level_offset));
 
     // fetch the layer indices of the acceleration grid (.x) and the geometry buffer (.y)
-    highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, mipmap_level), 0).xy;
+    highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, tile_level_offset), 0).xy;
 
-    // lower the tile_id/uv to the appropriate mipmap_level
-    decrease_zoom_level_until(tile_id, uv, tile_id.z - mipmap_level);
+    // lower the tile_id/uv to the appropriate tile_level_offset
+    decrease_zoom_level_until(tile_id, uv, tile_id.z - tile_level_offset);
 
     meta.zoom_offset = float_zoom-float(tile_id.z);
     meta.zoom_blend = fract(meta.zoom_offset);
     meta.tile_zoom = tile_id.z;
 
+    // DEBUG SETTINGS to only show one tile (also uncomment "float_zoom = tile_id.z;" above)
+    // meta.zoom_offset = float_zoom-float(tile_id.z)+1.0;
+    // meta.zoom_blend = 1.0;
+
 
     /////////////////////////
     // FALLBACK COLOR
-    // lowp vec3 fallback_color0 = textureGrad(fallback_texture_array_higher, vec3(uv, texture_layer.x & layer_mask), meta.duvdx, meta.duvdy).rgb;
-    // lowp vec3 fallback_color1 = textureGrad(fallback_texture_array_lower, vec3(uv, texture_layer.x & layer_mask), meta.duvdx, meta.duvdy).rgb;
-    //  lowp vec3 fallback_color = mix(fallback_color1, fallback_color0, fract(float_zoom)).rgb;
     lowp vec3 fallback_color = get_fallback_color(temp_tile_id_fallback, fallback_uv, meta, float_zoom);
 
 
@@ -252,6 +256,7 @@ void main() {
     meta.cos_smoothing_factor = calculate_cos_smoothing();
 
     calculate_samples(meta, uv);
+    create_screenspace_transform_matrix(meta);
 
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
     if(offset_size.y != uint(0)) // only if we have data here
@@ -278,18 +283,33 @@ void main() {
         style.dash_info = vec2(1.0, 0.0);
         style.round_line_caps = false;
 
+#if DRAW_MODE == 0
         highp uint intersections = 0u;
-
+#else
+        highp float intersections = 0.0;
+        // highp vec2 smallest_v = vec2(10000.0);
+#endif
 
         for(highp uint i = offset_size.x; i < offset_size.x + min(uint(max_vector_geometry),offset_size.y); i++) // show only x layers
         {
             debug_draw_calls++;
+ #if DRAW_MODE == 0
             if(draw_layer(pixel_color, intersections, style, uv, i, meta))
                 break; // pixel is finished -> we can exit the loop early
+#else
+            if(draw_layer(pixel_color, intersections, style, uv, i, meta))
+            // if(draw_layer(pixel_color, smallest_v, style, uv, i, meta))
+                break; // pixel is finished -> we can exit the loop early
+#endif
         }
 
+#if DRAW_MODE == 0
         // blend the last layer (this only does something if we did not break out of the loop early)
         alpha_blend(pixel_color, style, intersections);
+#else
+        alpha_blend(pixel_color, style, intersections);
+        // alpha_blend(pixel_color, style, smallest_v, meta);
+#endif
     }
 
 
@@ -298,9 +318,6 @@ void main() {
 #if VIEW_MODE == 0
     texout_albedo = vec3(background_color * meta.ortho_color.rgb);
 #else
-    texout_albedo = vec3(pixel_color.rgb + ((1.0-pixel_color.a)*background_color * meta.ortho_color.rgb));
-
-
     texout_albedo = vec3(pixel_color.rgb) + ((1.0-pixel_color.a) * fallback_color.rgb);
 #endif
 

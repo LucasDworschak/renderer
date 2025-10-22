@@ -55,7 +55,7 @@ std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
     defines[QString("scale_polygons")] = QString("float(%1)").arg(constants::scale_polygons);
     defines[QString("scale_lines")] = QString("float(%1)").arg(constants::scale_lines);
     defines[QString("grid_size")] = QString("vec2(%1,%1)").arg(constants::grid_size);
-    defines[QString("mipmap_levels")] = QString::number(constants::mipmap_levels);
+    defines[QString("max_offset_levels")] = QString::number(constants::max_offset_levels);
     defines[QString("aa_sample_dist")] = QString("float(%1)").arg(constants::aa_sample_dist);
 
     defines[QString("all_bits")] = QString::number(constants::all_bits);
@@ -248,7 +248,7 @@ void VectorLayer::setup_buffers(std::shared_ptr<ShaderProgram> shader, const std
         zoom_level_raster.pixel({ i, 0 }) = layer0.id.zoom_level;
         array_index_raster.pixel({ i, 0 }) = { layer0.index1, layer0.index2 };
 
-        // load the mipmaps -> also make sure that all mipmaps are loaded -> otherwise use parent mipmap
+        // load the level offsets -> also make sure that all level offsets are loaded -> otherwise use parent level
         const auto layer1 = m_gpu_multi_array_helper.layer(layer0.id.parent());
         if (layer1.id.zoom_level < 200) {
             array_index_raster.pixel({ i, 1 }) = { layer1.index1, layer1.index2 };
