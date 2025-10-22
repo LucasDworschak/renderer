@@ -295,6 +295,9 @@ void Style::load()
         zoom_to_style.push_back(current_style_map);
     }
 
+    // determines how many styles per zoom level exist
+    constexpr auto style_zoom_multiplier = constants::style_zoom_range.y + 1;
+
     for (const auto& [key, layer_indices] : layerid_filter_to_layer_indices) {
 
         // we now know that we have valid styles -> create a new StyleFilter for this layer
@@ -312,7 +315,7 @@ void Style::load()
             const uint first_zoom = style_map.begin()->first;
             const auto first_style = style_map.at(first_zoom);
 
-            const uint32_t style_index = style_values.size() / (constants::style_zoom_range.y + 1);
+            const uint32_t style_index = style_values.size() / style_zoom_multiplier;
 
             for (uint i = 0; i < first_zoom; i++) {
                 // duplicate first style with alpha 0
@@ -363,6 +366,41 @@ void Style::load()
     assert(style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
     visible_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec2(-1u));
     style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec2(-1u));
+
+#ifdef ALP_ENABLE_DEBUG_VECTOR_TILES
+    // add debug styles
+
+    std::vector<LayerStyle> debug_styles {
+        { 0x000000FF, 0, 1 * constants::style_precision, 1, false }, // black poly
+        { 0xFFFFFFFF, 0, 1 * constants::style_precision, 1, false }, // white poly
+        { 0x000000FF, uint(0.1 * constants::style_precision), 1 * constants::style_precision, 1, false }, // black line width 0.1
+        { 0x000000FF, uint(0.5 * constants::style_precision), 1 * constants::style_precision, 1, false }, // black line width 0.5
+        { 0x000000FF, 1 * constants::style_precision, 1 * constants::style_precision, 1, false }, // black line width 1
+        { 0x000000FF, 5 * constants::style_precision, 1 * constants::style_precision, 1, false }, // black line width 5
+        { 0x000000FF, 10 * constants::style_precision, 1 * constants::style_precision, 1, false }, // black line width 10
+        { 0x000000FF, 15 * constants::style_precision, 1 * constants::style_precision, 1, false }, // black line width 15
+        { 0x000000FF, 25 * constants::style_precision, 1 * constants::style_precision, 1, false }, // black line width 25
+        { 0x000000FF, 50 * constants::style_precision, 1 * constants::style_precision, 1, false }, // black line width 50
+    };
+
+    const auto start_index = uint(style_values.size() / style_zoom_multiplier) - (debug_styles.size());
+
+    // make sure that we do not override valid styles
+    assert(style_values[start_index * style_zoom_multiplier] == glm::u32vec2(-1u));
+    assert(visible_style_values[start_index * style_zoom_multiplier] == glm::u32vec2(-1u));
+
+    for (uint i = 0; i < debug_styles.size(); i++) {
+        const auto style = debug_styles[i].buffer_alignment();
+        for (uint j = 0; j < constants::style_zoom_range.y + 1; j++) {
+
+            style_values[(start_index + i) * style_zoom_multiplier + j] = style;
+            visible_style_values[(start_index + i) * style_zoom_multiplier + j] = style;
+        }
+    }
+
+    qDebug() << "debug style start: " << start_index;
+
+#endif
 
     m_visible_styles
         = std::make_shared<nucleus::Raster<glm::u32vec2>>(nucleus::Raster<glm::u32vec2>(constants::style_buffer_size, std::move(visible_style_values)));

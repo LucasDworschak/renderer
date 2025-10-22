@@ -176,6 +176,10 @@ public:
     size_t processed_amount();
 
 private:
+#ifdef ALP_ENABLE_DEBUG_VECTOR_TILES
+    VectorLayers get_debug_vector_tiles(tile::Id id);
+#endif
+
     std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes);
 
     size_t triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const StyleLayerIndex& style_layer);

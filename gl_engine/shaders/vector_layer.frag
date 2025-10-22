@@ -18,7 +18,7 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *****************************************************************************/
 
-#define DRAW_MODE 1
+#define DRAW_MODE 0
 #define n_multisamples 4
 
 #include "shared_config.glsl"
@@ -212,7 +212,9 @@ void main() {
     decrease_zoom_level_until(tile_id, uv, texelFetch(instanced_texture_zoom_sampler_vector, ivec2(instance_id, 0), 0).x);
 
     mediump float float_zoom = float_zoom_interpolation();
-    // float_zoom = tile_id.z;     // DEBUG
+#ifdef DEBUG_DISABLE_STYLE_BLENDING
+    float_zoom = tile_id.z;     // DEBUG
+#endif
     // calculate tile_level_offset depending on floating zoom level
     lowp uint tile_level_offset = uint(clamp(int(ceil(float(tile_id.z)-float_zoom)), 0,max_offset_levels-1));
 
@@ -232,9 +234,11 @@ void main() {
     meta.zoom_blend = fract(meta.zoom_offset);
     meta.tile_zoom = tile_id.z;
 
+#ifdef DEBUG_DISABLE_STYLE_BLENDING
     // DEBUG SETTINGS to only show one tile (also uncomment "float_zoom = tile_id.z;" above)
-    // meta.zoom_offset = float_zoom-float(tile_id.z)+1.0;
-    // meta.zoom_blend = 1.0;
+    meta.zoom_offset = float_zoom-float(tile_id.z)+0.0;
+    meta.zoom_blend = 0.9999;
+#endif
 
 
     /////////////////////////

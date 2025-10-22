@@ -162,6 +162,10 @@ if(ALP_ENABLE_LABELS)
     target_compile_definitions(nucleus PUBLIC ALP_ENABLE_LABELS)
 endif()
 
+if(ALP_ENABLE_DEBUG_VECTOR_TILES)
+    target_compile_definitions(nucleus PUBLIC ALP_ENABLE_DEBUG_VECTOR_TILES)
+endif()
+
 if (ALP_ENABLE_DEV_TOOLS)
     target_compile_definitions(nucleus PUBLIC ALP_ENABLE_DEV_TOOLS)
     target_sources(nucleus PRIVATE

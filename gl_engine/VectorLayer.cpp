@@ -65,6 +65,10 @@ std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
 
     defines[QString("sampler_offset")] = QString::number(constants::array_helper_all_bits - constants::array_helper_buffer_info_bits);
 
+#ifdef ALP_ENABLE_DEBUG_VECTOR_TILES
+    defines[QString("DEBUG_DISABLE_STYLE_BLENDING")] = QString::number(1);
+#endif
+
     return defines;
 }
 

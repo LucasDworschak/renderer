@@ -99,7 +99,11 @@ GpuVectorLayerTile Preprocessor::preprocess(tile::Id id, const QByteArray& vecto
     //     glm::vec2(50.5 / 64.0 * constants::grid_size, 50.5 / 64.0 * constants::grid_size) } };
     // const std::vector<unsigned int> style_indices = { 1 };
 
+#ifdef ALP_ENABLE_DEBUG_VECTOR_TILES
+    auto tile_data = get_debug_vector_tiles(id);
+#else
     auto tile_data = parse_tile(id, vector_tile_data);
+#endif
 
     preprocess_geometry(tile_data, id.zoom_level);
 
@@ -285,6 +289,177 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
 
     return data;
 }
+
+#ifdef ALP_ENABLE_DEBUG_VECTOR_TILES
+
+VectorLayers Preprocessor::get_debug_vector_tiles(tile::Id id)
+{
+    // all available test patterns
+    // Triangle test pattern was only used for testing this method and will probably not be used for actual test cases
+    enum class Pattern { Triangle, Lines_Star, Siemens_Star, Checkerboard, Checkerboard_Triangle, Lines };
+
+    constexpr auto style_start = 852;
+    // const auto pattern = Pattern::Lines;
+    // + 1 since we dont want to draw the first when drawing all patterns
+    const Pattern pattern = Pattern((id.coords.x % 5) + 1);
+    VectorLayers data;
+
+    std::vector<GeometryData> geoms;
+
+    if (pattern == Pattern::Triangle) {
+
+        auto* geom_data = &geoms.emplace_back();
+        geom_data->vertices = { Clipper2Lib::MakePath<ClipperResolution>({ 0,
+            0,
+            ClipperResolution(constants::tile_extent * constants::scale_polygons),
+            0,
+            0,
+            ClipperResolution(constants::tile_extent * constants::scale_polygons) }) };
+        geom_data->is_polygon = true;
+        geom_data->style_layer = { style_start + 0, 0 }; // black polygon
+        geom_data->full_opaque = true;
+    }
+
+    if (pattern == Pattern::Lines_Star) {
+
+        // a line goes from one end through the center and ends at the other side
+        const auto num_lines = 8;
+        const auto increments = M_PI / num_lines;
+        const auto center = glm::vec2((constants::tile_extent * constants::scale_lines) / 2.0);
+        const auto radius = center.x;
+        for (int i = 0; i < num_lines; i++) {
+            ClipperPoint pos1 = ClipperPoint(center.x, center.y);
+            ClipperPoint pos2 = ClipperPoint(center.x, center.y);
+            pos1.x += radius * cos(increments * i);
+            pos1.y += radius * sin(increments * i);
+            pos2.x += radius * cos(increments * i + M_PI);
+            pos2.y += radius * sin(increments * i + M_PI);
+
+            auto* geom_data = &geoms.emplace_back();
+            geom_data->vertices = { Clipper2Lib::MakePath<ClipperResolution>({ pos1.x, pos1.y, pos2.x, pos2.y }) };
+            geom_data->is_polygon = false;
+            geom_data->style_layer = { style_start + 7, 0 }; // black line
+            geom_data->full_opaque = true;
+        }
+    }
+
+    if (pattern == Pattern::Siemens_Star) {
+        const auto num_parts = 16;
+        const auto increments = 2.0 * M_PI / num_parts;
+        const auto center = glm::vec2((constants::tile_extent * constants::scale_polygons) / 2.0);
+        const auto radius = center.x;
+        for (int i = 0; i < num_parts; i++) {
+            ClipperPoint pos1 = ClipperPoint(center.x, center.y);
+            ClipperPoint pos2 = ClipperPoint(center.x, center.y);
+            ClipperPoint pos3 = ClipperPoint(center.x, center.y);
+            pos1.x += radius * cos(increments * i);
+            pos1.y += radius * sin(increments * i);
+            pos2.x += radius * cos(increments * (i + 1));
+            pos2.y += radius * sin(increments * (i + 1));
+
+            auto* geom_data = &geoms.emplace_back();
+            geom_data->vertices = { Clipper2Lib::MakePath<ClipperResolution>({ pos1.x, pos1.y, pos2.x, pos2.y, pos3.x, pos3.y }) };
+            geom_data->is_polygon = true;
+            const auto white_black = uint(i % 2);
+            geom_data->style_layer = { style_start + white_black, 0 }; // black or white triangle
+            geom_data->full_opaque = true;
+        }
+    }
+
+    if (pattern == Pattern::Checkerboard) {
+        const auto num_parts = 8;
+        const auto increments = (constants::tile_extent * constants::scale_polygons) / num_parts;
+
+        for (int i = 0; i < num_parts; i++) {
+            for (int j = 0; j < num_parts; j++) {
+                ClipperPoint pos1 = ClipperPoint(i * increments, j * increments);
+                ClipperPoint pos2 = ClipperPoint(pos1.x, pos1.y) + ClipperPoint(increments, 0.0);
+                ClipperPoint pos3 = ClipperPoint(pos1.x, pos1.y) + ClipperPoint(increments, increments);
+                ClipperPoint pos4 = ClipperPoint(pos1.x, pos1.y) + ClipperPoint(0.0, increments);
+
+                auto* geom_data = &geoms.emplace_back();
+                geom_data->vertices = { Clipper2Lib::MakePath<ClipperResolution>({ pos1.x, pos1.y, pos2.x, pos2.y, pos3.x, pos3.y, pos4.x, pos4.y }) };
+                geom_data->is_polygon = true;
+                const auto white_black = uint(((i % 2) + j) % 2);
+                geom_data->style_layer = { style_start + white_black, 0 }; // black or white triangle
+                geom_data->full_opaque = true;
+            }
+        }
+    }
+
+    if (pattern == Pattern::Checkerboard_Triangle) {
+        const auto num_parts = 8;
+        const auto increments = (constants::tile_extent * constants::scale_polygons) / num_parts;
+
+        for (int i = 0; i < num_parts; i++) {
+            for (int j = 0; j < num_parts; j++) {
+                ClipperPoint pos1 = ClipperPoint(i * increments, j * increments);
+                ClipperPoint pos2 = ClipperPoint(pos1.x, pos1.y) + ClipperPoint(increments, 0.0);
+                ClipperPoint pos3 = ClipperPoint(pos1.x, pos1.y) + ClipperPoint(increments, increments);
+                ClipperPoint pos4 = ClipperPoint(pos1.x, pos1.y) + ClipperPoint(0.0, increments);
+
+                { // black triangle
+                    auto* geom_data = &geoms.emplace_back();
+                    geom_data->vertices = { Clipper2Lib::MakePath<ClipperResolution>({ pos1.x, pos1.y, pos2.x, pos2.y, pos3.x, pos3.y }) };
+                    geom_data->is_polygon = true;
+                    geom_data->style_layer = { style_start + 0, 0 }; // black triangle
+                    geom_data->full_opaque = true;
+                }
+                { // white triangle
+                    auto* geom_data = &geoms.emplace_back();
+                    geom_data->vertices = { Clipper2Lib::MakePath<ClipperResolution>({ pos1.x, pos1.y, pos3.x, pos3.y, pos4.x, pos4.y }) };
+                    geom_data->is_polygon = true;
+                    geom_data->style_layer = { style_start + 1, 0 }; // white triangle
+                    geom_data->full_opaque = true;
+                }
+            }
+        }
+    }
+
+    if (pattern == Pattern::Lines) {
+
+        // a line goes from one end through the center and ends at the other side
+        const auto num_lines = 8;
+        const auto increments = constants::tile_extent * constants::scale_lines / num_lines;
+
+        for (int i = 0; i < num_lines; i++) {
+            // + - increments in y direction to overlap with neighbouring tiles
+            ClipperPoint pos1 = ClipperPoint(increments * i, 0.0 - increments);
+            ClipperPoint pos2 = ClipperPoint(increments * i, constants::tile_extent * constants::scale_lines + increments);
+
+            auto* geom_data = &geoms.emplace_back();
+            geom_data->vertices = { Clipper2Lib::MakePath<ClipperResolution>({ pos1.x, pos1.y, pos2.x, pos2.y }) };
+            geom_data->is_polygon = false;
+            geom_data->style_layer = { uint(style_start + 2 + i), 0 }; // black line
+            geom_data->full_opaque = true;
+        }
+    }
+
+    //////////////////////////////
+    //////////////////////////////
+    //////////////////////////////
+    // calculate clipper bounds and aabb for acceleration grid and add them to the output
+    //////////////////////////////
+    for (auto& geom : geoms) {
+        if (geom.is_polygon) {
+            const auto cell_scale = float(constants::grid_size) / (float(constants::tile_extent) * constants::scale_polygons);
+
+            auto bound = Clipper2Lib::GetBounds(geom.vertices);
+
+            geom.aabb = radix::geometry::Aabb2i({ constants::grid_size * 2 * constants::scale_polygons, constants::grid_size * 2 * constants::scale_polygons },
+                { -constants::grid_size * 2 * constants::scale_polygons, -constants::grid_size * 2 * constants::scale_polygons });
+
+            geom.aabb.expand_by({ std::floor(float(bound.left) * cell_scale), std::floor(float(bound.top) * cell_scale) });
+            geom.aabb.expand_by({ std::ceil(float(bound.right) * cell_scale), std::ceil(float(bound.bottom) * cell_scale) });
+            geom.bounds = std::vector<ClipperRect> { bound };
+        }
+
+        data[geom.style_layer.layer_index].push_back(geom);
+    }
+
+    return data;
+}
+#endif
 
 glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index, bool line_cap0, bool line_cap1)
 {
@@ -604,8 +779,8 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                         cell.is_done = true;
 
                         // we are packing two triangles -> packing only one triangle would result in problems with multisample antialiasing
-                        // we tried packing only one triangle but artificially scaling it up in the shader if a "is_full" flag was transmitted, but this causes
-                        // more performance problems
+                        // we tried packing only one triangle but artificially scaling it up in the shader if a "is_full" flag was transmitted, but this
+                        // causes more performance problems
 
                         const glm::ivec2 a = { -geometry_offset_polygons, -geometry_offset_polygons };
                         const glm::ivec2 b = { max_cell_width_polygons - geometry_offset_polygons - 1, -geometry_offset_polygons };
@@ -690,8 +865,8 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
  *      example input(triangle indice for 6 cells): [1], [1], [1,2], [2,3], [2,3], [2,3]
  *      expected output: [[1], [1,2], [2,3]]
  *      Note: it is theoretically possible to further condense the above example to [[1,2,3]] where we can both point to 1, 12 and 23
- *      nevertheless for more complex entries this might be overkill and take more time to compute than it is worth -> only necessary if we need more buffer space
- * simultaneously we also generate the final grid for the tile that stores the offset and size for lookups into the index_bridge
+ *      nevertheless for more complex entries this might be overkill and take more time to compute than it is worth -> only necessary if we need more buffer
+ * space simultaneously we also generate the final grid for the tile that stores the offset and size for lookups into the index_bridge
  */
 GpuVectorLayerTile Preprocessor::create_gpu_tile()
 {

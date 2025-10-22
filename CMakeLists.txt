@@ -29,6 +29,7 @@ option(ALP_ENABLE_LTO "Enable link time optimisation." OFF)
 option(ALP_ENABLE_GL_ENGINE "Enable OpenGL/WebGL engine" ON)
 option(ALP_ENABLE_AVLANCHE_WARNING_LAYER "Enables avalanche warning layer (requires Qt Gui in nucleus)" OFF)
 option(ALP_ENABLE_LABELS "Enables label rendering" ON)
+option(ALP_ENABLE_DEBUG_VECTOR_TILES "Enables label rendering" OFF)
 
 set(ALP_VECTOR_LAYER_TESSELATOR "cdt" CACHE STRING "defines which rasterizer is used")
 set_property(CACHE ALP_VECTOR_LAYER_TESSELATOR PROPERTY STRINGS cdt earcut) # the options for the rasterizer (available to choose from in Qt Project cmake settings)

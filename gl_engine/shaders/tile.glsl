@@ -96,6 +96,7 @@ void compute_vertex(out vec3 position, out vec2 uv, out uvec3 tile_id, bool comp
     // there was no measurable difference despite a cos and a atan, so leaving as is for now.
     highp float world_space_y = position.y + camera.position.y;
     highp float altitude_correction_factor = 0.125 / cos(y_to_lat(world_space_y)); // https://github.com/AlpineMapsOrg/renderer/issues/5
+    altitude_tex = 850;
     float adjusted_altitude = altitude_tex * altitude_correction_factor;
     position.z = adjusted_altitude - camera.position.z;
 
