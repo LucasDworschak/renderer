@@ -18,7 +18,7 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *****************************************************************************/
 
-#define DRAW_MODE 0
+#define DRAW_MODE 1
 #define n_multisamples 4
 
 #include "shared_config.glsl"
