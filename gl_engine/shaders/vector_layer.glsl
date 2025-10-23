@@ -547,7 +547,7 @@ highp vec3 sd_Line_Triangle_screenspace( in highp vec2 uv, SDFData data, bool tr
         highp float s0 = s*(v0.x*data.e0.y-v0.y*data.e0.x);
         highp float s1 = s*(v1.x*data.e1.y-v1.y*data.e1.x);
         highp float s2 = s*(v2.x*data.e2.y-v2.y*data.e2.x);
-        highp float poly_sign = sign(min(s0, min(s1,s2)));
+        highp float poly_sign = -sign(min(s0, min(s1,s2)));
 
         // d.xy == vector to nearest intersection
         // d.z == squared distance to this intersection
@@ -555,8 +555,10 @@ highp vec3 sd_Line_Triangle_screenspace( in highp vec2 uv, SDFData data, bool tr
         highp vec3 d1 = vec3(pq1, dot(pq1,pq1));
         highp vec3 d2 = vec3(pq2, dot(pq2,pq2));
 
-        highp vec3 smallest_v = mix(d0, d1, step(d0.z,d1.z));
-        smallest_v = mix(smallest_v, d2, step(smallest_v.z,d2.z));
+        // highp vec3 smallest_v = mix(d0, d1, step(d0.z,d1.z));
+        // smallest_v = mix(smallest_v, d2, step(smallest_v.z,d2.z));
+        highp vec3 smallest_v = mix(d1, d0, step(d0.z,d1.z));
+        smallest_v = mix(d2,smallest_v,  step(smallest_v.z,d2.z));
 
         // return vec3(sqrt(dot(smallest_v.xy,smallest_v.xy))*poly_sign);
         return vec3(smallest_v.xy, poly_sign);
@@ -925,7 +927,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
     // }
 
     bool thony = true;
-    // thony = false;
+    thony = false;
 
     if(!thony)
     { // screenspace transformation nehab
@@ -953,8 +955,11 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         highp float d_far = v_length_screen + line_width_screen;
 
         float kernel_size = sqrt(2.0);
+        if(geom_data.is_polygon)
+            intersection_percentage = max(smoothstep(kernel_size,0.0,v_length_screen), intersection_percentage);
+        else
+            intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
 
-        intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
         // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
         // intersection_percentage = max(step(0,d_near), intersection_percentage);
         // intersection_percentage = max(step(0,length(smallest_v_screen.xy)*v.z), intersection_percentage);
@@ -962,7 +967,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
 
     }
-    // else
+    else
     { // screenspace transformation thony2018
         VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
         SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data);
@@ -989,20 +994,17 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         highp float A_pix = w_pix*w_pix;
 
         highp float A_line = v_length_screen;
-        highp float w_line = 100.0;
+        highp float w_line = 10000.0;
 
         A_line = w_pix*((w_pix/2.0+v_length_screen));
 
-
-
         if(!geom_data.is_polygon)
         {
-            // highp float scaling = d / max(length(v),0.0000001); // prevent division by 0 if length is 0
-            highp float scaling = v_length_screen / length(v.xy); // prevent division by 0 if length is 0
+            highp float scaling = v_length_screen / length(v.xy); // TODO prevent division by 0 if length is 0
             highp float line_width_screen = style.line_width * scaling;
 
-            highp float d_near = v_length_screen - line_width_screen;
-            highp float d_far = v_length_screen + line_width_screen;
+            // highp float d_near = v_length_screen - line_width_screen;
+            // highp float d_far = v_length_screen + line_width_screen;
 
             w_line = line_width_screen*2.0;
 
@@ -1010,17 +1012,9 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
         }
 
-
-        // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
-        // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
-        // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
-
-
-        // A_line = 1.0;
+        // A_line = w_pix*(min(w_pix/2.0-v_length_screen, w_line/2.0)+min(w_pix/2.0+v_length_screen, w_line/2.0));
 
         intersection_percentage = max(intersection_percentage, clamp(A_line/A_pix, 0,1));
-        // intersection_percentage = max(intersection_percentage, smoothstep(0,kernel_size,A_line/A_pix));
-
 
     }
 

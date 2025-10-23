@@ -323,7 +323,7 @@ VectorLayers Preprocessor::get_debug_vector_tiles(tile::Id id)
     if (pattern == Pattern::Lines_Star) {
 
         // a line goes from one end through the center and ends at the other side
-        const auto num_lines = 8;
+        const auto num_lines = 16;
         const auto increments = M_PI / num_lines;
         const auto center = glm::vec2((constants::tile_extent * constants::scale_lines) / 2.0);
         const auto radius = center.x;
@@ -344,7 +344,7 @@ VectorLayers Preprocessor::get_debug_vector_tiles(tile::Id id)
     }
 
     if (pattern == Pattern::Siemens_Star) {
-        const auto num_parts = 16;
+        const auto num_parts = 32;
         const auto increments = 2.0 * M_PI / num_parts;
         const auto center = glm::vec2((constants::tile_extent * constants::scale_polygons) / 2.0);
         const auto radius = center.x;
