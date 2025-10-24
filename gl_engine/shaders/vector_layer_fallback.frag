@@ -22,9 +22,9 @@
 
 #define SDF_MODE 0
 
-#include "vector_layer.glsl"
 #include "shared_config.glsl"
 #include "tile_id.glsl"
+#include "vector_layer.glsl"
 #include "hashing.glsl" // DEBUG
 
 #line 30029

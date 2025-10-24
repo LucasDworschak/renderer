@@ -77,3 +77,13 @@ void decrease_zoom_level_until(inout highp uvec3 id, in lowp uint zoom_level) {
     id.x = id.x >> z_delta;
     id.y = id.y >> z_delta;
 }
+
+highp float tile_size(in uint zoom_level) {
+    const highp float cSemiMajorAxis = 6378137.0;
+    const highp float pi = 3.1415926535897932384626433;
+    const highp float cEarthCircumference = 2.0 * pi * cSemiMajorAxis;
+
+    highp uint n_tiles = 1u << zoom_level;
+    return cEarthCircumference / float(n_tiles);
+}
+

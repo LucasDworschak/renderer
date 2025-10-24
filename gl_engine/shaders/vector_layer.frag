@@ -326,6 +326,12 @@ void main() {
 #endif
 
 
+    // texout_albedo = vec3(vec2(gl_FragCoord) / camera.viewport_size, 0);
+    // // mat3x3 uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix);
+    // // // vec3 uv_clipspace = uv2clipspace_matrix * vec3(0.5, 0.5, 1);
+    // // vec3 uv_clipspace = uv2clipspace_matrix * vec3(uv, 1);
+    // // vec2 uv_ndc = vec2(uv_clipspace / uv_clipspace.z);
+    // // texout_albedo = vec3(uv_ndc * 0.5 + 0.5, 0.0);
 
 
 
