@@ -865,7 +865,8 @@ bool clipHalfSpace(inout vec3 P0, inout vec3 P1, float f0, float f1) {
     if (f0 > 0.0 || f1 > 0.0) {
         float t = f0 / (f0 - f1);                 // solve f(P0 + t*(P1-P0)) = 0
         vec3  D = P1 - P0;
-        if (f0 > 0.0) P0 += t * D; else P1 = P0 + t * D;
+        if (f0 > 0.0) P0 += t * D;
+        else P1 = P0 + t * D;
     }
     return true;
 }
@@ -876,10 +877,10 @@ void uv_line2screenspace(inout vec2 a, inout vec2 b, in highp mat3 uv2clipspace_
     highp vec3 b_clip = uv2clipspace_matrix * vec3(b, 1.0);
 
     float eps = 1e-6;
-    if (!clipHalfSpace(a_clip, b_clip, eps - a_clip.z, eps - b_clip.z)) { a = b = vec2(-1.0); return; }
-    if (!clipHalfSpace(a_clip, b_clip, a_clip.x - a_clip.z, b_clip.x - b_clip.z)) { a = b = vec2(-1.0); return; }
+    if (!clipHalfSpace(a_clip, b_clip,       eps - a_clip.z,       eps - b_clip.z)) { a = b = vec2(-1.0); return; }
+    if (!clipHalfSpace(a_clip, b_clip,  a_clip.x - a_clip.z,  b_clip.x - b_clip.z)) { a = b = vec2(-1.0); return; }
     if (!clipHalfSpace(a_clip, b_clip, -a_clip.x - a_clip.z, -b_clip.x - b_clip.z)) { a = b = vec2(-1.0); return; }
-    if (!clipHalfSpace(a_clip, b_clip, a_clip.y - a_clip.z, b_clip.y - b_clip.z)) { a = b = vec2(-1.0); return; }
+    if (!clipHalfSpace(a_clip, b_clip,  a_clip.y - a_clip.z,  b_clip.y - b_clip.z)) { a = b = vec2(-1.0); return; }
     if (!clipHalfSpace(a_clip, b_clip, -a_clip.y - a_clip.z, -b_clip.y - b_clip.z)) { a = b = vec2(-1.0); return; }
 
 
@@ -1060,6 +1061,8 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         // else
             intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
         // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
+            intersection_percentage = 1.0;
+            pixel_color = vec4(vec3(v_length_screen/40.0), 1.0);
 
 
 
