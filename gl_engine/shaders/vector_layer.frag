@@ -270,8 +270,6 @@ void main() {
     meta.uv2clipspace_matrix = create_uv2clipspace_matrix(normal_by_fragment_position_interpolation(), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix);
 
     meta.uv2clipspace_matrix_inv = inverse(meta.uv2clipspace_matrix);
-    highp vec2 screenspace_coord = uv;
-    uv2screenspace(screenspace_coord, meta);
 
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
     if(offset_size.y != uint(0)) // only if we have data here
@@ -309,10 +307,10 @@ void main() {
         {
             debug_draw_calls++;
  #if DRAW_MODE == 0
-            if(draw_layer(pixel_color, intersections, style, screenspace_coord, i, meta))
+            if(draw_layer(pixel_color, intersections, style, gl_FragCoord.xy, i, meta))
                 break; // pixel is finished -> we can exit the loop early
 #else
-            if(draw_layer(pixel_color, intersections, style, screenspace_coord, uv, i, meta))
+            if(draw_layer(pixel_color, intersections, style, gl_FragCoord.xy, uv, i, meta))
                 break; // pixel is finished -> we can exit the loop early
 #endif
         }
