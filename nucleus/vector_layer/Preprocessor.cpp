@@ -144,7 +144,7 @@ float Preprocessor::polygon_area(const ClipperPath& vertices)
 std::vector<ClipperPaths> Preprocessor::separate_vertex_groups(const ClipperPaths& vertices)
 {
     std::vector<ClipperPaths> output;
-    ClipperPaths* current_path;
+    ClipperPaths* current_path = nullptr;
 
     for (const auto& polygon : vertices) {
 
