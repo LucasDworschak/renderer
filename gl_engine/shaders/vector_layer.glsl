@@ -149,7 +149,8 @@ struct DrawMeta
     highp vec2 duvdy;
     mediump float zoom_offset;
     mediump float zoom_blend;
-    highp mat2 screenspace_transform_matrix;
+    highp mat3x3 uv2clipspace_matrix;
+    highp mat3x3 uv2clipspace_matrix_inv;
 };
 
 
@@ -526,28 +527,28 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, hig
 
 }
 
-highp vec3 sd_Line_Triangle_screenspace( in highp vec2 uv, SDFData data, bool triangle, highp float line_width, lowp vec2 dash_info, bool round_line_caps)
+highp vec3 sd_Line_Triangle_screenspace( in highp vec2 uv, VectorLayerData geom_data, highp float line_width, lowp vec2 dash_info, bool round_line_caps)
 {
-    highp vec2 v0 = uv - data.vertices.a;
-    highp vec2 v1 = uv - data.vertices.b;
-    highp float h = clamp( dot(v0,data.e0)/data.dot_e0, 0.0, 1.0 );
-    highp vec2 pq0 = v0 - data.e0*h;
+    highp vec2 v0 = uv - geom_data.a;
+    highp vec2 v1 = uv - geom_data.b;
+    highp vec2 e0 = geom_data.b-geom_data.a;
+    highp float h = clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );
+    highp vec2 pq0 = v0 - e0*h;
 
-    highp float poly_sign = 1.0;
-    highp float mask = 1.0;
-    highp float result = 1.0;
-
-    if(triangle)
+    if(geom_data.is_polygon)
     {
-        highp vec2 v2 = uv - data.vertices.c;
-        highp vec2 pq1 = v1 - data.e1*clamp( dot(v1,data.e1)/data.dot_e1, 0.0, 1.0 );
-        highp vec2 pq2 = v2 - data.e2*clamp( dot(v2,data.e2)/data.dot_e2, 0.0, 1.0 );
-        highp float s = sign( data.e0.x*data.e2.y - data.e0.y*data.e2.x );
+        highp vec2 e1 = geom_data.c-geom_data.b;
+        highp vec2 e2 = geom_data.a-geom_data.c;
 
-        highp float s0 = s*(v0.x*data.e0.y-v0.y*data.e0.x);
-        highp float s1 = s*(v1.x*data.e1.y-v1.y*data.e1.x);
-        highp float s2 = s*(v2.x*data.e2.y-v2.y*data.e2.x);
-        highp float poly_sign = sign(min(s0, min(s1,s2)));
+        highp vec2 v2 = uv - geom_data.c;
+        highp vec2 pq1 = v1 - e1*clamp( dot(v1,e1)/dot(e1,e1), 0.0, 1.0 );
+        highp vec2 pq2 = v2 - e2*clamp( dot(v2,e2)/dot(e2,e2), 0.0, 1.0 );
+        highp float s = sign( e0.x*e2.y - e0.y*e2.x );
+
+        highp float s0 = s*(v0.x*e0.y-v0.y*e0.x);
+        highp float s1 = s*(v1.x*e1.y-v1.y*e1.x);
+        highp float s2 = s*(v2.x*e2.y-v2.y*e2.x);
+        highp float poly_sign = -sign(min(s0, min(s1,s2)));
 
         // d.xy == vector to nearest intersection
         // d.z == squared distance to this intersection
@@ -806,7 +807,7 @@ lowp float hit_percentage(highp uint intersections)
     return float(bits_hit) / float(n_aa_samples);
 }
 
- #if DRAW_MODE == 0
+#if DRAW_MODE == 0
 void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp uint intersections)
 {
     // we store which sample has hit the geometry -> if two geometries hit the same sample we only store one hit
@@ -823,11 +824,6 @@ void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp float inte
     pixel_color = pixel_color + ((1.0-pixel_color.a) * style.color * intersection_percentage);
 }
 #endif
-
-void create_screenspace_transform_matrix(inout DrawMeta meta)
-{
-    meta.screenspace_transform_matrix = inverse(mat2(meta.duvdx, meta.duvdy));
-}
 
 mat3x3 create_uv2clipspace_matrix(in highp vec3 normal, in highp uint zoom_level, in highp vec3 ws_position, in highp vec2 uv_position, in highp mat4 view_proj_matrix)
 {
@@ -854,6 +850,14 @@ mat3x3 create_uv2clipspace_matrix(in highp vec3 normal, in highp uint zoom_level
 
     highp mat4x3 uv2clipspace_t = transpose(view_proj_matrix * uv2world);
     return transpose(mat3(uv2clipspace_t[0], uv2clipspace_t[1], uv2clipspace_t[3]));
+}
+
+void uv2screenspace(inout vec2 coord, DrawMeta meta)
+{
+    highp vec3 temp = meta.uv2clipspace_matrix * vec3(coord, 1);
+    coord = temp.xy / temp.z;
+    coord += vec2(1.0); // [-1,1] to [0,2]
+    coord *= vec2(0.5) * camera.viewport_size; // [0,2] to [0, screen_size]
 }
 
 #if DRAW_MODE == 0
@@ -919,7 +923,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
 
 
 #if DRAW_MODE == 1
-bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_percentage, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
+bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_percentage, inout LayerStyle style, highp vec2 screenspace_coord, highp vec2 uv, highp uint i, DrawMeta meta)
 {
     highp uvec2 raw_geom_data = fetch_raw_geometry_data(meta.sampler_buffer_index, i, meta.texture_layer);
     highp uint style_index = unpack_style_index(raw_geom_data) + meta.tile_zoom;
@@ -940,116 +944,94 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
 
 
-    // { // old naive version (testing if sd_Line_Triangle_screenspace provides correct values)
-    //     VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
-    //     SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data);
 
-    //     highp vec3 v = sd_Line_Triangle_screenspace(uv, prepared_sdf_data, geom_data.is_polygon, style.line_width, style.dash_info, style.round_line_caps);
 
-    //     highp float d = sqrt(dot(v.xy,v.xy))*v.z - style.line_width;
 
-    //     intersection_percentage = max(step(d,0), intersection_percentage);
-    // }
-
-    bool thony = true;
-    // thony = false;
-
-    if(!thony)
     { // screenspace transformation nehab
         VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
-        SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data);
-        // if(geom_data.is_polygon)
-        //     return false;
+
+        highp vec2 e0 = geom_data.b-geom_data.a;
+        highp vec2 n0_uv = normalize(vec2(e0.y, -e0.x)); // normal in uv space (used for line width)
+
+        uv2screenspace(geom_data.a, meta);
+        uv2screenspace(geom_data.b, meta);
+        uv2screenspace(geom_data.c, meta);
 
 
-        highp vec3 v = sd_Line_Triangle_screenspace(uv, prepared_sdf_data, geom_data.is_polygon, style.line_width, style.dash_info, style.round_line_caps);
+        highp vec3 v = sd_Line_Triangle_screenspace(screenspace_coord, geom_data, style.line_width, style.dash_info, style.round_line_caps);
 
-        // save the smallest_v -> smaller vector length -> will be saved
-        // smallest_v = mix(smallest_v, v, step(length(v),length(smallest_v)));
+        highp float v_length_screen = length(v.xy) * v.z;
 
-
-
-        highp vec2 smallest_v_screen = meta.screenspace_transform_matrix * v.xy;
-
-        highp float v_length_screen = length(smallest_v_screen) * v.z;
-        // highp float scaling = v_length_screen / max(length(v),0.0000001); // prevent division by 0 if length is 0
-        highp float scaling = v_length_screen / length(v.xy); // prevent division by 0 if length is 0
-        highp float line_width_screen = style.line_width * scaling;
-
-        highp float d_near = v_length_screen - line_width_screen;
-        highp float d_far = v_length_screen + line_width_screen;
-
-        float kernel_size = sqrt(2.0);
-
-        intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
-        // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
-        // intersection_percentage = max(step(0,d_near), intersection_percentage);
-        // intersection_percentage = max(step(0,length(smallest_v_screen.xy)*v.z), intersection_percentage);
-        // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
-        // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
-
-    }
-    // else
-    { // screenspace transformation thony2018
-        VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
-        SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data);
-        // if(geom_data.is_polygon)
-        //     return false;
-
-
-        highp vec3 v = sd_Line_Triangle_screenspace(uv, prepared_sdf_data, geom_data.is_polygon, style.line_width, style.dash_info, style.round_line_caps);
-
-        // save the smallest_v -> smaller vector length -> will be saved
-        // smallest_v = mix(smallest_v, v, step(length(v),length(smallest_v)));
-
-        float kernel_size = sqrt(2.0);
-
-
-        highp vec2 smallest_v_screen = meta.screenspace_transform_matrix * v.xy;
-
-        highp float v_length_screen = length(smallest_v_screen) * v.z;
-
-        // highp float d = length(smallest_v_screen) * -v.z;
-        // highp float d = length(smallest_v_screen) * v.z;
-
-        highp float w_pix = kernel_size;
-        highp float A_pix = w_pix*w_pix;
-
-        highp float A_line = v_length_screen;
-        highp float w_line = 100.0;
-
-        A_line = w_pix*((w_pix/2.0+v_length_screen));
-
-
+        highp float d_near = v_length_screen;
+        highp float d_far = v_length_screen;
 
         if(!geom_data.is_polygon)
         {
-            // highp float scaling = d / max(length(v),0.0000001); // prevent division by 0 if length is 0
-            highp float scaling = v_length_screen / length(v.xy); // prevent division by 0 if length is 0
-            highp float line_width_screen = style.line_width * scaling;
+            // calculate line width
 
-            highp float d_near = v_length_screen - line_width_screen;
-            highp float d_far = v_length_screen + line_width_screen;
 
-            w_line = line_width_screen*2.0;
+            /*
+              screenspace_coord                         evaluation point in screenspace
+              uv                                        evaluation point in uv space
+              v                                         vector between evaluation point and nearest line point in screenspace
+              v+screenspace_coord                       the nearest line point in screenspace
 
-            A_line = w_pix*(min(w_pix/2.0-v_length_screen, w_line/2.0)+min(w_pix/2.0+v_length_screen, w_line/2.0));
+              nearest_line_point_uv                     the nearest line point in uv space
+              smallest_v_direction_uv                   vector between  evaluation point and nearest line point in uv space (but normalized, as we only want the direction)
+
+              line_width_vector                         point in space that is exactly one line width away from nearest line point -> point is transformed from uv to screenspace
+              screenspace_coord - line_width_vector     vector where the length encodes the distance to the nearest line point
+            */
+
+
+            highp vec2 nearest_line_point_ndc = (screenspace_coord+v.xy) / camera.viewport_size; // [0, screen_size] to [0,1]
+            nearest_line_point_ndc -= vec2(0.5); // [0, 1] to [-0.5,0.5] // -> changing to [1,1] shouldn't be neceesary as we are only interested in direction
+            nearest_line_point_ndc *= 2.0; // [-0.5,0.5] to [-1,1] // test
+
+            // transform v back to uv space and normalize the xy vector (division by z not necessary as we are only interested in direction)
+            highp vec3 temp = meta.uv2clipspace_matrix_inv * vec3(nearest_line_point_ndc, 1.0);
+            highp vec2 nearest_line_point_uv = temp.xy / temp.z;
+            highp vec2 smallest_v_direction_uv = normalize(uv - nearest_line_point_uv);
+
+            // get a vector in smallest_v direction that encodes the line width
+            // -> dot is necessary since through the clipspace transformation the smallest vector is not necessarily in the same direction as the normal
+            highp vec2 line_width_vector = uv + smallest_v_direction_uv * abs(dot(smallest_v_direction_uv, n0_uv)) * style.line_width;
+            // highp vec2 line_width_vector = uv + n0_uv * abs(dot(smallest_v_direction_uv, n0_uv)) * style.line_width;
+            // highp vec2 line_width_vector = uv + n0_uv * style.line_width;
+
+            // convert to screenspace
+            uv2screenspace(line_width_vector,meta);
+
+            // evaluate the line width in screen space
+            float line_width = length(screenspace_coord - line_width_vector);
+
+            d_near -= line_width;
+            d_far += line_width;
+
+            // pixel_color = vec4(vec3(length(line_width_vector.xy)/10000.0), 1.0);
+
 
         }
 
+        // highp float scaling = v_length_screen / max(length(v),0.0000001); // prevent division by 0 if length is 0
+        // highp float scaling = v_length_screen / length(v.xy); // prevent division by 0 if length is 0
+        // highp float line_width_screen = style.line_width * scaling;
 
-        // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
-        // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
+        // highp float d_near = v_length_screen - line_width_screen;
+        // highp float d_far = v_length_screen + line_width_screen;
+
+        highp float kernel_size = sqrt(2.0);
+        // if(geom_data.is_polygon)
+            // intersection_percentage = max(smoothstep(kernel_size,0.0,d_near), intersection_percentage);
+            // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
+        // else
+            intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
         // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
 
 
-        // A_line = 1.0;
-
-        intersection_percentage = max(intersection_percentage, clamp(A_line/A_pix, 0,1));
-        // intersection_percentage = max(intersection_percentage, smoothstep(0,kernel_size,A_line/A_pix));
-
 
     }
+
 
 
     return false;

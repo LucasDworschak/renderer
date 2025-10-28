@@ -258,9 +258,15 @@ void main() {
     /////////////////////////
     // anti-alialing
     meta.cos_smoothing_factor = calculate_cos_smoothing();
+    meta.cos_smoothing_factor = 1;
 
     calculate_samples(meta, uv);
-    create_screenspace_transform_matrix(meta);
+    // create_screenspace_transform_matrix(meta);
+
+    meta.uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix);
+    meta.uv2clipspace_matrix_inv = inverse(meta.uv2clipspace_matrix);
+    highp vec2 screenspace_coord = uv;
+    uv2screenspace(screenspace_coord, meta);
 
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
     if(offset_size.y != uint(0)) // only if we have data here
@@ -298,22 +304,17 @@ void main() {
         {
             debug_draw_calls++;
  #if DRAW_MODE == 0
-            if(draw_layer(pixel_color, intersections, style, uv, i, meta))
+            if(draw_layer(pixel_color, intersections, style, screenspace_coord, i, meta))
                 break; // pixel is finished -> we can exit the loop early
 #else
-            if(draw_layer(pixel_color, intersections, style, uv, i, meta))
-            // if(draw_layer(pixel_color, smallest_v, style, uv, i, meta))
+            if(draw_layer(pixel_color, intersections, style, screenspace_coord, uv, i, meta))
                 break; // pixel is finished -> we can exit the loop early
 #endif
         }
 
-#if DRAW_MODE == 0
         // blend the last layer (this only does something if we did not break out of the loop early)
         alpha_blend(pixel_color, style, intersections);
-#else
-        alpha_blend(pixel_color, style, intersections);
-        // alpha_blend(pixel_color, style, smallest_v, meta);
-#endif
+
     }
 
 
@@ -334,23 +335,29 @@ void main() {
     // // texout_albedo = vec3(uv_ndc * 0.5 + 0.5, 0.0);
 
 
+    // mat3x3 uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix);
+    // // vec3 uv_clipspace = uv2clipspace_matrix * vec3(uv, 1);
+    // vec3 uv_clipspace = meta.uv2clipspace_matrix * vec3(uv, 1);
+    // vec2 uv_ndc = vec2(uv_clipspace / uv_clipspace.z);
 
-    mat3x3 uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix);
-    highp float test_offset = 1.0/2048.0; // -> texture resolution for lines 1024 -> 1/2048 perturbtion = 1/2 pixel diff in texture space
-    test_offset = 1.0/1024.0; // -> 1 pixel diff in texture space
-    test_offset = 1.0/512.0; // -> 2 pixel diff in texture space
 
-    // highp vec3 test_point_a = uv2clipspace_matrix * vec3(uv.x, uv.y, 1);
-    // highp vec3 test_point_b = uv2clipspace_matrix * vec3(uv.x, uv.y+test_offset, 1);
-    highp vec3 test_point_a = uv2clipspace_matrix * vec3(0.5, 0.5, 1);
-    highp vec3 test_point_b = uv2clipspace_matrix * vec3(0.5, 0.5+test_offset, 1);
 
-    vec2 uv_ndc_a = vec2(test_point_a / test_point_a.z) * camera.viewport_size;
-    vec2 uv_ndc_b = vec2(test_point_b / test_point_b.z) * camera.viewport_size;
+    // mat3x3 uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix);
+    // highp float test_offset = 1.0/2048.0; // -> texture resolution for lines 1024 -> 1/2048 perturbtion = 1/2 pixel diff in texture space
+    // test_offset = 1.0/1024.0; // -> 1 pixel diff in texture space
+    // test_offset = 1.0/512.0; // -> 2 pixel diff in texture space
 
-    highp float error = step(0.5,length(uv_ndc_a-uv_ndc_b)); // 0.5: if black -> perturbance is mapped to value smaller than half a pixel
+    // // highp vec3 test_point_a = uv2clipspace_matrix * vec3(uv.x, uv.y, 1);
+    // // highp vec3 test_point_b = uv2clipspace_matrix * vec3(uv.x, uv.y+test_offset, 1);
+    // highp vec3 test_point_a = uv2clipspace_matrix * vec3(0.5, 0.5, 1);
+    // highp vec3 test_point_b = uv2clipspace_matrix * vec3(0.5, 0.5+test_offset, 1);
 
-    texout_albedo = vec3(error);
+    // vec2 uv_ndc_a = vec2(test_point_a / test_point_a.z) * camera.viewport_size;
+    // vec2 uv_ndc_b = vec2(test_point_b / test_point_b.z) * camera.viewport_size;
+
+    // highp float error = step(0.5,length(uv_ndc_a-uv_ndc_b)); // 0.5: if black -> perturbance is mapped to value smaller than half a pixel
+
+    // texout_albedo = vec3(error);
 
 
     if (conf.overlay_mode > 199u && conf.overlay_mode < 300u) {
