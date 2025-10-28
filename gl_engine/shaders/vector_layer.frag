@@ -263,7 +263,12 @@ void main() {
     calculate_samples(meta, uv);
     // create_screenspace_transform_matrix(meta);
 
-    meta.uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix);
+    // todo: not sure whether we should use shading or geometric normals
+    // shading normals:
+    // meta.uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix);
+    // geometric normals:
+    meta.uv2clipspace_matrix = create_uv2clipspace_matrix(normal_by_fragment_position_interpolation(), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix);
+
     meta.uv2clipspace_matrix_inv = inverse(meta.uv2clipspace_matrix);
     highp vec2 screenspace_coord = uv;
     uv2screenspace(screenspace_coord, meta);

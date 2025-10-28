@@ -832,14 +832,14 @@ mat3x3 create_uv2clipspace_matrix(in highp vec3 normal, in highp uint zoom_level
     highp vec3 x_axis = vec3(1, 0, 0);
     highp vec3 y_axis = vec3(0, 1, 0);
     highp vec3 z_axis = vec3(0, 0, 1);
-    // highp vec3 scaled_Rx = cross(normal, vec3(0, 1, 0));
-    // highp vec3 scaled_Ry = cross(vec3(1, 0, 0), normal);
+    highp vec3 scaled_Rx = cross(normal, vec3(0, 1, 0));
+    highp vec3 scaled_Ry = cross(vec3(1, 0, 0), normal);
     // highp vec3 scaled_Rz = scale * normal;
 
     highp mat3x4 uv2world = mat3x4(
-                vec4(x_axis, 0.0),
-                vec4(y_axis, 0.0),
-                vec4(ws_position, 1.0)) * mat3(vec3(scale, 0, 0), vec3(0, -scale, 0), vec3(0, 0, 1)) * mat3x3(vec3(1, 0, 0), vec3(0, 1, 0), vec3(-uv_position, 1));
+                vec4(-scaled_Rx, 0.0),
+                vec4(-scaled_Ry, 0.0), // todo: not sure whether we should use positive or negative values, they look quite similar
+                vec4(ws_position, 1.0)) * mat3(vec3(scale / dot(scaled_Rx, x_axis), 0, 0), vec3(0, -scale / dot(scaled_Ry, y_axis), 0), vec3(0, 0, 1)) * mat3x3(vec3(1, 0, 0), vec3(0, 1, 0), vec3(-uv_position, 1));
 
     // glsl is column major, but we want to remove the 3rd row,
     // so we transpose, remove the 3rd col and transpose back.
