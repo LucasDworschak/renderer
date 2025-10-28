@@ -995,7 +995,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
             // get a vector in smallest_v direction that encodes the line width
             // -> dot is necessary since through the clipspace transformation the smallest vector is not necessarily in the same direction as the normal
-            highp vec2 line_width_vector = uv + smallest_v_direction_uv * abs(dot(smallest_v_direction_uv, n0_uv)) * style.line_width;
+            highp vec2 line_width_vector = uv + smallest_v_direction_uv * abs(1.0/dot(smallest_v_direction_uv, n0_uv)) * style.line_width;
             // highp vec2 line_width_vector = uv + n0_uv * abs(dot(smallest_v_direction_uv, n0_uv)) * style.line_width;
             // highp vec2 line_width_vector = uv + n0_uv * style.line_width;
 
