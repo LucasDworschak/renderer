@@ -859,6 +859,40 @@ void uv2screenspace(inout vec2 coord, DrawMeta meta)
     coord += vec2(1.0); // [-1,1] to [0,2]
     coord *= vec2(0.5) * camera.viewport_size; // [0,2] to [0, screen_size]
 }
+
+bool clipHalfSpace(inout vec3 P0, inout vec3 P1, float f0, float f1) {
+    if (f0 > 0.0 && f1 > 0.0) return false;       // both outside
+    if (f0 > 0.0 || f1 > 0.0) {
+        float t = f0 / (f0 - f1);                 // solve f(P0 + t*(P1-P0)) = 0
+        vec3  D = P1 - P0;
+        if (f0 > 0.0) P0 += t * D;
+        else P1 = P0 + t * D;
+    }
+    return true;
+}
+
+void uv_line2screenspace(inout vec2 a, inout vec2 b, in highp mat3 uv2clipspace_matrix)
+{
+    highp vec3 a_clip = uv2clipspace_matrix * vec3(a, 1.0);
+    highp vec3 b_clip = uv2clipspace_matrix * vec3(b, 1.0);
+
+    float eps = 1e-6;
+    if (!clipHalfSpace(a_clip, b_clip,       eps - a_clip.z,       eps - b_clip.z)) { a = b = vec2(-1.0); return; }
+    if (!clipHalfSpace(a_clip, b_clip,  a_clip.x - a_clip.z,  b_clip.x - b_clip.z)) { a = b = vec2(-1.0); return; }
+    if (!clipHalfSpace(a_clip, b_clip, -a_clip.x - a_clip.z, -b_clip.x - b_clip.z)) { a = b = vec2(-1.0); return; }
+    if (!clipHalfSpace(a_clip, b_clip,  a_clip.y - a_clip.z,  b_clip.y - b_clip.z)) { a = b = vec2(-1.0); return; }
+    if (!clipHalfSpace(a_clip, b_clip, -a_clip.y - a_clip.z, -b_clip.y - b_clip.z)) { a = b = vec2(-1.0); return; }
+
+
+    a = a_clip.xy / a_clip.z;
+    a += vec2(1.0); // [-1,1] to [0,2]
+    a *= vec2(0.5) * camera.viewport_size; // [0,2] to [0, screen_size]
+
+    b = b_clip.xy / b_clip.z;
+    b += vec2(1.0); // [-1,1] to [0,2]
+    b *= vec2(0.5) * camera.viewport_size; // [0,2] to [0, screen_size]
+}
+
 #if DRAW_MODE == 0
 bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
 {
@@ -952,8 +986,9 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         highp vec2 e0 = geom_data.b-geom_data.a;
         highp vec2 n0_uv = normalize(vec2(e0.y, -e0.x)); // normal in uv space (used for line width)
 
-        uv2screenspace(geom_data.a, meta);
-        uv2screenspace(geom_data.b, meta);
+        // uv2screenspace(geom_data.a, meta);
+        // uv2screenspace(geom_data.b, meta);
+        uv_line2screenspace(geom_data.a, geom_data.b, meta.uv2clipspace_matrix);
         uv2screenspace(geom_data.c, meta);
 
 
@@ -984,8 +1019,8 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
 
             highp vec2 nearest_line_point_ndc = (screenspace_coord+v.xy) / camera.viewport_size; // [0, screen_size] to [0,1]
-            nearest_line_point_ndc -= vec2(0.5); // [0, 1] to [-0.5,0.5]
-            nearest_line_point_ndc *= 2.0; // [-0.5,0.5] to [-1,1]
+            nearest_line_point_ndc -= vec2(0.5); // [0, 1] to [-0.5,0.5] // -> changing to [1,1] shouldn't be neceesary as we are only interested in direction
+            nearest_line_point_ndc *= 2.0; // [-0.5,0.5] to [-1,1] // test
 
             // transform v back to uv space and normalize the xy vector (division by z not necessary as we are only interested in direction)
             highp vec3 temp = meta.uv2clipspace_matrix_inv * vec3(nearest_line_point_ndc, 1.0);
@@ -994,9 +1029,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
             // get a vector in smallest_v direction that encodes the line width
             // -> dot is necessary since through the clipspace transformation the smallest vector is not necessarily in the same direction as the normal
-            // make sure that dot is larger than 0 -> otherwise division by 0
-            highp float dot_v_n = max(0.000001,abs(dot(smallest_v_direction_uv, n0_uv)));
-            highp vec2 line_width_vector = uv + smallest_v_direction_uv * (1.0/dot_v_n) * style.line_width;
+            highp vec2 line_width_vector = uv + smallest_v_direction_uv * abs(1.0/dot(smallest_v_direction_uv, n0_uv)) * style.line_width;
             // highp vec2 line_width_vector = uv + n0_uv * abs(dot(smallest_v_direction_uv, n0_uv)) * style.line_width;
             // highp vec2 line_width_vector = uv + n0_uv * style.line_width;
 
@@ -1028,8 +1061,8 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         // else
             intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
         // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
-            // intersection_percentage = 1.0;
-            // pixel_color = vec4(vec3(v_length_screen/40.0), 1.0);
+            intersection_percentage = 1.0;
+            pixel_color = vec4(vec3(v_length_screen/40.0), 1.0);
 
 
 
