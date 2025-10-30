@@ -20,8 +20,6 @@
 
 #define n_multisamples 4
 
-#define SDF_MODE 0
-
 #include "camera_config.glsl"
 #include "shared_config.glsl"
 #include "tile_id.glsl"

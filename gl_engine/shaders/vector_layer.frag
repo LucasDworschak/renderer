@@ -18,7 +18,7 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *****************************************************************************/
 
-#define DRAW_MODE 1
+#define SDF_MODE 1
 #define n_multisamples 4
 
 #include "shared_config.glsl"
@@ -296,7 +296,7 @@ void main() {
         style.dash_info = vec2(1.0, 0.0);
         style.round_line_caps = false;
 
-#if DRAW_MODE == 0
+#if SDF_MODE == 0
         highp uint intersections = 0u;
 #else
         highp float intersections = 0.0;
@@ -306,7 +306,7 @@ void main() {
         for(highp uint i = offset_size.x; i < offset_size.x + min(uint(max_vector_geometry),offset_size.y); i++) // show only x layers
         {
             debug_draw_calls++;
- #if DRAW_MODE == 0
+ #if SDF_MODE == 0
             if(draw_layer(pixel_color, intersections, style, gl_FragCoord.xy, i, meta))
                 break; // pixel is finished -> we can exit the loop early
 #else

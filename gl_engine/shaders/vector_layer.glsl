@@ -22,8 +22,7 @@
 
 
 // SDF_MODE 0: naive multisample antialiasing (golden -> but worse performnace)
-// SDF_MODE 1: derivative multisample antialiasing
-// SDF_MODE 2: screenspace transformation -> smoothstep
+// SDF_MODE 1: screenspace transformation -> smoothstep
 #ifndef SDF_MODE
 #define SDF_MODE 0
 #endif
@@ -404,14 +403,10 @@ void calculate_samples(inout DrawMeta meta, highp vec2 uv)
 {
     if(n_aa_samples <= 1)
     {
-#if SDF_MODE == 0
         meta.aa_sample_positions[0] = uv;
-#else
-        meta.aa_sample_multipliers[0] = vec2(0.0);
-#endif
+
         return;
     }
-#if SDF_MODE == 0
     highp vec2 min_cell = meta.grid_cell_float * cell_size_uv;
     highp vec2 max_cell = min_cell + cell_size_uv;
     min_cell -= vec2(aa_cell_overlap_uv);
@@ -419,7 +414,6 @@ void calculate_samples(inout DrawMeta meta, highp vec2 uv)
 
     highp vec2 grad_u = vec2(meta.duvdx.x, meta.duvdy.x);
     highp vec2 grad_v = vec2(meta.duvdx.y, meta.duvdy.y);
-#endif
 
 #if SAMPLE_DISTRIBUTION == 0
     highp float aa_sample_dist_increments = aa_sample_dist / float(n_aa_samples_row_cols);
@@ -436,13 +430,11 @@ void calculate_samples(inout DrawMeta meta, highp vec2 uv)
             meta.aa_sample_multipliers[index] = random_gaussian_point(ivec2(x,y), uv);
 #endif
 
-#if SDF_MODE == 0
             meta.aa_sample_positions[index].x = uv.x + dot(grad_u, meta.aa_sample_multipliers[index]);
             meta.aa_sample_positions[index].y = uv.y + dot(grad_v, meta.aa_sample_multipliers[index]);
 
             // clip to current cell
             meta.aa_sample_positions[index] = min(max_cell, max(min_cell, meta.aa_sample_positions[index]));
-#endif
         }
     }
 }
@@ -527,6 +519,8 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, hig
 
 }
 
+#else
+// screenspace sdf
 highp vec3 sd_Line_Triangle_screenspace( in highp vec2 uv, VectorLayerData geom_data, highp float line_width, lowp vec2 dash_info, bool round_line_caps)
 {
     highp vec2 v0 = uv - geom_data.a;
@@ -569,139 +563,6 @@ highp vec3 sd_Line_Triangle_screenspace( in highp vec2 uv, VectorLayerData geom_
 
     return vec3(1000.0);
 
-}
-#endif
-#if SDF_MODE == 1
-highp float grad_clamp_fun(highp float v, highp float min, highp float max, highp float incoming_grad)
-{
-    // return incoming_grad * // TODO convert to * instead of if
-
-    // return float(v > min && v < max) * incoming_grad;
-    // return incoming_grad * step(v,min) * step(max,v);
-
-    if (v > min && v < max)
-        return incoming_grad;
-    return 0.0;
-}
-
-
-highp vec4 sdf_with_grad(VectorLayerData data, highp vec2 uv, highp float incoming_grad, lowp vec2 dash_info, bool round_line_caps)
-{
-    highp vec2 e0 = data.b - data.a;
-    highp vec2 v0 = uv - data.a;
-    highp vec2 v1 = uv - data.b;
-    highp float dot0 = dot(v0, e0);
-    highp float one_over_dot0 = 1.0 / dot(e0, e0);
-    highp float div0 = dot0 * one_over_dot0;
-    highp float h = clamp(div0, 0.0, 1.0);
-    highp vec2 pq0 = v0 - e0 * h;
-    highp float dot_pq0_pq0 = dot(pq0, pq0);
-
-    highp float poly_sign = 1.0;
-    highp float distance_sq = 1.0;
-    highp float mask = 1.0;
-
-    highp vec2 grad_uv = vec2(0.0);
-    highp vec2 grad_pq0 = vec2(0.0);
-    if (data.is_polygon) {
-        highp vec2 e1 = data.c - data.b;
-        highp vec2 e2 = data.a - data.c;
-        highp vec2 v2 = uv - data.c;
-        highp float dot1 = dot(v1, e1);
-        highp float dot2 = dot(v2, e2);
-        highp float one_over_dot1 = 1.0 / dot(e1, e1);
-        highp float one_over_dot2 = 1.0 / dot(e2, e2);
-        highp float div1 = dot1 * one_over_dot1;
-        highp float div2 = dot2 * one_over_dot2;
-        highp float clamp1 = clamp(div1, 0.0, 1.0);
-        highp float clamp2 = clamp(div2, 0.0, 1.0);
-        highp vec2 pq1 = v1 - e1 * clamp1;
-        highp vec2 pq2 = v2 - e2 * clamp2;
-        highp float s = sign(e0.x * e2.y - e0.y * e2.x);
-        highp vec2 d0 = vec2(dot_pq0_pq0, s * (v0.x * e0.y - v0.y * e0.x));
-        highp vec2 d1 = vec2(dot(pq1, pq1), s * (v1.x * e1.y - v1.y * e1.x));
-        highp vec2 d2 = vec2(dot(pq2, pq2), s * (v2.x * e2.y - v2.y * e2.x));
-        highp vec2 d = min(min(d0, d1), d2);
-
-        poly_sign = -sign(d.y);
-        distance_sq = d.x;
-
-        // gradient computation
-        highp float grad_d0_x = 0.0;
-        highp float grad_d1_x = 0.0;
-        highp float grad_d2_x = 0.0;
-
-        if (d0.x <= d1.x && d0.x <= d2.x) {
-            grad_d0_x = incoming_grad;
-        } else if (d1.x < d0.x && d1.x <= d2.x) {
-            grad_d1_x = incoming_grad;
-        } else {
-            grad_d2_x = incoming_grad;
-        }
-        grad_pq0 = 2.0 * pq0 * grad_d0_x;
-        highp vec2 grad_pq1 = 2.0 * pq1 * grad_d1_x;
-        highp vec2 grad_pq2 = 2.0 * pq2 * grad_d2_x;
-
-        highp vec2 grad_v1 = grad_pq1;
-        highp vec2 grad_e1 = -grad_pq1 * clamp1;
-        highp float grad_clamp1 = -dot(e1, grad_pq1);
-
-        highp vec2 grad_v2 = grad_pq2;
-        highp vec2 grad_e2 = -grad_pq2 * clamp2;
-        highp float grad_clamp2 = -dot(e2, grad_pq2);
-
-        highp float grad_div1 = grad_clamp_fun(div1, 0.0, 1.0, grad_clamp1);
-
-        highp float grad_div2 = grad_clamp_fun(div2, 0.0, 1.0, grad_clamp2);
-
-        highp float grad_dot1 = grad_div1 * one_over_dot1;
-
-        highp float grad_dot2 = grad_div2 * one_over_dot2;
-
-        grad_v1 += e1 * grad_dot1;
-        grad_e1 += v1 * grad_dot1;
-
-        grad_v2 += e2 * grad_dot2;
-        grad_e2 += v2 * grad_dot2;
-
-        grad_uv += grad_v1 + grad_v2;
-
-    } else {
-
-        highp float line_length = length(e0);
-
-        highp float amount_dash_gap_pairs = ceil(line_length/dash_info.y);
-        // + 0.01 -> small delta to remove artifacts if there shouldn't be any dashes
-        highp float dash_period = cos(PI*h*amount_dash_gap_pairs*2.0)+cos((1.0-dash_info.x)*PI)+0.01;
-        // tanh is used as a differentiable step function -> all values above 0 are mapped to +1, all below to -1
-        // multiplication by big value ensures a quick transition at 0 +/- small delta
-        highp float dashes = tanh(dash_period*500000.0);
-
-        highp float line_endings = 1.0;
-        if(!round_line_caps)
-        {
-            if(data.line_cap0)
-                line_endings *= dot(normalize(e0), v0);
-            if(data.line_cap1)
-                line_endings *= dot(normalize(-e0), v1);
-        }
-        line_endings = (tanh(line_endings*500000.0)+1.0) / 2.0;
-
-        mask = line_endings*dashes;
-
-        grad_pq0 += 2.0 * pq0 * incoming_grad;
-        distance_sq = dot_pq0_pq0;
-    }
-
-    highp vec2 grad_v0 = grad_pq0;
-    highp float grad_clamp = -dot(grad_pq0, e0);
-    highp float grad_div0 = grad_clamp_fun(div0, 0.0, 1.0, grad_clamp);
-    highp float grad_dot0 = grad_div0 * one_over_dot0;
-    grad_v0 += e0 * grad_dot0;
-    grad_uv += grad_v0;
-    highp float sdf_val = sqrt(distance_sq) * poly_sign;
-
-    return vec4(sdf_val, grad_uv / (2.0 * sdf_val), mask);
 }
 #endif
 
@@ -807,7 +668,7 @@ lowp float hit_percentage(highp uint intersections)
     return float(bits_hit) / float(n_aa_samples);
 }
 
-#if DRAW_MODE == 0
+#if SDF_MODE == 0
 void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp uint intersections)
 {
     // we store which sample has hit the geometry -> if two geometries hit the same sample we only store one hit
@@ -893,7 +754,7 @@ void uv_line2screenspace(inout vec2 a, inout vec2 b, in highp mat3 uv2clipspace_
     b *= vec2(0.5) * camera.viewport_size; // [0,2] to [0, screen_size]
 }
 
-#if DRAW_MODE == 0
+#if SDF_MODE == 0
 bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
 {
     highp uvec2 raw_geom_data = fetch_raw_geometry_data(meta.sampler_buffer_index, i, meta.texture_layer);
@@ -911,30 +772,6 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
         parse_style(style, style_index, meta.zoom_offset, meta.zoom_blend, meta.ortho_color, meta.cos_smoothing_factor, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
     }
 
-
-#if SDF_MODE == 1
-    { // derivative aa
-        VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
-
-        highp vec4 dist_and_grad = sdf_with_grad(geom_data, uv, 1.0, style.dash_info, style.round_line_caps);
-
-        highp float dDist_dx = dot(dist_and_grad.yz, meta.duvdx);
-        highp float dDist_dy = dot(dist_and_grad.yz, meta.duvdy);
-
-        for (lowp int j = 0; j < n_aa_samples; ++j)
-        {
-            highp float d = dist_and_grad.x + meta.aa_sample_multipliers[j].x * dDist_dx + meta.aa_sample_multipliers[j].y * dDist_dy;
-
-            // for lines use the abs(d) -> lines should not be able to be negative -> but it is possible with derivative -> we have to correct this
-            d = mix(abs(d), d, float(geom_data.is_polygon)) - (style.line_width * dist_and_grad.w);
-
-            // highp uint geometry_hit = uint(1.0 - step(0.0,d));
-            highp uint geometry_hit = uint(d<0.0);// TODO check if faster
-            intersections |= geometry_hit << j;
-        }
-    }
-#endif
-#if SDF_MODE == 0
     { // naive aa
         VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
         SDFData prepared_sdf_data = prepare_sd_Line_Triangle(geom_data);
@@ -947,15 +784,11 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
             intersections |= geometry_hit << j;
         }
     }
-#endif
 
      return false;
 
 }
-#endif
-
-
-#if DRAW_MODE == 1
+#else
 bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_percentage, inout LayerStyle style, highp vec2 screenspace_coord, highp vec2 uv, highp uint i, DrawMeta meta)
 {
     highp uvec2 raw_geom_data = fetch_raw_geometry_data(meta.sampler_buffer_index, i, meta.texture_layer);
@@ -973,12 +806,6 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
         parse_style(style, style_index, meta.zoom_offset, meta.zoom_blend, meta.ortho_color, meta.cos_smoothing_factor, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
     }
-
-
-
-
-
-
 
     { // screenspace transformation nehab
         VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
@@ -1015,6 +842,21 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
               line_width_vector                         point in space that is exactly one line width away from nearest line point -> point is transformed from uv to screenspace
               screenspace_coord - line_width_vector     vector where the length encodes the distance to the nearest line point
+
+                1. calculate the smallest v in uv space
+                2. add smallest_v to a and b to create a half space where line width is encoded
+                3. do the same thing in the other direction
+                4. create half space with nearest line ending (either a, or b) -> see below for line ending specifics
+                5. convert all three half spaces into screeenspace
+                6. use the half spaces in screen space to calculate distance
+
+
+                line endings
+                we are within the line-> the third half space to line ending is
+                -) for flat: a half space with origin a|b coordinate
+                -) for round: a half space with origin a|b the line width is increased by line width
+
+                if we evaluate within round line cap, we only evaluate two half spaces in positive line width and negative line width direction
             */
 
 
@@ -1042,9 +884,6 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
             d_near -= line_width;
             d_far += line_width;
 
-            // pixel_color = vec4(vec3(length(line_width_vector.xy)/10000.0), 1.0);
-
-
         }
 
         // highp float scaling = v_length_screen / max(length(v),0.0000001); // prevent division by 0 if length is 0
@@ -1061,14 +900,10 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         // else
             intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
         // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
-            intersection_percentage = 1.0;
-            pixel_color = vec4(vec3(v_length_screen/40.0), 1.0);
-
-
+            // intersection_percentage = 1.0;
+            // pixel_color = vec4(vec3(v_length_screen/40.0), 1.0);
 
     }
-
-
 
     return false;
 }
