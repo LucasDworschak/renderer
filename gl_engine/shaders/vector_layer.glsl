@@ -123,6 +123,12 @@ struct SDFData
     bool line_cap0;
     bool line_cap1;
 };
+#else
+struct HalfVector
+{
+     highp vec2 a;
+     highp vec2 b;
+};
 #endif
 
 struct LayerStyle {
@@ -521,6 +527,81 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, hig
 
 #else
 // screenspace sdf
+
+
+
+
+highp vec2 halfvector_normal(HalfVector half_vector)
+{
+    highp vec2 e = half_vector.b - half_vector.a;
+    return vec2(-e.y, e.x);
+}
+
+// construct half vector at line ending
+// TODO offset by line_width for round line caps
+HalfVector half_vector_line_end(highp vec2 current_point, HalfVector half_vector, highp vec2 h_normal)
+{
+    // determinen if a or b is closer to current_point
+    // additionaly encode if we have to switch the normal direction
+    highp vec3 closer_point = mix(vec3(half_vector.b, 1), vec3(half_vector.a,-1), step(length(current_point-half_vector.a), length(current_point-half_vector.b)));
+
+    return HalfVector(closer_point.xy, closer_point.xy + h_normal * closer_point.z);
+}
+
+
+highp float halfvector_dot(highp vec2 current_point, HalfVector half_vector)
+{
+    highp vec2 n = halfvector_normal(half_vector);
+    highp vec2 v0 = current_point - half_vector.a;
+
+    return dot(n,v0);
+}
+
+// returns the shortest possible vector to the half vector that goes through points a and b
+// z coordinate says if within half space or outside
+// TODO I think we only need the length and the side of the the smallest v
+// -> it should be easier to calculate them using the normal and the dot -> but not quite sure yet if this is correct
+highp vec3 halfvector_smallest_v(highp vec2 current_point, HalfVector half_vector)
+{
+    highp vec2 e0 = half_vector.b-half_vector.a;
+    highp vec2 v0 = current_point - half_vector.a;
+    highp vec2 v1 = current_point - half_vector.b;
+
+    // where on the line are we if within [0,1] we are between a and b
+    // value can also be more or less than 0,1
+    highp float t = dot(v0,e0)/dot(e0,e0);
+
+    // stretch the edge by t -> and use v0 as origin
+    // since v0 has current_point as origin -> result is shortest possible vector to half vector
+    vec2 v = v0 - e0*t;
+
+    return vec3(v, sign(halfvector_dot(current_point, half_vector)));
+}
+
+void order_smallest_v(in float v[4], out int v_order[4]) {
+    v_order[0] = 0;
+    v_order[1] = 1;
+    v_order[2] = 2;
+
+    // compare v[0] and v[1]
+    int swap = int(v[v_order[0]] > v[v_order[1]]);
+    int temp = v_order[0];
+    v_order[0] = swap * v_order[1] + (1 - swap) * temp;
+    v_order[1] = swap * temp + (1 - swap) * v_order[1];
+
+    // compare v[1] and v[2]
+    swap = int(v[v_order[1]] > v[v_order[2]]);
+    temp = v_order[1];
+    v_order[1] = swap * v_order[2] + (1 - swap) * temp;
+    v_order[2] = swap * temp + (1 - swap) * v_order[2];
+
+    // compare v[0] and v[1] again
+    swap = int(v[v_order[0]] > v[v_order[1]]);
+    temp = v_order[0];
+    v_order[0] = swap * v_order[1] + (1 - swap) * temp;
+    v_order[1] = swap * temp + (1 - swap) * v_order[1];
+}
+
 highp vec3 sd_Line_Triangle_screenspace( in highp vec2 uv, VectorLayerData geom_data, highp float line_width, lowp vec2 dash_info, bool round_line_caps)
 {
     highp vec2 v0 = uv - geom_data.a;
@@ -684,7 +765,7 @@ void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp float inte
 
     pixel_color = pixel_color + ((1.0-pixel_color.a) * style.color * intersection_percentage);
 }
-#endif
+
 
 mat3x3 create_uv2clipspace_matrix(in highp vec3 normal, in highp uint zoom_level, in highp vec3 ws_position, in highp vec2 uv_position, in highp mat4 view_proj_matrix)
 {
@@ -732,27 +813,28 @@ bool clipHalfSpace(inout vec3 P0, inout vec3 P1, float f0, float f1) {
     return true;
 }
 
-void uv_line2screenspace(inout vec2 a, inout vec2 b, in highp mat3 uv2clipspace_matrix)
-{
-    highp vec3 a_clip = uv2clipspace_matrix * vec3(a, 1.0);
-    highp vec3 b_clip = uv2clipspace_matrix * vec3(b, 1.0);
+
+void uv_halfvector2screenspace(inout HalfVector half_vector, in highp mat3 uv2clipspace_matrix) {
+    highp vec3 a_clip = uv2clipspace_matrix * vec3(half_vector.a, 1.0);
+    highp vec3 b_clip = uv2clipspace_matrix * vec3(half_vector.b, 1.0);
 
     float eps = 1e-6;
-    if (!clipHalfSpace(a_clip, b_clip,       eps - a_clip.z,       eps - b_clip.z)) { a = b = vec2(-1.0); return; }
-    if (!clipHalfSpace(a_clip, b_clip,  a_clip.x - a_clip.z,  b_clip.x - b_clip.z)) { a = b = vec2(-1.0); return; }
-    if (!clipHalfSpace(a_clip, b_clip, -a_clip.x - a_clip.z, -b_clip.x - b_clip.z)) { a = b = vec2(-1.0); return; }
-    if (!clipHalfSpace(a_clip, b_clip,  a_clip.y - a_clip.z,  b_clip.y - b_clip.z)) { a = b = vec2(-1.0); return; }
-    if (!clipHalfSpace(a_clip, b_clip, -a_clip.y - a_clip.z, -b_clip.y - b_clip.z)) { a = b = vec2(-1.0); return; }
+    if (!clipHalfSpace(a_clip, b_clip,       eps - a_clip.z,       eps - b_clip.z)) { half_vector.a = half_vector.b = vec2(-1.0); return; }
+    if (!clipHalfSpace(a_clip, b_clip,  a_clip.x - a_clip.z,  b_clip.x - b_clip.z)) { half_vector.a = half_vector.b = vec2(-1.0); return; }
+    if (!clipHalfSpace(a_clip, b_clip, -a_clip.x - a_clip.z, -b_clip.x - b_clip.z)) { half_vector.a = half_vector.b = vec2(-1.0); return; }
+    if (!clipHalfSpace(a_clip, b_clip,  a_clip.y - a_clip.z,  b_clip.y - b_clip.z)) { half_vector.a = half_vector.b = vec2(-1.0); return; }
+    if (!clipHalfSpace(a_clip, b_clip, -a_clip.y - a_clip.z, -b_clip.y - b_clip.z)) { half_vector.a = half_vector.b = vec2(-1.0); return; }
 
+    half_vector.a = a_clip.xy / a_clip.z;
+    half_vector.a += vec2(1.0); // [-1,1] to [0,2]
+    half_vector.a *= vec2(0.5) * camera.viewport_size; // [0,2] to [0, screen_size]
 
-    a = a_clip.xy / a_clip.z;
-    a += vec2(1.0); // [-1,1] to [0,2]
-    a *= vec2(0.5) * camera.viewport_size; // [0,2] to [0, screen_size]
-
-    b = b_clip.xy / b_clip.z;
-    b += vec2(1.0); // [-1,1] to [0,2]
-    b *= vec2(0.5) * camera.viewport_size; // [0,2] to [0, screen_size]
+    half_vector.b = b_clip.xy / b_clip.z;
+    half_vector.b += vec2(1.0); // [-1,1] to [0,2]
+    half_vector.b *= vec2(0.5) * camera.viewport_size; // [0,2] to [0, screen_size]
 }
+
+#endif
 
 #if SDF_MODE == 0
 bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
@@ -810,98 +892,116 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
     { // screenspace transformation nehab
         VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
 
-        highp vec2 e0 = geom_data.b-geom_data.a;
-        highp vec2 n0_uv = normalize(vec2(e0.y, -e0.x)); // normal in uv space (used for line width)
+        // three half vectors
+        // xy and zw encode 2d coordinates
+        HalfVector half_vectors[3];
+        half_vectors[0] = HalfVector(geom_data.a, geom_data.b);
 
-        // uv2screenspace(geom_data.a, meta);
-        // uv2screenspace(geom_data.b, meta);
-        uv_line2screenspace(geom_data.a, geom_data.b, meta.uv2clipspace_matrix);
-        uv2screenspace(geom_data.c, meta);
-
-
-        highp vec3 v = sd_Line_Triangle_screenspace(screenspace_coord, geom_data, style.line_width, style.dash_info, style.round_line_caps);
-
-        highp float v_length_screen = length(v.xy) * v.z;
-
-        highp float d_near = v_length_screen;
-        highp float d_far = v_length_screen;
 
         if(!geom_data.is_polygon)
         {
-            // calculate line width
+            // calculate smallest v for lines
+            highp vec2 h0_normal = normalize(halfvector_normal(half_vectors[0]));
+            highp vec2 line_offset = h0_normal*style.line_width;
+            half_vectors[0].a = half_vectors[0].a - line_offset;
+            half_vectors[0].b = half_vectors[0].b - line_offset;
+
+            // h1 half vector changes a and b points -> that way the half vector normal is created to be positive to the center of the line
+            half_vectors[1] = HalfVector(geom_data.b + line_offset, geom_data.a + line_offset);
+
+            // TODO calculate dashes and change a and b location
+
+            half_vectors[2] = half_vector_line_end(uv, half_vectors[0], h0_normal);
 
 
-            /*
-              screenspace_coord                         evaluation point in screenspace
-              uv                                        evaluation point in uv space
-              v                                         vector between evaluation point and nearest line point in screenspace
-              v+screenspace_coord                       the nearest line point in screenspace
+            // {// DEBUG value testing
+            //     // calculate the dot of the halfvector with the current position
+            //     // if all positive -> we are within the line
+            //     highp float test0 = step(0.0,halfvector_dot(uv, h0));
+            //     highp float test1 = step(0.0,halfvector_dot(uv, h1));
+            //     highp float test2 = step(0.0,halfvector_dot(uv, h2));
+            //     highp float test = test0*test1*test2;
 
-              nearest_line_point_uv                     the nearest line point in uv space
-              smallest_v_direction_uv                   vector between  evaluation point and nearest line point in uv space (but normalized, as we only want the direction)
-
-              line_width_vector                         point in space that is exactly one line width away from nearest line point -> point is transformed from uv to screenspace
-              screenspace_coord - line_width_vector     vector where the length encodes the distance to the nearest line point
-
-                1. calculate the smallest v in uv space
-                2. add smallest_v to a and b to create a half space where line width is encoded
-                3. do the same thing in the other direction
-                4. create half space with nearest line ending (either a, or b) -> see below for line ending specifics
-                5. convert all three half spaces into screeenspace
-                6. use the half spaces in screen space to calculate distance
+            //     pixel_color = vec4(vec3(1.0-test),1.0);
 
 
-                line endings
-                we are within the line-> the third half space to line ending is
-                -) for flat: a half space with origin a|b coordinate
-                -) for round: a half space with origin a|b the line width is increased by line width
-
-                if we evaluate within round line cap, we only evaluate two half spaces in positive line width and negative line width direction
-            */
-
-
-            highp vec2 nearest_line_point_ndc = (screenspace_coord+v.xy) / camera.viewport_size; // [0, screen_size] to [0,1]
-            nearest_line_point_ndc -= vec2(0.5); // [0, 1] to [-0.5,0.5] // -> changing to [1,1] shouldn't be neceesary as we are only interested in direction
-            nearest_line_point_ndc *= 2.0; // [-0.5,0.5] to [-1,1] // test
-
-            // transform v back to uv space and normalize the xy vector (division by z not necessary as we are only interested in direction)
-            highp vec3 temp = meta.uv2clipspace_matrix_inv * vec3(nearest_line_point_ndc, 1.0);
-            highp vec2 nearest_line_point_uv = temp.xy / temp.z;
-            highp vec2 smallest_v_direction_uv = normalize(uv - nearest_line_point_uv);
-
-            // get a vector in smallest_v direction that encodes the line width
-            // -> dot is necessary since through the clipspace transformation the smallest vector is not necessarily in the same direction as the normal
-            highp vec2 line_width_vector = uv + smallest_v_direction_uv * abs(1.0/dot(smallest_v_direction_uv, n0_uv)) * style.line_width;
-            // highp vec2 line_width_vector = uv + n0_uv * abs(dot(smallest_v_direction_uv, n0_uv)) * style.line_width;
-            // highp vec2 line_width_vector = uv + n0_uv * style.line_width;
-
-            // convert to screenspace
-            uv2screenspace(line_width_vector,meta);
-
-            // evaluate the line width in screen space
-            float line_width = length(screenspace_coord - line_width_vector);
-
-            d_near -= line_width;
-            d_far += line_width;
-
+            //     // pixel_color = vec4(vec3(step(0.01,length(uv-geom_data.b))),1.0);
+            // }
+        }
+        else
+        {
+            // TODO optimally the half vectors are constructed in a way so they all point inwards or outside
+            // not quite sure if this is true though
+            half_vectors[0] = HalfVector(geom_data.a, geom_data.b);
+            half_vectors[1] = HalfVector(geom_data.b, geom_data.c);
+            half_vectors[2] = HalfVector(geom_data.c, geom_data.a);
         }
 
-        // highp float scaling = v_length_screen / max(length(v),0.0000001); // prevent division by 0 if length is 0
-        // highp float scaling = v_length_screen / length(v.xy); // prevent division by 0 if length is 0
-        // highp float line_width_screen = style.line_width * scaling;
+        // convert half vectors into screenspace
+        // and calculate the sdf with the three half vectors
+        uv_halfvector2screenspace(half_vectors[0], meta.uv2clipspace_matrix);
+        uv_halfvector2screenspace(half_vectors[1], meta.uv2clipspace_matrix);
+        uv_halfvector2screenspace(half_vectors[2], meta.uv2clipspace_matrix);
 
-        // highp float d_near = v_length_screen - line_width_screen;
-        // highp float d_far = v_length_screen + line_width_screen;
+
+        // v_to_half -> x,y is vector towards half space, z == 1 is if within half space or z == -1 outside
+        highp vec3 v_to_half[4];
+        highp float v_length[4];
+        highp int v_order[4];
+
+        // index 4 is the fallback if every vector is invalid
+        // always the highest value
+        v_to_half[3] = vec3(1000.,1000., -1);
+        v_length[3] = 10000.0;
+        v_order[3] = 3;
+
+
+        v_to_half[0] = halfvector_smallest_v(screenspace_coord, half_vectors[0]);
+        v_to_half[1] = halfvector_smallest_v(screenspace_coord, half_vectors[1]);
+        // TODO do line ending half space correctly
+        v_to_half[2] = vec3(1000.,1000., -1);
+        // v_to_half[2] = halfvector_smallest_v(screenspace_coord, half_vectors[2]);
+
+        // calculate the distance
+        v_length[0] = length(v_to_half[0].xy);
+        v_length[1] = length(v_to_half[1].xy);
+        v_length[2] = length(v_to_half[2].xy);
+
+        order_smallest_v(v_length, v_order);
+
+        // apply the side of the half space we are located at
+        v_length[0] *= v_to_half[0].z;
+        v_length[1] *= v_to_half[1].z;
+        v_length[2] *= v_to_half[2].z;
+
+        // it might be possible that we calculate the vector length of a 0 length vector if both coordinates are clipped
+        int start_index = 0;
+        // while(v_length[start_index] <= 0.0)
+        //     start_index+=1;
+
+
+        // we have dark cells I'm guessing that some cells have smallest_v length == 0 -> since it got clipped to the same point
+        // {// DEBUG squared vector length screenspace
+        //     if(v_length[0] > 0)
+        //         pixel_color = vec4(vec3(v_length[v_order[0]]), 1.0);
+        //     else if(v_length[1] > 0)
+        //         pixel_color = vec4(vec3(v_length[v_order[1]]), 1.0);
+        //     else if(v_length[2] > 0)
+        //         pixel_color = vec4(vec3(v_length[v_order[2]]), 1.0);
+        // }
+
+
+
+        // highp vec2 smallest_v = mix(v_to_half[0], v_to_half[1], step(length(v_to_half[1]), length(v_to_half[0])));
+        // smallest_v = mix(smallest_v, v_to_half[2], step(length(v_to_half[2]), length(smallest_v)));
+
+        // pixel_color = vec4(vec3(length(v_to_half[v_order[start_index]].xy)), 1.0);
 
         highp float kernel_size = sqrt(2.0);
-        // if(geom_data.is_polygon)
-            // intersection_percentage = max(smoothstep(kernel_size,0.0,d_near), intersection_percentage);
-            // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
-        // else
-            intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
-        // intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near), intersection_percentage);
-            // intersection_percentage = 1.0;
-            // pixel_color = vec4(vec3(v_length_screen/40.0), 1.0);
+        float d_near = v_length[v_order[start_index]];
+        float d_far = -v_length[v_order[clamp(start_index+1, 0,3)]];
+        intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
+
 
     }
 
