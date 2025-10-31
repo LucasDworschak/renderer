@@ -132,6 +132,12 @@ float Preprocessor::polygon_area(const ClipperPath& vertices)
         area += current.x * next.y - next.x * current.y;
     }
 
+    // last edge from last to first
+    const ClipperPoint& current = vertices[vertices.size() - 1];
+    const ClipperPoint& next = vertices[0];
+
+    area += current.x * next.y - next.x * current.y;
+
     return area * 0.5f;
 }
 
@@ -352,10 +358,10 @@ VectorLayers Preprocessor::get_debug_vector_tiles(tile::Id id)
             ClipperPoint pos1 = ClipperPoint(center.x, center.y);
             ClipperPoint pos2 = ClipperPoint(center.x, center.y);
             ClipperPoint pos3 = ClipperPoint(center.x, center.y);
-            pos1.x += radius * cos(increments * i);
-            pos1.y += radius * sin(increments * i);
-            pos2.x += radius * cos(increments * (i + 1));
-            pos2.y += radius * sin(increments * (i + 1));
+            pos1.x += radius * cos(increments * (i + 1));
+            pos1.y += radius * sin(increments * (i + 1));
+            pos2.x += radius * cos(increments * i);
+            pos2.y += radius * sin(increments * i);
 
             auto* geom_data = &geoms.emplace_back();
             geom_data->vertices = { Clipper2Lib::MakePath<ClipperResolution>({ pos1.x, pos1.y, pos2.x, pos2.y, pos3.x, pos3.y }) };
@@ -788,7 +794,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                         const glm::ivec2 d = { max_cell_width_polygons - geometry_offset_polygons - 1, max_cell_width_polygons - geometry_offset_polygons - 1 };
 
                         const auto& data1 = nucleus::vector_layer::Preprocessor::pack_triangle_data({ a, b, c, style_layer.style_index, true });
-                        const auto& data2 = nucleus::vector_layer::Preprocessor::pack_triangle_data({ d, b, c, style_layer.style_index, true });
+                        const auto& data2 = nucleus::vector_layer::Preprocessor::pack_triangle_data({ d, c, b, style_layer.style_index, true });
 
                         cell.cell_data.push_back(data1);
                         cell.cell_data.push_back(data2);

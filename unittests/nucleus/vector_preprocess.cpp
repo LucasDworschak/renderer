@@ -484,7 +484,7 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
     SECTION("clipping vector tile to cell")
     { // real example
-        constexpr size_t expected_process_amount = 132026;
+        constexpr size_t expected_process_amount = 133126;
 
         Style style(":/vectorlayerstyles/openstreetmap.json"); // 13
         // Style style(":/vectorlayerstyles/qwant.json"); // 9
@@ -1059,6 +1059,24 @@ TEST_CASE("nucleus/vector_preprocess")
         CHECK(values[0] == 10);
         CHECK(values[1] == 60); // is inserted on second position
         CHECK(values[2] == 30);
+    }
+
+    SECTION("Polygon area calculation - clockwise polygon")
+    {
+        auto vertices = Clipper2Lib::MakePath<ClipperResolution>({ 2560, 3584, 3072, 3584, 3072, 4096 });
+
+        CHECK(vertices.size() == 3);
+        auto area = Preprocessor::polygon_area(vertices);
+        CHECK(area > 0.0);
+    }
+
+    SECTION("Polygon area calculation - counter-clockwise polygon")
+    {
+        auto vertices = Clipper2Lib::MakePath<ClipperResolution>({ 3072, 3584, 2560, 3584, 3072, 4096 });
+
+        CHECK(vertices.size() == 3);
+        auto area = Preprocessor::polygon_area(vertices);
+        CHECK(area < 0.0);
     }
 }
 
