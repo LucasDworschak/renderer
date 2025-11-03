@@ -369,20 +369,40 @@ void main() {
 
     // }
 
-    {// x,y,d -> screen
+    {
+        // MATRIX definitions
+        highp mat3x3 clip2screenspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0),
+                                                vec3(0.0,camera.viewport_size.y/2.0,0),
+                                                vec3(camera.viewport_size/2.0-gl_FragCoord.xy,1)
+                                                );
+
         mat3x3 uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix, gl_FragCoord.xy);
-        mat3x3 halfspace2screenspace = inverse(transpose(uv2clipspace_matrix));
+        mat3x3 halfspace_uv2clip = inverse(transpose(uv2clipspace_matrix));
+        mat3x3 halfspace_clip2screenspace = inverse(transpose(clip2screenspace));
 
+
+        // DEFINE POINT AND HALF SPACE
         vec2 to_center_uv = vec2(uv-vec2(0.5));
-        // vec3 to_uv_center_halfspace_uv = vec3(normalize(to_center_uv), length(to_center_uv));
+
+        vec3 point_on_halfspace = vec3(to_center_uv, 1);
         vec3 to_uv_center_halfspace_uv = vec3(vec2(0,1), to_center_uv.y);
-        vec3 to_uv_center_halfspace_screen = halfspace2screenspace * vec3(to_uv_center_halfspace_uv);
 
-        float L = length(to_uv_center_halfspace_screen.xy);
-        // float L = length(to_uv_center_halfspace_screen.xy / to_uv_center_halfspace_screen.z);
+        // TRANSFORM POINT AND HALF SPACE
+        vec3 point_on_halfspace_clip = uv2clipspace_matrix * vec3(point_on_halfspace);
+        vec3 halfspace_clip = (halfspace_uv2clip * vec3(to_uv_center_halfspace_uv));
 
-        float distance_screen = to_uv_center_halfspace_screen.z / L;
-        texout_albedo = vec3(abs(distance_screen) / 500.0);
+        // perspective divide
+        halfspace_clip /= point_on_halfspace_clip.z;
+
+        // transform halfspace to screenspace
+        vec3 halfspace_screen = halfspace_clip2screenspace * halfspace_clip;
+
+        // determine length of transformed halfspace normal
+        float L = length(halfspace_screen.xy);
+
+        // calculate and output distance
+        float distance_screen = halfspace_screen.z / L;
+        texout_albedo = vec3(abs(distance_screen) / 500.);
         // texout_albedo = vec3(L / 0.001);
         // texout_albedo = vec3(normalize(to_uv_center_halfspace_screen.xy), 0);
         // texout_albedo = vec3(normalize(to_center_uv), 0);
