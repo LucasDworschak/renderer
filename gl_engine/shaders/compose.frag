@@ -151,13 +151,14 @@ highp float csm_shadow_term(highp vec4 pos_cws, highp vec3 normal_ws, out lowp i
 
 void main() {
     lowp vec3 albedo = texture(texin_albedo, texcoords).rgb;
+    // albedo = vec3(vec2(gl_FragCoord / 1920), 0);
 
     highp vec4 pos_dist = texture(texin_position, texcoords);
     highp vec3 pos_cws = pos_dist.xyz;
     highp float dist = pos_dist.w; // negative if sky
     // Alpha-Value for Tile-Overlay (distant linear falloff)
-    lowp float alpha = 0.0;
-    if (dist > 0.0) alpha = calculate_falloff(dist, 300000.0, 600000.0);
+    lowp float alpha = 1.0;
+    // if (dist > 0.0) alpha = calculate_falloff(dist, 300000.0, 600000.0);
 
     highp vec3 normal = octNormalDecode2u16(texture(texin_normal, texcoords).xy);
 
@@ -175,7 +176,7 @@ void main() {
         highp vec3 ray_direction = pos_cws / dist;
         highp vec4 material_light_response = conf.material_light_response;
 
-        highp vec3 light_through_atmosphere = calculate_atmospheric_light(origin / 1000.0, ray_direction, dist / 1000.0, albedo, 10);
+        // highp vec3 light_through_atmosphere = calculate_atmospheric_light(origin / 1000.0, ray_direction, dist / 1000.0, albedo, 10);
 
         highp float shadow_term = 0.0;
         if (bool(conf.csm_enabled)) {
@@ -205,7 +206,7 @@ void main() {
         if (bool(conf.phong_enabled)) {
             shaded_color = calculate_illumination(shaded_color, origin, pos_ws, normal, conf.sun_light, conf.amb_light, conf.sun_light_dir.xyz, material_light_response, amb_occlusion, shadow_term);
         }
-        shaded_color = calculate_atmospheric_light(origin / 1000.0, ray_direction, dist / 1000.0, shaded_color, 10);
+        // shaded_color = calculate_atmospheric_light(origin / 1000.0, ray_direction, dist / 1000.0, shaded_color, 10);
         shaded_color = max(vec3(0.0), shaded_color);
     }
 

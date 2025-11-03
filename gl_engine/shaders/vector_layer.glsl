@@ -766,6 +766,13 @@ void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp float inte
     pixel_color = pixel_color + ((1.0-pixel_color.a) * style.color * intersection_percentage);
 }
 
+mat3 create_ndc2fragmentspace_matrix(in highp vec2 frag_coord) {
+    return mat3x3(vec3(camera.viewport_size.x/2.0, 0,0),
+                  vec3(0.0,camera.viewport_size.y/2.0,0),
+                  vec3(camera.viewport_size/2.0-frag_coord,1)
+            );
+}
+
 
 mat3x3 create_uv2clipspace_matrix(in highp vec3 normal, in highp uint zoom_level, in highp vec3 ws_position, in highp vec2 uv_position, in highp mat4 view_proj_matrix, in highp vec2 frag_coord)
 {
@@ -798,10 +805,10 @@ mat3x3 create_uv2clipspace_matrix(in highp vec3 normal, in highp uint zoom_level
     // 3. von [-1,1] -> [-1-currentFragCoord_ndc, 1-currentFragCoord_ndc]
 
 
-    // highp mat3x3 clip2screenspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0),
-    //                                         vec3(0.0,camera.viewport_size.y/2.0,0),
-    //                                         vec3(camera.viewport_size/2.0-frag_coord,1)
-    //                                         );
+    highp mat3x3 clip2screenspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0),
+                                            vec3(0.0,camera.viewport_size.y/2.0,0),
+                                            vec3(camera.viewport_size/2.0-frag_coord,1)
+                                            );
 
 
     // highp mat3x3 clip2screenspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0), vec3(0.0,camera.viewport_size.y/2.0,0), vec3((camera.viewport_size-frag_coord*2.0)/2.0,1)) ;
@@ -811,8 +818,8 @@ mat3x3 create_uv2clipspace_matrix(in highp vec3 normal, in highp uint zoom_level
     // highp mat3x3 clip2screenspace = ;
     // highp mat3x3 clip2screenspace = mat3x3(vec3(camera.viewport_size.x/2.0, 0,0), vec3(0.0,camera.viewport_size.y/2.0,0), vec3(camera.viewport_size/2.0,1));
     // highp mat3x3 clip2screenspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0), vec3(0.0,camera.viewport_size.y/2.0,0), vec3(0.0,0.0,1));
-    // return clip2screenspace * transpose(mat3(uv2clipspace_t[0], uv2clipspace_t[1], uv2clipspace_t[3]));
-    return transpose(mat3(uv2clipspace_t[0], uv2clipspace_t[1], uv2clipspace_t[3]));
+    return clip2screenspace * transpose(mat3(uv2clipspace_t[0], uv2clipspace_t[1], uv2clipspace_t[3]));
+    // return transpose(mat3(uv2clipspace_t[0], uv2clipspace_t[1], uv2clipspace_t[3]));
 }
 
 void uv2screenspace(inout vec2 coord, DrawMeta meta)
