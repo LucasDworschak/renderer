@@ -384,14 +384,17 @@ void main() {
         // DEFINE POINT AND HALF SPACE
         // vec2 uv_a = vec2(0.5, 0.22);
         // vec2 uv_b = vec2(1.2, 0.6);
-        // vec2 uv_a = vec2(0.0, 1.8); // not sure why but this is in space [0,2]
-        // vec2 uv_b = vec2(1.0, 1.8);
-        vec2 uv_a = vec2(0.5, 0.0); // not sure why but this is in space [0,2]
-        vec2 uv_b = vec2(1.0, 2.0);
+        vec2 uv_a = vec2(0.0, 1.8); // not sure why but this is in space [0,2]
+        vec2 uv_b = vec2(1.0, 1.8);
+        // vec2 uv_a = vec2(0.5, 0.0);
+        // vec2 uv_b = vec2(1.0, 2.0);
         highp vec2 e = uv_b - uv_a;
         vec2 uv_halfspace = vec2(-e.y, e.x);
         vec2 uv_normal = normalize(uv_halfspace);
-        float uv_distance = length(halfvector_smallest_v(uv, uv_a, uv_normal).xy); // TODO determine if we should use positive or negative...
+        // float uv_distance = length(halfvector_smallest_v(uv, uv_a, uv_normal).xy); // TODO determine if we should use positive or negative...
+
+        highp vec3 smallest_v = halfvector_smallest_v(uv, uv_a, uv_normal);
+        float uv_distance = length(smallest_v.xy) * smallest_v.z; // TODO determine if we should use positive or negative...
 
         vec3 to_uv_center_halfspace_uv = vec3(uv_normal, uv_distance);
 
