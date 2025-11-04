@@ -578,6 +578,25 @@ highp vec3 halfvector_smallest_v(highp vec2 current_point, HalfVector half_vecto
     return vec3(v, sign(halfvector_dot(current_point, half_vector)));
 }
 
+highp vec3 halfvector_smallest_v(highp vec2 current_point, highp vec2 point_on_line, highp vec2 n)
+{
+    highp vec2 e0 = vec2(n.y, -n.x);
+    highp vec2 v0 = current_point - point_on_line;
+    highp vec2 v1 = current_point - (point_on_line + e0);
+    // highp vec2 v0 =  point_on_line;
+    // highp vec2 v1 =  (point_on_line + e0);
+
+    // where on the line are we if within [0,1] we are between a and b
+    // value can also be more or less than 0,1
+    highp float t = dot(v0,e0);
+
+    // stretch the edge by t -> and use v0 as origin
+    // since v0 has current_point as origin -> result is shortest possible vector to half vector
+    vec2 v = v0 - e0*t;
+
+    return vec3(v, sign(dot(v0, n)));
+}
+
 void order_smallest_v(in float v[4], out int v_order[4]) {
     v_order[0] = 0;
     v_order[1] = 1;
