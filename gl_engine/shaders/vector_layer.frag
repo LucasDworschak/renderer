@@ -382,31 +382,25 @@ void main() {
 
 
         // DEFINE POINT AND HALF SPACE
-        vec2 to_center_uv = vec2(uv-vec2(0.5));
+        vec2 uv_a = vec2(0.5, 0.22);
+        vec2 uv_b = vec2(1.2, 0.6);
+        highp vec2 e = uv_b - uv_a;
+        vec2 uv_halfspace = vec2(-e.y, e.x);
+        vec2 uv_normal = normalize(uv_halfspace);
+        float uv_distance = dot(-uv_a, uv_normal);
 
-        // vec3 point_on_halfspace = vec3(to_center_uv, 1);
-        // vec3 to_uv_center_halfspace_uv = vec3(normalize(-to_center_uv), length(to_center_uv));
-        vec3 to_uv_center_halfspace_uv = vec3(vec2(1, 0), -(0.5 - uv.x));
+        vec3 to_uv_center_halfspace_uv = vec3(uv_normal, -uv_distance);
 
         // TRANSFORM POINT AND HALF SPACE
         // vec3 point_on_halfspace_clip = uv2clipspace_matrix * vec3(point_on_halfspace);
         vec3 halfspace_fragment_space = (halfspace_uv2clip * vec3(to_uv_center_halfspace_uv));
+        halfspace_fragment_space = halfspace_fragment_space / length(halfspace_fragment_space.xy);
 
-        // perspective divide
-        halfspace_fragment_space /= length(halfspace_fragment_space.xy);
-
-        // transform halfspace to screenspace
-        // vec3 halfspace_screen = halfspace_clip2screenspace * halfspace_clip;
-
-        // determine length of transformed halfspace normal
-        // float L = length(halfspace_screen.xy);
-
-        // calculate and output distance
-        float distance_screen = halfspace_fragment_space.z;
-        texout_albedo = vec3(max(distance_screen, 0.0) / 500., abs(distance_screen) < 10, max(-distance_screen, 0.0) / 500.);
-        // texout_albedo = vec3(L / 0.001);
-        // texout_albedo = vec3(normalize(to_uv_center_halfspace_screen.xy), 0);
-        // texout_albedo = vec3(normalize(to_center_uv), 0);
+        // float distance_screen = halfspace_fragment_space.z;
+        // float distance_screen = length(halfspace_fragment_space.xy);
+        // texout_albedo = vec3(abs(halfspace_fragment_space.z) < 5);
+        texout_albedo = vec3(abs(halfspace_fragment_space.z) / 50);
+        // texout_albedo = vec3(abs(dot(uv, uv_normal) - uv_distance) < 0.02);
     }
 
 
