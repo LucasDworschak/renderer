@@ -382,12 +382,19 @@ void main() {
 
 
         // DEFINE POINT AND HALF SPACE
-        vec2 uv_a = vec2(0.5, 0.22);
-        vec2 uv_b = vec2(1.2, 0.6);
+        // vec2 uv_a = vec2(0.5, 0.22);
+        // vec2 uv_b = vec2(1.2, 0.6);
+        // vec2 uv_a = vec2(0.5, 0.0);
+        // vec2 uv_b = vec2(0.5, 1.0);
+        // vec2 uv_a = vec2(0.5, 0.5);
+        // vec2 uv_b = vec2(1.5, 0.5);
+        vec2 uv_a = vec2(0.0, 0.5);
+        vec2 uv_b = vec2(1.0, 0.5);
+
         highp vec2 e = uv_b - uv_a;
         vec2 uv_halfspace = vec2(-e.y, e.x);
         vec2 uv_normal = normalize(uv_halfspace);
-        float uv_distance = dot(-uv_a, uv_normal);
+        float uv_distance = dot(uv_a, uv_normal);
 
         vec3 to_uv_center_halfspace_uv = vec3(uv_normal, -uv_distance);
 
@@ -399,6 +406,7 @@ void main() {
         // float distance_screen = halfspace_fragment_space.z;
         // float distance_screen = length(halfspace_fragment_space.xy);
         // texout_albedo = vec3(abs(halfspace_fragment_space.z) < 5);
+        // texout_albedo = vec3(step(0,halfspace_fragment_space.z));
         texout_albedo = vec3(abs(halfspace_fragment_space.z) / 50);
         // texout_albedo = vec3(abs(dot(uv, uv_normal) - uv_distance) < 0.02);
     }
