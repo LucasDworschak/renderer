@@ -154,8 +154,7 @@ struct DrawMeta
     highp vec2 duvdy;
     mediump float zoom_offset;
     mediump float zoom_blend;
-    highp mat3x3 uv2clipspace_matrix;
-    highp mat3x3 uv2clipspace_matrix_inv;
+    highp mat3x3 uv2fragspace_normal_matrix;
 };
 
 
@@ -766,15 +765,9 @@ void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp float inte
     pixel_color = pixel_color + ((1.0-pixel_color.a) * style.color * intersection_percentage);
 }
 
-mat3 create_ndc2fragmentspace_matrix(in highp vec2 frag_coord) {
-    return mat3x3(vec3(camera.viewport_size.x/2.0, 0,0),
-                  vec3(0.0,camera.viewport_size.y/2.0,0),
-                  vec3(camera.viewport_size/2.0-frag_coord,1)
-            );
-}
-
-
-mat3x3 create_uv2clipspace_matrix(in highp vec3 normal, in highp uint zoom_level, in highp vec3 ws_position, in highp vec2 uv_position, in highp mat4 view_proj_matrix, in highp vec2 frag_coord)
+// frag space -> origin is fragment (~pixel) center. going 0.5 units to left, right, up or down -> you reached the border of the fragment
+// additionally since we are transforming normals we need to inverse and transpose the matrix
+mat3x3 create_uv2fragspace_normal_matrix(in highp vec3 normal, in highp uint zoom_level, in highp vec3 ws_position, in highp vec2 uv_position)
 {
     highp float scale = tile_size(zoom_level);
 
@@ -797,69 +790,17 @@ mat3x3 create_uv2clipspace_matrix(in highp vec3 normal, in highp uint zoom_level
 
     // return view_proj_matrix * uv2world;
 
-    highp mat4x3 uv2clipspace_t = transpose(view_proj_matrix * uv2world);
-    // highp mat3x3 clip2screenspace = mat3x3(vec3(1.0,0,0), vec3(0.0,1.0,0), vec3(-frag_coord,1))* mat3x3(vec3(camera.viewport_size.x/2.0, 0,0), vec3(0.0,camera.viewport_size.y/2.0,0), vec3(camera.viewport_size/2.0,1)) ;
+    highp mat4x3 uv2clipspace_t = transpose(camera.view_proj_matrix * uv2world);
 
-    // 1. von [-1,1] -> [0,2]
-    // 2. von [0,2] -> [0, screensize]
-    // 3. von [-1,1] -> [-1-currentFragCoord_ndc, 1-currentFragCoord_ndc]
-
-
-    highp mat3x3 clip2screenspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0),
+    // scale to [-screen_size,screen_size] -> translate to [0,screen_size] -> translate to [0+current_frag, screensize+current_frag]
+    // result -> origin is at the current frag_coord scale is screen_size
+    // frag_coord
+    highp mat3x3 clip2fragspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0),
                                             vec3(0.0,camera.viewport_size.y/2.0,0),
-                                            vec3(camera.viewport_size/2.0-frag_coord,1)
+                                            vec3(camera.viewport_size/2.0-gl_FragCoord.xy,1)
                                             );
 
-
-    // highp mat3x3 clip2screenspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0), vec3(0.0,camera.viewport_size.y/2.0,0), vec3((camera.viewport_size-frag_coord*2.0)/2.0,1)) ;
-    // highp mat3x3 clip2screenspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0), vec3(0.0,camera.viewport_size.y/2.0,0), vec3((camera.viewport_size-frag_coord*2.0)/2.0,1));
-    // highp mat3x3 clip2screenspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0), vec3(0.0,camera.viewport_size.y/2.0,0), vec3(camera.viewport_size/2.0,1));
-    // highp mat3x3 clip2screenspace = mat3x3(vec3(camera.viewport_size.x/2.0, 0,0), vec3(0.0,camera.viewport_size.y/2.0,0), vec3(camera.viewport_size/2.0-frag_coord/2.0,1)) ;
-    // highp mat3x3 clip2screenspace = ;
-    // highp mat3x3 clip2screenspace = mat3x3(vec3(camera.viewport_size.x/2.0, 0,0), vec3(0.0,camera.viewport_size.y/2.0,0), vec3(camera.viewport_size/2.0,1));
-    // highp mat3x3 clip2screenspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0), vec3(0.0,camera.viewport_size.y/2.0,0), vec3(0.0,0.0,1));
-    return clip2screenspace * transpose(mat3(uv2clipspace_t[0], uv2clipspace_t[1], uv2clipspace_t[3]));
-    // return transpose(mat3(uv2clipspace_t[0], uv2clipspace_t[1], uv2clipspace_t[3]));
-}
-
-void uv2screenspace(inout vec2 coord, DrawMeta meta)
-{
-    highp vec3 temp = meta.uv2clipspace_matrix * vec3(coord, 1);
-    coord = temp.xy / temp.z;
-    coord += vec2(1.0); // [-1,1] to [0,2]
-    coord *= vec2(0.5) * camera.viewport_size; // [0,2] to [0, screen_size]
-}
-
-bool clipHalfSpace(inout vec3 P0, inout vec3 P1, float f0, float f1) {
-    if (f0 > 0.0 && f1 > 0.0) return false;       // both outside
-    if (f0 > 0.0 || f1 > 0.0) {
-        float t = f0 / (f0 - f1);                 // solve f(P0 + t*(P1-P0)) = 0
-        vec3  D = P1 - P0;
-        if (f0 > 0.0) P0 += t * D;
-        else P1 = P0 + t * D;
-    }
-    return true;
-}
-
-
-void uv_halfvector2screenspace(inout HalfVector half_vector, in highp mat3 uv2clipspace_matrix) {
-    highp vec3 a_clip = uv2clipspace_matrix * vec3(half_vector.a, 1.0);
-    highp vec3 b_clip = uv2clipspace_matrix * vec3(half_vector.b, 1.0);
-
-    float eps = 1e-6;
-    if (!clipHalfSpace(a_clip, b_clip,       eps - a_clip.z,       eps - b_clip.z)) { half_vector.a = half_vector.b = vec2(-1.0); return; }
-    if (!clipHalfSpace(a_clip, b_clip,  a_clip.x - a_clip.z,  b_clip.x - b_clip.z)) { half_vector.a = half_vector.b = vec2(-1.0); return; }
-    if (!clipHalfSpace(a_clip, b_clip, -a_clip.x - a_clip.z, -b_clip.x - b_clip.z)) { half_vector.a = half_vector.b = vec2(-1.0); return; }
-    if (!clipHalfSpace(a_clip, b_clip,  a_clip.y - a_clip.z,  b_clip.y - b_clip.z)) { half_vector.a = half_vector.b = vec2(-1.0); return; }
-    if (!clipHalfSpace(a_clip, b_clip, -a_clip.y - a_clip.z, -b_clip.y - b_clip.z)) { half_vector.a = half_vector.b = vec2(-1.0); return; }
-
-    half_vector.a = a_clip.xy / a_clip.z;
-    half_vector.a += vec2(1.0); // [-1,1] to [0,2]
-    half_vector.a *= vec2(0.5) * camera.viewport_size; // [0,2] to [0, screen_size]
-
-    half_vector.b = b_clip.xy / b_clip.z;
-    half_vector.b += vec2(1.0); // [-1,1] to [0,2]
-    half_vector.b *= vec2(0.5) * camera.viewport_size; // [0,2] to [0, screen_size]
+    return  inverse(transpose(clip2fragspace * transpose(mat3(uv2clipspace_t[0], uv2clipspace_t[1], uv2clipspace_t[3]))));
 }
 
 #endif
@@ -967,9 +908,9 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
         // convert half vectors into screenspace
         // and calculate the sdf with the three half vectors
-        uv_halfvector2screenspace(half_vectors[0], meta.uv2clipspace_matrix);
-        uv_halfvector2screenspace(half_vectors[1], meta.uv2clipspace_matrix);
-        uv_halfvector2screenspace(half_vectors[2], meta.uv2clipspace_matrix);
+        // uv_halfvector2screenspace(half_vectors[0], meta.uv2clipspace_matrix);
+        // uv_halfvector2screenspace(half_vectors[1], meta.uv2clipspace_matrix);
+        // uv_halfvector2screenspace(half_vectors[2], meta.uv2clipspace_matrix);
 
 
         // v_to_half -> x,y is vector towards half space, z == 1 is if within half space or z == -1 outside

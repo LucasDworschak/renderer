@@ -261,15 +261,8 @@ void main() {
     meta.cos_smoothing_factor = 1;
 
     calculate_samples(meta, uv);
-    // create_screenspace_transform_matrix(meta);
 
-    // todo: not sure whether we should use shading or geometric normals
-    // shading normals:
-    // meta.uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix);
-    // geometric normals:
-    meta.uv2clipspace_matrix = create_uv2clipspace_matrix(normal_by_fragment_position_interpolation(), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix, gl_FragCoord.xy);
-
-    meta.uv2clipspace_matrix_inv = inverse(meta.uv2clipspace_matrix);
+    meta.uv2fragspace_normal_matrix = create_uv2fragspace_normal_matrix(normal_by_fragment_position_interpolation(), tile_id.z, var_pos_cws, uv);
 
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
     if(offset_size.y != uint(0)) // only if we have data here
@@ -330,55 +323,9 @@ void main() {
 #endif
 
 
-    // texout_albedo = vec3(vec2(gl_FragCoord) / camera.viewport_size, 0);
-    mat3x3 uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix, gl_FragCoord.xy);
-    // vec3 uv_clipspace = uv2clipspace_matrix * vec3(uv, 1);
-    // vec2 uv_ndc = vec2(uv_clipspace / uv_clipspace.z);
-    // texout_albedo = vec3(uv_ndc, 0.0);
-
-    // texout_albedo = vec3(uv_ndc, 0.0);
-    // texout_albedo = vec3(uv, 0.0);
-    // texout_albedo = vec3(fract(gl_FragCoord.xy), 0.0);
-    // texout_albedo = vec3(fract(gl_FragCoord.xy), 0.0);
-
-    // TODO here: !!!!!
-    // DO NOT transform the distance to screenspace -> use 1 and divide the original distance by L
-
-
-
-    // mat3x3 halfspace2screenspace = inverse(transpose(uv2clipspace_matrix));
-    // // mat3x3 halfspace2screenspace = inverse((uv2clipspace_matrix));
-    // vec2 to_center_uv = vec2(uv-vec2(0.5));
-    // float dist_uv = length(to_center_uv);
-
-
-
-    // {// x,y,1 -> screen
-        // vec3 to_uv_center_halfspace_screen = halfspace2screenspace * vec3(normalize(to_center_uv), 1);
-
-        { // do not divide by z
-            // float L = length(to_uv_center_halfspace_screen.xy/ to_uv_center_halfspace_screen.z);
-            // float distance_screen = dist_uv / L;
-            // texout_albedo = vec3(distance_screen / 100.);
-        }
-        { // divide by z
-            // float L = length(to_uv_center_halfspace_screen.xy / to_uv_center_halfspace_screen.z);
-            // float distance_screen = to_uv_center_halfspace_uv.z / L;
-            // texout_albedo = vec3(distance_screen / 100.);
-        }
-
-    // }
 
     {
-        // MATRIX definitions
-        // highp mat3x3 clip2screenspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0),
-        //                                         vec3(0.0,camera.viewport_size.y/2.0,0),
-        //                                         vec3(camera.viewport_size/2.0-gl_FragCoord.xy,1)
-        //                                         );
-
-        mat3x3 uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix, gl_FragCoord.xy);
-        mat3x3 halfspace_uv2clip = transpose(inverse(uv2clipspace_matrix));
-        // mat3x3 halfspace_clip2screenspace = inverse(transpose(clip2screenspace));
+        mat3x3 halfspace_uv2clip = create_uv2fragspace_normal_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv);
 
 
         // DEFINE POINT AND HALF SPACE
@@ -399,80 +346,13 @@ void main() {
         vec3 to_uv_center_halfspace_uv = vec3(uv_normal, -uv_distance);
 
         // TRANSFORM POINT AND HALF SPACE
-        // vec3 point_on_halfspace_clip = uv2clipspace_matrix * vec3(point_on_halfspace);
         vec3 halfspace_fragment_space = (halfspace_uv2clip * vec3(to_uv_center_halfspace_uv));
         halfspace_fragment_space = halfspace_fragment_space / length(halfspace_fragment_space.xy);
 
-        // float distance_screen = halfspace_fragment_space.z;
-        // float distance_screen = length(halfspace_fragment_space.xy);
-        // texout_albedo = vec3(abs(halfspace_fragment_space.z) < 5);
-        // texout_albedo = vec3(step(0,halfspace_fragment_space.z));
         texout_albedo = vec3(abs(halfspace_fragment_space.z) / 50);
-        // texout_albedo = vec3(abs(dot(uv, uv_normal) - uv_distance) < 0.02);
     }
 
 
-    // texout_albedo = vec3(distance_screen / 100.);
-    // texout_albedo = vec3(L / 0.0000005);
-    // texout_albedo = vec3(to_uv_center_halfspace_screen.z / 0.0005);
-    // texout_albedo = vec3(length(to_center));
-
-    // vec2 norm_center = normalize(to_center.xy);
-    // vec2 norm_center = normalize(to_uv_center_halfspace_screen.xy);
-    // texout_albedo= vec3(norm_center, 0.0);
-    // texout_albedo= vec3(abs(to_uv_center_halfspace_screen.z / L)/100.0);
-    // texout_albedo = vec3(vec2(gl_FragCoord) / camera.viewport_size, 0);
-
-
-    // mat3x3 uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix);
-    // // vec3 uv_clipspace = uv2clipspace_matrix * vec3(uv, 1);
-    // vec3 uv_clipspace = meta.uv2clipspace_matrix * vec3(uv, 1);
-    // vec2 uv_ndc = vec2(uv_clipspace / uv_clipspace.z);
-
-
-
-    // mat3x3 test_matrix = mat3x3(vec3(1.0, 0,0.0), vec3(0.0,1.0,0), vec3(-0.0,0.0,1));
-    // highp vec2 frag_coord_ndc = gl_FragCoord.xy / camera.viewport_size; // [0-1]
-    // frag_coord_ndc -= 0.5;
-    // frag_coord_ndc *= 2.0;
-
-    // highp mat3x3 test_matrix =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0), vec3(0.0,camera.viewport_size.y/2.0,0), vec3(0.0,0.0,1));
-    // // highp mat3x3 test_matrix =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0), vec3(0.0,camera.viewport_size.y/2.0,0), vec3(camera.viewport_size/2.0,1));
-    // vec3 test_vector = test_matrix * vec3(-1.0,1.0,1);
-    // test_vector /= test_vector.z;
-    // texout_albedo = vec3(test_vector.x/camera.viewport_size.x);
-
-    // texout_albedo = vec3(frag_coord_ndc, 0.0);
-
-
-
-    // highp mat3x3 clip2fragspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0),
-    //                                         vec3(0.0,camera.viewport_size.y/2.0,0),
-    //                                         vec3(camera.viewport_size/2.0-gl_FragCoord.xy,1)
-    //                                         );
-
-    // highp vec3 test_vector = inverse(clip2fragspace) * vec3(0,0,1);
-
-    // texout_albedo = vec3(test_vector.xy*0.5 + 0.5, 0);
-    // texout_albedo = vec3(gl_FragCoord.xy/camera.viewport_size, 0);
-
-
-    // mat3x3 uv2clipspace_matrix = create_uv2clipspace_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv, camera.view_proj_matrix);
-    // highp float test_offset = 1.0/2048.0; // -> texture resolution for lines 1024 -> 1/2048 perturbtion = 1/2 pixel diff in texture space
-    // test_offset = 1.0/1024.0; // -> 1 pixel diff in texture space
-    // test_offset = 1.0/512.0; // -> 2 pixel diff in texture space
-
-    // // highp vec3 test_point_a = uv2clipspace_matrix * vec3(uv.x, uv.y, 1);
-    // // highp vec3 test_point_b = uv2clipspace_matrix * vec3(uv.x, uv.y+test_offset, 1);
-    // highp vec3 test_point_a = uv2clipspace_matrix * vec3(0.5, 0.5, 1);
-    // highp vec3 test_point_b = uv2clipspace_matrix * vec3(0.5, 0.5+test_offset, 1);
-
-    // vec2 uv_ndc_a = vec2(test_point_a / test_point_a.z) * camera.viewport_size;
-    // vec2 uv_ndc_b = vec2(test_point_b / test_point_b.z) * camera.viewport_size;
-
-    // highp float error = step(0.5,length(uv_ndc_a-uv_ndc_b)); // 0.5: if black -> perturbance is mapped to value smaller than half a pixel
-
-    // texout_albedo = vec3(error);
 
 
     if (conf.overlay_mode > 199u && conf.overlay_mode < 300u) {
