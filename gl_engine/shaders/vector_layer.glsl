@@ -123,12 +123,6 @@ struct SDFData
     bool line_cap0;
     bool line_cap1;
 };
-#else
-struct HalfVector
-{
-     highp vec2 a;
-     highp vec2 b;
-};
 #endif
 
 struct LayerStyle {
@@ -529,120 +523,65 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, hig
 
 
 
-
-highp vec2 halfvector_normal(HalfVector half_vector)
+highp vec3 create_halfspace_with_normal(highp vec2 a, highp vec2 n)
 {
-    highp vec2 e = half_vector.b - half_vector.a;
-    return vec2(-e.y, e.x);
+    float distance = dot(a, n);
+
+    return vec3(n, -distance);
 }
 
-// construct half vector at line ending
+highp vec3 create_halfspace(highp vec2 a, highp vec2 b)
+{
+    highp vec2 e = b - a;
+    highp vec2 normal = normalize(vec2(-e.y, e.x));
+
+    return create_halfspace_with_normal(a, normal);
+}
+
+// construct half space at line ending
 // TODO offset by line_width for round line caps
-HalfVector half_vector_line_end(highp vec2 current_point, HalfVector half_vector, highp vec2 h_normal)
+highp vec3 create_halfspace_line_end(highp vec2 current_point, highp vec3 line_halfspace, highp vec2 a, highp vec2 b)
 {
     // determinen if a or b is closer to current_point
     // additionaly encode if we have to switch the normal direction
-    highp vec3 closer_point = mix(vec3(half_vector.b, 1), vec3(half_vector.a,-1), step(length(current_point-half_vector.a), length(current_point-half_vector.b)));
+    highp vec3 closer_point = mix(vec3(b, 1), vec3(a,-1), step(length(current_point-a), length(current_point-b)));
 
-    return HalfVector(closer_point.xy, closer_point.xy + h_normal * closer_point.z);
+    // create a halfspace at line ending -> the second point of the halfspace is
+    return create_halfspace_with_normal(closer_point.xy, vec2(line_halfspace.y, -line_halfspace.x) * closer_point.z);
 }
 
-
-highp float halfvector_dot(highp vec2 current_point, HalfVector half_vector)
+void halfspace_to_fragspace(inout highp vec3 halfspace, mat3x3 matrix)
 {
-    highp vec2 n = halfvector_normal(half_vector);
-    highp vec2 v0 = current_point - half_vector.a;
-
-    return dot(n,v0);
+    halfspace = matrix * halfspace;
+    // TODO not sure if we want to also normalize the normal or if distance is enough
+    // halfspace.z /= length(halfspace.xy);
+    halfspace /= length(halfspace.xy);
 }
 
-// returns the shortest possible vector to the half vector that goes through points a and b
-// z coordinate says if within half space or outside
-// TODO I think we only need the length and the side of the the smallest v
-// -> it should be easier to calculate them using the normal and the dot -> but not quite sure yet if this is correct
-highp vec3 halfvector_smallest_v(highp vec2 current_point, HalfVector half_vector)
+// orders the halfspaces acccording to distance
+void order_halfspace_distance(in vec3 halfspaces[3], out int halfspace_order[3])
 {
-    highp vec2 e0 = half_vector.b-half_vector.a;
-    highp vec2 v0 = current_point - half_vector.a;
-    highp vec2 v1 = current_point - half_vector.b;
+    halfspace_order[0] = 0;
+    halfspace_order[1] = 1;
+    halfspace_order[2] = 2;
 
-    // where on the line are we if within [0,1] we are between a and b
-    // value can also be more or less than 0,1
-    highp float t = dot(v0,e0)/dot(e0,e0);
+    // compare halfspaces[0] and halfspaces[1]
+    int swap = int(halfspaces[halfspace_order[0]].z < halfspaces[halfspace_order[1]].z);
+    int temp = halfspace_order[0];
+    halfspace_order[0] = swap * halfspace_order[1] + (1 - swap) * temp;
+    halfspace_order[1] = swap * temp + (1 - swap) * halfspace_order[1];
 
-    // stretch the edge by t -> and use v0 as origin
-    // since v0 has current_point as origin -> result is shortest possible vector to half vector
-    vec2 v = v0 - e0*t;
+    // compare halfspaces[1] and halfspaces[2]
+    swap = int(halfspaces[halfspace_order[1]].z < halfspaces[halfspace_order[2]].z);
+    temp = halfspace_order[1];
+    halfspace_order[1] = swap * halfspace_order[2] + (1 - swap) * temp;
+    halfspace_order[2] = swap * temp + (1 - swap) * halfspace_order[2];
 
-    return vec3(v, sign(halfvector_dot(current_point, half_vector)));
-}
-
-void order_smallest_v(in float v[4], out int v_order[4]) {
-    v_order[0] = 0;
-    v_order[1] = 1;
-    v_order[2] = 2;
-
-    // compare v[0] and v[1]
-    int swap = int(v[v_order[0]] > v[v_order[1]]);
-    int temp = v_order[0];
-    v_order[0] = swap * v_order[1] + (1 - swap) * temp;
-    v_order[1] = swap * temp + (1 - swap) * v_order[1];
-
-    // compare v[1] and v[2]
-    swap = int(v[v_order[1]] > v[v_order[2]]);
-    temp = v_order[1];
-    v_order[1] = swap * v_order[2] + (1 - swap) * temp;
-    v_order[2] = swap * temp + (1 - swap) * v_order[2];
-
-    // compare v[0] and v[1] again
-    swap = int(v[v_order[0]] > v[v_order[1]]);
-    temp = v_order[0];
-    v_order[0] = swap * v_order[1] + (1 - swap) * temp;
-    v_order[1] = swap * temp + (1 - swap) * v_order[1];
-}
-
-highp vec3 sd_Line_Triangle_screenspace( in highp vec2 uv, VectorLayerData geom_data, highp float line_width, lowp vec2 dash_info, bool round_line_caps)
-{
-    highp vec2 v0 = uv - geom_data.a;
-    highp vec2 v1 = uv - geom_data.b;
-    highp vec2 e0 = geom_data.b-geom_data.a;
-    highp float h = clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );
-    highp vec2 pq0 = v0 - e0*h;
-
-    if(geom_data.is_polygon)
-    {
-        highp vec2 e1 = geom_data.c-geom_data.b;
-        highp vec2 e2 = geom_data.a-geom_data.c;
-
-        highp vec2 v2 = uv - geom_data.c;
-        highp vec2 pq1 = v1 - e1*clamp( dot(v1,e1)/dot(e1,e1), 0.0, 1.0 );
-        highp vec2 pq2 = v2 - e2*clamp( dot(v2,e2)/dot(e2,e2), 0.0, 1.0 );
-        highp float s = sign( e0.x*e2.y - e0.y*e2.x );
-
-        highp float s0 = s*(v0.x*e0.y-v0.y*e0.x);
-        highp float s1 = s*(v1.x*e1.y-v1.y*e1.x);
-        highp float s2 = s*(v2.x*e2.y-v2.y*e2.x);
-        highp float poly_sign = -sign(min(s0, min(s1,s2)));
-
-        // d.xy == vector to nearest intersection
-        // d.z == squared distance to this intersection
-        highp vec3 d0 = vec3(pq0, dot(pq0,pq0));
-        highp vec3 d1 = vec3(pq1, dot(pq1,pq1));
-        highp vec3 d2 = vec3(pq2, dot(pq2,pq2));
-
-        highp vec3 smallest_v = mix(d0, d1, step(d0.z,d1.z));
-        smallest_v = mix(smallest_v, d2, step(smallest_v.z,d2.z));
-
-        // return vec3(sqrt(dot(smallest_v.xy,smallest_v.xy))*poly_sign);
-        return vec3(smallest_v.xy, poly_sign);
-
-    }
-    else{
-        return vec3(pq0, 1);
-    }
-
-    return vec3(1000.0);
-
+    // compare halfspaces[0] and halfspaces[1] again
+    swap = int(halfspaces[halfspace_order[0]].z < halfspaces[halfspace_order[1]].z);
+    temp = halfspace_order[0];
+    halfspace_order[0] = swap * halfspace_order[1] + (1 - swap) * temp;
+    halfspace_order[1] = swap * temp + (1 - swap) * halfspace_order[1];
 }
 #endif
 
@@ -788,19 +727,17 @@ mat3x3 create_uv2fragspace_normal_matrix(in highp vec3 normal, in highp uint zoo
     // can be done faster by direct element access
     // even the matmul can be reduced (but probably the compiler does most of that (?))
 
-    // return view_proj_matrix * uv2world;
-
     highp mat4x3 uv2clipspace_t = transpose(camera.view_proj_matrix * uv2world);
 
     // scale to [-screen_size,screen_size] -> translate to [0,screen_size] -> translate to [0+current_frag, screensize+current_frag]
     // result -> origin is at the current frag_coord scale is screen_size
     // frag_coord
-    highp mat3x3 clip2fragspace =  mat3x3(vec3(camera.viewport_size.x/2.0, 0,0),
-                                            vec3(0.0,camera.viewport_size.y/2.0,0),
-                                            vec3(camera.viewport_size/2.0-gl_FragCoord.xy,1)
-                                            );
+    highp mat3x3 clip2fragspace =  mat3x3(  vec3(camera.viewport_size.x/2.0,               0,         0),
+                                            vec3(0.0,             camera.viewport_size.y/2.0,         0),
+                                            vec3(   camera.viewport_size/2.0-gl_FragCoord.xy,         1)
+                                         );
 
-    return  inverse(transpose(clip2fragspace * transpose(mat3(uv2clipspace_t[0], uv2clipspace_t[1], uv2clipspace_t[3]))));
+    return inverse(transpose(clip2fragspace * transpose(mat3(uv2clipspace_t[0], uv2clipspace_t[1], uv2clipspace_t[3]))));
 }
 
 #endif
@@ -861,114 +798,64 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
     { // screenspace transformation nehab
         VectorLayerData geom_data = unpack_data(raw_geom_data, meta.grid_cell_float);
 
-        // three half vectors
-        // xy and zw encode 2d coordinates
-        HalfVector half_vectors[3];
-        half_vectors[0] = HalfVector(geom_data.a, geom_data.b);
+        // three half spaces
+        // half space definition: xy=normalized normal; z=distance between origin and nearest point on line
+        // distance negative implies that we are within the shape
+        vec3 halfspaces[3];
+        halfspaces[0] = create_halfspace(geom_data.a, geom_data.b);
 
 
         if(!geom_data.is_polygon)
         {
-            // calculate smallest v for lines
-            highp vec2 h0_normal = normalize(halfvector_normal(half_vectors[0]));
-            highp vec2 line_offset = h0_normal*style.line_width;
-            half_vectors[0].a = half_vectors[0].a - line_offset;
-            half_vectors[0].b = half_vectors[0].b - line_offset;
+            halfspaces[1] = -halfspaces[0];
+            halfspaces[0].z -= style.line_width;
+            halfspaces[1].z -= style.line_width;
 
-            // h1 half vector changes a and b points -> that way the half vector normal is created to be positive to the center of the line
-            half_vectors[1] = HalfVector(geom_data.b + line_offset, geom_data.a + line_offset);
 
-            // TODO calculate dashes and change a and b location
+            // // TODO calculate dashes and change a and b location
 
-            half_vectors[2] = half_vector_line_end(uv, half_vectors[0], h0_normal);
-
+            halfspaces[2] = create_halfspace_line_end(uv, halfspaces[0], geom_data.a, geom_data.b);
 
             // {// DEBUG value testing
-            //     // calculate the dot of the halfvector with the current position
-            //     // if all positive -> we are within the line
-            //     highp float test0 = step(0.0,halfvector_dot(uv, h0));
-            //     highp float test1 = step(0.0,halfvector_dot(uv, h1));
-            //     highp float test2 = step(0.0,halfvector_dot(uv, h2));
+            //     halfspace_to_fragspace(halfspaces[0], meta.uv2fragspace_normal_matrix);
+            //     halfspace_to_fragspace(halfspaces[1], meta.uv2fragspace_normal_matrix);
+            //     halfspace_to_fragspace(halfspaces[2], meta.uv2fragspace_normal_matrix);
+
+            //     // determine if if the current fragment is within the negative or the positive side of all halfspaces
+            //     // if all negative -> we are within the line
+            //     highp float test0 = step(halfspaces[0].z,0.0);
+            //     highp float test1 = step(halfspaces[1].z,0.0);
+            //     highp float test2 = step(halfspaces[2].z,0.0);
             //     highp float test = test0*test1*test2;
 
-            //     pixel_color = vec4(vec3(1.0-test),1.0);
-
-
-            //     // pixel_color = vec4(vec3(step(0.01,length(uv-geom_data.b))),1.0);
+            //     pixel_color = vec4(vec3(test),1.0);
+            //     return true;
             // }
         }
         else
         {
-            // TODO optimally the half vectors are constructed in a way so they all point inwards or outside
+            // TODO optimally the half spaces are constructed in a way so they all point inwards or outside
             // not quite sure if this is true though
-            half_vectors[0] = HalfVector(geom_data.a, geom_data.b);
-            half_vectors[1] = HalfVector(geom_data.b, geom_data.c);
-            half_vectors[2] = HalfVector(geom_data.c, geom_data.a);
+            halfspaces[0] = create_halfspace(geom_data.a, geom_data.b);
+            halfspaces[1] = create_halfspace(geom_data.b, geom_data.c);
+            halfspaces[2] = create_halfspace(geom_data.c, geom_data.a);
         }
 
-        // convert half vectors into screenspace
-        // and calculate the sdf with the three half vectors
-        // uv_halfvector2screenspace(half_vectors[0], meta.uv2clipspace_matrix);
-        // uv_halfvector2screenspace(half_vectors[1], meta.uv2clipspace_matrix);
-        // uv_halfvector2screenspace(half_vectors[2], meta.uv2clipspace_matrix);
+        // convert half spaces into fragspace
+        halfspace_to_fragspace(halfspaces[0], meta.uv2fragspace_normal_matrix);
+        halfspace_to_fragspace(halfspaces[1], meta.uv2fragspace_normal_matrix);
+        halfspace_to_fragspace(halfspaces[2], meta.uv2fragspace_normal_matrix);
 
+        // order halfspaces -> index 0 is always the nearest
+        highp int halfspace_order[3];
+        order_halfspace_distance(halfspaces, halfspace_order);
 
-        // v_to_half -> x,y is vector towards half space, z == 1 is if within half space or z == -1 outside
-        highp vec3 v_to_half[4];
-        highp float v_length[4];
-        highp int v_order[4];
-
-        // index 4 is the fallback if every vector is invalid
-        // always the highest value
-        v_to_half[3] = vec3(1000.,1000., -1);
-        v_length[3] = 10000.0;
-        v_order[3] = 3;
-
-
-        v_to_half[0] = halfvector_smallest_v(screenspace_coord, half_vectors[0]);
-        v_to_half[1] = halfvector_smallest_v(screenspace_coord, half_vectors[1]);
-        // TODO do line ending half space correctly
-        v_to_half[2] = vec3(1000.,1000., -1);
-        // v_to_half[2] = halfvector_smallest_v(screenspace_coord, half_vectors[2]);
-
-        // calculate the distance
-        v_length[0] = length(v_to_half[0].xy);
-        v_length[1] = length(v_to_half[1].xy);
-        v_length[2] = length(v_to_half[2].xy);
-
-        order_smallest_v(v_length, v_order);
-
-        // apply the side of the half space we are located at
-        v_length[0] *= v_to_half[0].z;
-        v_length[1] *= v_to_half[1].z;
-        v_length[2] *= v_to_half[2].z;
-
-        // it might be possible that we calculate the vector length of a 0 length vector if both coordinates are clipped
-        int start_index = 0;
-        // while(v_length[start_index] <= 0.0)
-        //     start_index+=1;
-
-
-        // we have dark cells I'm guessing that some cells have smallest_v length == 0 -> since it got clipped to the same point
-        // {// DEBUG squared vector length screenspace
-        //     if(v_length[0] > 0)
-        //         pixel_color = vec4(vec3(v_length[v_order[0]]), 1.0);
-        //     else if(v_length[1] > 0)
-        //         pixel_color = vec4(vec3(v_length[v_order[1]]), 1.0);
-        //     else if(v_length[2] > 0)
-        //         pixel_color = vec4(vec3(v_length[v_order[2]]), 1.0);
-        // }
-
-
-
-        // highp vec2 smallest_v = mix(v_to_half[0], v_to_half[1], step(length(v_to_half[1]), length(v_to_half[0])));
-        // smallest_v = mix(smallest_v, v_to_half[2], step(length(v_to_half[2]), length(smallest_v)));
-
-        // pixel_color = vec4(vec3(length(v_to_half[v_order[start_index]].xy)), 1.0);
+        // TODO determine if we need to subtract or multiply remaining two half spaces
+        // -> this depends if the normal is orthogonal or not to normal of nearest halfspace
 
         highp float kernel_size = sqrt(2.0);
-        float d_near = v_length[v_order[start_index]];
-        float d_far = -v_length[v_order[clamp(start_index+1, 0,3)]];
+        float d_near = halfspaces[halfspace_order[0]].z;
+        float d_far = -halfspaces[halfspace_order[1]].z;
         intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
 
 

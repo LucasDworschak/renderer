@@ -324,33 +324,19 @@ void main() {
 
 
 
-    {
-        mat3x3 halfspace_uv2clip = create_uv2fragspace_normal_matrix(normalize(var_normal), tile_id.z, var_pos_cws, uv);
+    // {
+    //     // DEFINE POINTS AND HALF SPACE
+    //     vec2 uv_a = vec2(0.0, 0.5);
+    //     vec2 uv_b = vec2(1.0, 0.5);
+    //     vec3 h = create_halfspace(uv_a, uv_b);
 
+    //     // TRANSFORM HALF SPACE
+    //     halfspace_to_fragspace(h, meta.uv2fragspace_normal_matrix);
 
-        // DEFINE POINT AND HALF SPACE
-        // vec2 uv_a = vec2(0.5, 0.22);
-        // vec2 uv_b = vec2(1.2, 0.6);
-        // vec2 uv_a = vec2(0.5, 0.0);
-        // vec2 uv_b = vec2(0.5, 1.0);
-        // vec2 uv_a = vec2(0.5, 0.5);
-        // vec2 uv_b = vec2(1.5, 0.5);
-        vec2 uv_a = vec2(0.0, 0.5);
-        vec2 uv_b = vec2(1.0, 0.5);
-
-        highp vec2 e = uv_b - uv_a;
-        vec2 uv_halfspace = vec2(-e.y, e.x);
-        vec2 uv_normal = normalize(uv_halfspace);
-        float uv_distance = dot(uv_a, uv_normal);
-
-        vec3 to_uv_center_halfspace_uv = vec3(uv_normal, -uv_distance);
-
-        // TRANSFORM POINT AND HALF SPACE
-        vec3 halfspace_fragment_space = (halfspace_uv2clip * vec3(to_uv_center_halfspace_uv));
-        halfspace_fragment_space = halfspace_fragment_space / length(halfspace_fragment_space.xy);
-
-        texout_albedo = vec3(abs(halfspace_fragment_space.z) / 50);
-    }
+    //     // VISUALIZE
+    //     texout_albedo = vec3(abs(h.z) / 50);
+    //     texout_albedo = vec3(step(0.0,h.z));
+    // }
 
 
 
