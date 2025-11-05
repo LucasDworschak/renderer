@@ -553,13 +553,11 @@ highp vec3 create_halfspace_line_end(highp vec2 current_point, highp vec3 line_h
 void halfspace_to_fragspace(inout highp vec3 halfspace, mat3x3 matrix)
 {
     halfspace = matrix * halfspace;
-    // TODO not sure if we want to also normalize the normal or if distance is enough
-    // halfspace.z /= length(halfspace.xy);
     halfspace /= length(halfspace.xy);
 }
 
 // orders the halfspaces acccording to distance
-void order_halfspace_distance(in vec3 halfspaces[3], out int halfspace_order[3])
+void order_halfspace_distance(highp vec3 halfspaces[3], out highp int halfspace_order[3])
 {
     halfspace_order[0] = 0;
     halfspace_order[1] = 1;
@@ -583,6 +581,49 @@ void order_halfspace_distance(in vec3 halfspaces[3], out int halfspace_order[3])
     halfspace_order[0] = swap * halfspace_order[1] + (1 - swap) * temp;
     halfspace_order[1] = swap * temp + (1 - swap) * halfspace_order[1];
 }
+
+highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_order[3], highp float kernel_size)
+{
+    float d0 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[0]].z);
+    float d1 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[1]].z);
+    float d2 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[2]].z);
+
+    // determine if we need to subtract or multiply remaining two half spaces
+    // -> this depends if the normal is orthogonal or not to normal of nearest halfspace
+    float perpendicular_multiplications = 1.0;
+    float paralell_subractions = 0.0;
+
+    highp float dot_01 = dot(halfspaces[halfspace_order[0]].xy, halfspaces[halfspace_order[1]].xy);
+    highp float dot_02 = dot(halfspaces[halfspace_order[0]].xy, halfspaces[halfspace_order[2]].xy);
+
+    if(abs(dot_01) < 0.5) // perpendicular
+    {
+        perpendicular_multiplications = d1;
+    }
+    else
+    {
+        // TODO is case:
+        // - triangle normal of a triangle -> both normals look in same direction
+        // correctly handled?
+        paralell_subractions = (1.0-d1) * -sign(dot_01);
+    }
+    // TODO for the second case we only want to use it if we choose the other method as the first case
+    // -> min and max are here to prevent this for now but there should be better method where if 1 sets mult 2 checks only for sub and only sets this
+    if(abs(dot_02) < 0.5) // perpendicular
+    {
+        perpendicular_multiplications = min(perpendicular_multiplications, d2);
+    }
+    else
+    {
+        // TODO same as above
+        paralell_subractions = max(paralell_subractions, (1.0-d2) * -sign(dot_02));
+    }
+
+
+    // return (d0 - paralell_subractions) * perpendicular_multiplications;
+    return d0;
+}
+
 #endif
 
 highp uvec2 to_offset_size(highp uint combined) {
@@ -836,9 +877,9 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         {
             // TODO optimally the half spaces are constructed in a way so they all point inwards or outside
             // not quite sure if this is true though
-            halfspaces[0] = create_halfspace(geom_data.a, geom_data.b);
-            halfspaces[1] = create_halfspace(geom_data.b, geom_data.c);
-            halfspaces[2] = create_halfspace(geom_data.c, geom_data.a);
+            halfspaces[0] = create_halfspace(geom_data.b, geom_data.a);
+            halfspaces[1] = create_halfspace(geom_data.c, geom_data.b);
+            halfspaces[2] = create_halfspace(geom_data.a, geom_data.c);
         }
 
         // convert half spaces into fragspace
@@ -850,14 +891,17 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         highp int halfspace_order[3];
         order_halfspace_distance(halfspaces, halfspace_order);
 
-        // TODO determine if we need to subtract or multiply remaining two half spaces
-        // -> this depends if the normal is orthogonal or not to normal of nearest halfspace
+        float d = calculate_coverage(halfspaces, halfspace_order, sqrt(2.0));
 
-        highp float kernel_size = sqrt(2.0);
-        float d_near = halfspaces[halfspace_order[0]].z;
-        float d_far = -halfspaces[halfspace_order[1]].z;
-        intersection_percentage = max(smoothstep(kernel_size,-kernel_size,d_near) - smoothstep(kernel_size,-kernel_size,d_far), intersection_percentage);
+        intersection_percentage = max(d, intersection_percentage);
 
+
+        // TODOs
+        // DONE improvable - subtract or divide remaining
+        //                 - circle line ending
+        //                 - dashes
+        // ~ edges visible - triangles
+        //                 - try out linear interpolation instead of smoothstep (performance)
 
     }
 
