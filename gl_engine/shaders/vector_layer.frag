@@ -260,9 +260,12 @@ void main() {
     meta.cos_smoothing_factor = calculate_cos_smoothing();
     meta.cos_smoothing_factor = 1;
 
+#if SDF_MODE == 0
     calculate_samples(meta, uv);
-
-    meta.uv2fragspace_normal_matrix = create_uv2fragspace_normal_matrix(normal_by_fragment_position_interpolation(), tile_id.z, var_pos_cws, uv);
+#else
+    // meta.uv2fragspace_normal_matrix = create_uv2fragspace_normal_matrix(normal_by_fragment_position_interpolation(), tile_id.z, var_pos_cws, uv);
+    meta.uv2fragspace_normal_matrix = create_uv2fragspace_normal_matrix(var_normal, tile_id.z, var_pos_cws, uv);
+#endif
 
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
     if(offset_size.y != uint(0)) // only if we have data here

@@ -31,7 +31,7 @@
 // 1 mixed
 // 2 vector only
 #ifndef VIEW_MODE
-#define VIEW_MODE 2
+#define VIEW_MODE 1
 #endif
 
 // SAMPLE_DISTRIBUTION 0: UNIFORM SAMPLES
@@ -605,7 +605,7 @@ highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_ord
         // TODO is case:
         // - triangle normal of a triangle -> both normals look in same direction
         // correctly handled?
-        paralell_subractions = (1.0-d1) * -sign(dot_01);
+        paralell_subractions = (1.0-d1);
     }
     // TODO for the second case we only want to use it if we choose the other method as the first case
     // -> min and max are here to prevent this for now but there should be better method where if 1 sets mult 2 checks only for sub and only sets this
@@ -616,12 +616,13 @@ highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_ord
     else
     {
         // TODO same as above
-        paralell_subractions = max(paralell_subractions, (1.0-d2) * -sign(dot_02));
+        paralell_subractions = max(paralell_subractions, (1.0-d2));
     }
 
 
-    // return (d0 - paralell_subractions) * perpendicular_multiplications;
-    return d0;
+    return (d0 - paralell_subractions) * perpendicular_multiplications;
+    // return (d0 - paralell_subractions);
+    // return d0;
 }
 
 #endif
@@ -897,11 +898,11 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
 
         // TODOs
-        // DONE improvable - subtract or divide remaining
-        //                 - circle line ending
-        //                 - dashes
-        // ~ edges visible - triangles
-        //                 - try out linear interpolation instead of smoothstep (performance)
+        // - circle line ending
+        // - dashes
+        // - triangles
+        //      -> inner edge visible
+        // - try out linear interpolation instead of smoothstep (performance)
 
     }
 
