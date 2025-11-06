@@ -199,7 +199,7 @@ void RenderingContext::initialise()
     m->engine_context->set_aabb_decorator(m->aabb_decorator);
     m->engine_context->ortho_layer()->set_tile_limit(1024);
     m->engine_context->set_vector_layer(std::make_shared<gl_engine::VectorLayer>());
-    m->engine_context->vector_layer()->set_tile_limit(512);
+    m->engine_context->vector_layer()->set_tile_limit(1024);
     m->engine_context->vector_layer()->set_texture_layer(m->engine_context->ortho_layer());
 
     nucleus::utils::thread::async_call(m->geometry.scheduler.get(), [this]() { m->geometry.scheduler->set_enabled(true); });

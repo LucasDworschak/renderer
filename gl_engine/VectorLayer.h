@@ -57,7 +57,7 @@ struct FallbackMeta {
 class VectorLayer : public QObject {
     Q_OBJECT
 public:
-    explicit VectorLayer(unsigned fallback_resolution = 1024, QObject* parent = nullptr);
+    explicit VectorLayer(unsigned fallback_resolution = 512, QObject* parent = nullptr);
 
     void init(ShaderRegistry* shader_registry); // needs OpenGL context
     void draw(const TileGeometry& tile_geometry,
