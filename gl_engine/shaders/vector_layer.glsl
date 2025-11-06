@@ -538,19 +538,124 @@ highp vec3 create_halfspace(highp vec2 a, highp vec2 b)
     return create_halfspace_with_normal(a, normal);
 }
 
-// construct half space at line ending
-// TODO offset by line_width for round line caps
-highp vec3 create_halfspace_line_end(highp vec2 current_point, highp vec3 line_halfspace, highp vec2 a, highp vec2 b)
+highp vec3 create_round_cap(highp vec2 uv, highp vec2 point, highp float line_width)
 {
-    // determinen if a or b is closer to current_point
-    // additionaly encode if we have to switch the normal direction
-    highp vec3 closer_point = mix(vec3(b, 1), vec3(a,-1), step(length(current_point-a), length(current_point-b)));
-
-    // create a halfspace at line ending -> the second point of the halfspace is
-    return create_halfspace_with_normal(closer_point.xy, vec2(line_halfspace.y, -line_halfspace.x) * closer_point.z);
+    highp vec2 n = normalize(uv - point);
+    highp float dist = dot(n, point + n*line_width);
+    return vec3(n, -dist);
 }
 
-void halfspace_to_fragspace(inout highp vec3 halfspace, mat3x3 matrix)
+highp vec3 create_line_segment_end_halfspace(highp vec2 uv, VectorLayerData geom_data, vec2 n_line, highp float line_width, bool round_line_caps)
+{
+    // TODO this adds shader divergence and worsens performance by about 10% -> maybe we can improve it a bit
+    // e.g. always calculate halfspace for 1) round 2) butt 3) square (for round approx) -> decide which one to return using bool var
+    // TODO 2: if we render a round line cap do we also want to change the other halfspaces?
+
+    // {// TEST with only butt line cap
+    //     highp vec3 closer_point = mix(vec3(geom_data.b, 1), vec3(geom_data.a,-1), step(length(uv-geom_data.a), length(uv-geom_data.b)));
+    //     return create_halfspace_with_normal(closer_point.xy, vec2(n_line.y, -n_line.x) * closer_point.z);
+    // }
+
+
+    // calculate the sign between current uv and the two normals for line endings
+    highp vec2 n_line_end = vec2(n_line.y, -n_line.x);
+
+    highp float dist_a = dot(uv-geom_data.a, -n_line_end);
+    highp float dist_b = dot(uv-geom_data.b, n_line_end);
+
+    highp vec3 nearest_p = mix(vec3(geom_data.a, -1), vec3(geom_data.b, 1), step(dist_a,dist_b));
+    n_line_end *= nearest_p.z;
+
+    if(dist_a > 0 || dist_b > 0)
+    {
+        // we are at the end point of a line segment
+
+        if(!round_line_caps && ((geom_data.line_cap0 && dist_a > 0) || (geom_data.line_cap1 && dist_b > 0)))
+        {
+            // we have to use butt line cap
+
+            return create_halfspace_with_normal(nearest_p.xy, n_line_end);
+            // square line ending -> needs to be set in style though
+            // return create_halfspace_with_normal(nearest_p.xy + n_line_end * line_width, n_line_end);
+        }
+        else
+        {
+            // we are outside of the current line
+            // regardless if we are at the end of a polyline or not -> we want round line caps here
+
+            return create_round_cap(uv, nearest_p.xy, line_width);
+        }
+    }
+    else if(round_line_caps)
+    {
+        // we are not outside but want round line caps
+        // -> move halfspace by line width to approximate influence
+        return create_halfspace_with_normal(nearest_p.xy + n_line_end * line_width, n_line_end);
+    }
+
+    // we are not outside but want butt line ending
+    // return create_halfspace_with_normal(nearest_p.xy, n_line_end);
+    if(bool(mix(float(geom_data.line_cap0), float(geom_data.line_cap1), step(0, nearest_p.z))))
+    {
+        // nearest point is a line cap and we want butt line caps
+        return create_halfspace_with_normal(nearest_p.xy, n_line_end);
+    }
+    else
+    {
+        // nearest point is not a line cap -> approximate it in a way that it is round
+        // if this is not done we see a little bit missing between line and round end
+        return create_halfspace_with_normal(nearest_p.xy + n_line_end * line_width, n_line_end);
+    }
+
+}
+
+// if we have dashes we are changing the a and b vertices to the nearest dash
+// we also set line_cap0 and line_cap1 to true if we are within the line segment and not at the end
+// -> this allows us to draw butt endings within dashed lines
+void apply_dashes(highp vec2 uv, inout VectorLayerData geom_data, lowp vec2 dash_info)
+{
+    if(dash_info.x >= 0.99) // no dashes required
+        return;
+
+    highp vec2 e = geom_data.b - geom_data.a;
+
+    // we want the squared distance since t calculation needs it
+    highp float squared_dist = dot(e,e);
+
+    // value between 0 and 1, depending on where on the line we are (start point geom_data.a)
+    highp float t = clamp(dot(uv - geom_data.a, e)/squared_dist, 0.0,1.0);
+
+    // how many dash_gap pairs can we fit
+    highp float amount_dash_gap_pairs = ceil(sqrt(squared_dist)/dash_info.y);
+
+    // normed to [0,1] range how long is dash_gap for this line segment
+    // NOTE: every line segment has slightly different dash gap sizes
+    highp float dash_gap_pair_size = 1.0 / amount_dash_gap_pairs;
+
+    // which dash_gap_pair index are we on
+    highp float dash_size = dash_gap_pair_size * dash_info.x/2.0;
+    lowp float dash_gap_index = floor(1 + (t+ dash_size)/dash_gap_pair_size )-1;
+
+    highp float t0 = max(0.0, dash_gap_index * dash_gap_pair_size - dash_size);
+    highp float t1 = min(1.0, dash_gap_index * dash_gap_pair_size + dash_size);
+
+    // calculate new vertices from the dashes
+    // important calculate b before a -> since a overrides value
+    geom_data.b = geom_data.a + t1*e;
+    geom_data.a = geom_data.a + t0*e;
+
+    // force line_cap to true if we are within a dash (not at the line end)
+    // if line_cap was set and we are at the end of the line -> we do need to keep the line_cap set from preprocessor
+    // apparently |= does not work for bools in glsl?
+    geom_data.line_cap0 = geom_data.line_cap0 || (dash_gap_index > 0);
+    geom_data.line_cap1 = geom_data.line_cap1 || (dash_gap_index < amount_dash_gap_pairs);
+    // geom_data.line_cap0 = true;
+    // geom_data.line_cap1 = true;//geom_data.line_cap1 || (dash_gap_index < amount_dash_gap_pairs-1);
+}
+
+
+
+void halfspace_uv_to_fragspace(inout highp vec3 halfspace, mat3x3 matrix)
 {
     halfspace = matrix * halfspace;
     halfspace /= length(halfspace.xy);
@@ -620,9 +725,9 @@ highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_ord
     }
 
 
-    return (d0 - paralell_subractions) * perpendicular_multiplications;
+    // return (d0 - paralell_subractions) * perpendicular_multiplications;
     // return (d0 - paralell_subractions);
-    // return d0;
+    return d0;
 }
 
 #endif
@@ -849,6 +954,11 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
         if(!geom_data.is_polygon)
         {
+
+            apply_dashes(uv, geom_data, style.dash_info);
+
+            halfspaces[2] = create_line_segment_end_halfspace(uv, geom_data, halfspaces[0].xy, style.line_width, style.round_line_caps);
+
             halfspaces[1] = -halfspaces[0];
             halfspaces[0].z -= style.line_width;
             halfspaces[1].z -= style.line_width;
@@ -856,12 +966,11 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
             // // TODO calculate dashes and change a and b location
 
-            halfspaces[2] = create_halfspace_line_end(uv, halfspaces[0], geom_data.a, geom_data.b);
 
             // {// DEBUG value testing
-            //     halfspace_to_fragspace(halfspaces[0], meta.uv2fragspace_normal_matrix);
-            //     halfspace_to_fragspace(halfspaces[1], meta.uv2fragspace_normal_matrix);
-            //     halfspace_to_fragspace(halfspaces[2], meta.uv2fragspace_normal_matrix);
+            //     halfspace_uv_to_fragspace(halfspaces[0], meta.uv2fragspace_normal_matrix);
+            //     halfspace_uv_to_fragspace(halfspaces[1], meta.uv2fragspace_normal_matrix);
+            //     halfspace_uv_to_fragspace(halfspaces[2], meta.uv2fragspace_normal_matrix);
 
             //     // determine if if the current fragment is within the negative or the positive side of all halfspaces
             //     // if all negative -> we are within the line
@@ -876,17 +985,16 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         }
         else
         {
-            // TODO optimally the half spaces are constructed in a way so they all point inwards or outside
-            // not quite sure if this is true though
             halfspaces[0] = create_halfspace(geom_data.b, geom_data.a);
             halfspaces[1] = create_halfspace(geom_data.c, geom_data.b);
             halfspaces[2] = create_halfspace(geom_data.a, geom_data.c);
         }
 
+
         // convert half spaces into fragspace
-        halfspace_to_fragspace(halfspaces[0], meta.uv2fragspace_normal_matrix);
-        halfspace_to_fragspace(halfspaces[1], meta.uv2fragspace_normal_matrix);
-        halfspace_to_fragspace(halfspaces[2], meta.uv2fragspace_normal_matrix);
+        halfspace_uv_to_fragspace(halfspaces[0], meta.uv2fragspace_normal_matrix);
+        halfspace_uv_to_fragspace(halfspaces[1], meta.uv2fragspace_normal_matrix);
+        halfspace_uv_to_fragspace(halfspaces[2], meta.uv2fragspace_normal_matrix);
 
         // order halfspaces -> index 0 is always the nearest
         highp int halfspace_order[3];
@@ -898,10 +1006,10 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
 
         // TODOs
-        // - circle line ending
         // - dashes
         // - triangles
         //      -> inner edge visible
+        //      -> what happens if two normals look in roughly the same direction
         // - try out linear interpolation instead of smoothstep (performance)
 
     }
