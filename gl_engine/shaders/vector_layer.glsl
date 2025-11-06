@@ -692,6 +692,9 @@ highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_ord
     float d0 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[0]].z);
     float d1 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[1]].z);
     float d2 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[2]].z);
+    // float d0 = step(halfspaces[halfspace_order[0]].z, 0.0);
+    // float d1 = step(halfspaces[halfspace_order[1]].z, 0.0);
+    // float d2 = step(halfspaces[halfspace_order[2]].z, 0.0);
 
     // determine if we need to subtract or multiply remaining two half spaces
     // -> this depends if the normal is orthogonal or not to normal of nearest halfspace
