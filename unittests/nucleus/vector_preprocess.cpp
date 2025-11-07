@@ -1015,8 +1015,8 @@ TEST_CASE("nucleus/vector_preprocess")
 
         uint16_t style = 343u;
 
-        auto packed = nucleus::vector_layer::Preprocessor::pack_triangle_data({ a, b, c, style, true });
-        auto unpacked = nucleus::vector_layer::Preprocessor::unpack_data(packed);
+        auto packed = nucleus::vector_layer::Preprocessor::pack_shader_data({ a, b, c, glm::bvec3(), style, true });
+        auto unpacked = nucleus::vector_layer::Preprocessor::unpack_shader_data(packed);
 
         CHECK(a == glm::i64vec2(unpacked.a));
         CHECK(b == glm::i64vec2(unpacked.b));
@@ -1033,8 +1033,8 @@ TEST_CASE("nucleus/vector_preprocess")
 
         uint16_t style = 646u;
 
-        auto packed = nucleus::vector_layer::Preprocessor::pack_line_data(a, b, style, false, false);
-        auto unpacked = nucleus::vector_layer::Preprocessor::unpack_data(packed);
+        auto packed = nucleus::vector_layer::Preprocessor::pack_shader_data({ a, b, b, glm::bvec3(), style, false });
+        auto unpacked = nucleus::vector_layer::Preprocessor::unpack_shader_data(packed);
 
         CHECK(a == glm::ivec2(unpacked.a));
         CHECK(b == glm::ivec2(unpacked.b));

@@ -100,11 +100,10 @@ struct VectorLayerData{
     highp vec2 b;
     highp vec2 c;
 
+    highp bvec3 additional_info;
+
     highp uint style_index;
     bool is_polygon;
-
-    bool line_cap0;
-    bool line_cap1;
 };
 
 #if SDF_MODE == 0
@@ -119,9 +118,6 @@ struct SDFData
     highp float dot_e0;
     highp float dot_e1;
     highp float dot_e2;
-
-    bool line_cap0;
-    bool line_cap1;
 };
 #endif
 
@@ -196,8 +192,9 @@ const highp int geometry_offset_line = (max_cell_width_line - cell_width_lines) 
 
 const highp uint style_bitmask = ((1u << style_bits) - 1u);
 
-const highp uint line_cap0_mask = 1u << (style_bits + 1);
-const highp uint line_cap1_mask = 1u << (style_bits + 2);
+const highp uint additonal_info0_mask = 1u << (style_bits + 3);
+const highp uint additonal_info1_mask = 1u << (style_bits + 2);
+const highp uint additonal_info2_mask = 1u << (style_bits + 1);
 
 
 // Style unpacking
@@ -288,6 +285,10 @@ VectorLayerData unpack_data(highp uvec2 packed_data, lowp vec2 grid_cell)
 
     unpacked_data.is_polygon = is_polygon(packed_data);
 
+    unpacked_data.additional_info.x = (packed_data.y & additonal_info0_mask) != 0u;
+    unpacked_data.additional_info.y = (packed_data.y & additonal_info1_mask) != 0u;
+    unpacked_data.additional_info.z = (packed_data.y & additonal_info2_mask) != 0u;
+
     if (unpacked_data.is_polygon) {
         a -= geometry_offset_polygons;
         b -= geometry_offset_polygons;
@@ -301,9 +302,6 @@ VectorLayerData unpack_data(highp uvec2 packed_data, lowp vec2 grid_cell)
 
         a -= geometry_offset_line;
         b -= geometry_offset_line;
-
-        unpacked_data.line_cap0 = (packed_data.y & line_cap0_mask) != 0u;
-        unpacked_data.line_cap1 = (packed_data.y & line_cap1_mask) != 0u;
     }
 
     highp float tile_scale = float(scale_lines) * (1.0-float(unpacked_data.is_polygon)) + float(scale_polygons) * float(unpacked_data.is_polygon);
@@ -448,9 +446,6 @@ SDFData prepare_sd_Line_Triangle(VectorLayerData geom_data)
     data.e0 = data.vertices.b-data.vertices.a;
     data.dot_e0 = dot(data.e0,data.e0);
 
-    data.line_cap0 = geom_data.line_cap0;
-    data.line_cap1 = geom_data.line_cap1;
-
     if(geom_data.is_polygon)
     {
         data.e1 = data.vertices.c-data.vertices.b;
@@ -503,9 +498,9 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, hig
         highp float line_endings = 1.0;
         if(!round_line_caps)
         {
-            if(data.line_cap0)
+            if(data.vertices.additional_info.y)
                 line_endings *= dot(normalize(data.e0), v0);
-            if(data.line_cap1)
+            if(data.vertices.additional_info.z)
                 line_endings *= dot(normalize(-data.e0), v1);
         }
         line_endings = (tanh(line_endings*500000.0)+1.0) / 2.0;
@@ -570,7 +565,7 @@ highp vec3 create_line_segment_end_halfspace(highp vec2 uv, VectorLayerData geom
     {
         // we are at the end point of a line segment
 
-        if(!round_line_caps && ((geom_data.line_cap0 && dist_a > 0) || (geom_data.line_cap1 && dist_b > 0)))
+        if(!round_line_caps && ((geom_data.additional_info.y && dist_a > 0) || (geom_data.additional_info.z && dist_b > 0)))
         {
             // we have to use butt line cap
 
@@ -595,7 +590,7 @@ highp vec3 create_line_segment_end_halfspace(highp vec2 uv, VectorLayerData geom
 
     // we are not outside but want butt line ending
     // return create_halfspace_with_normal(nearest_p.xy, n_line_end);
-    if(bool(mix(float(geom_data.line_cap0), float(geom_data.line_cap1), step(0, nearest_p.z))))
+    if(bool(mix(float(geom_data.additional_info.y), float(geom_data.additional_info.z), step(0, nearest_p.z))))
     {
         // nearest point is a line cap and we want butt line caps
         return create_halfspace_with_normal(nearest_p.xy, n_line_end);
@@ -610,7 +605,7 @@ highp vec3 create_line_segment_end_halfspace(highp vec2 uv, VectorLayerData geom
 }
 
 // if we have dashes we are changing the a and b vertices to the nearest dash
-// we also set line_cap0 and line_cap1 to true if we are within the line segment and not at the end
+// we also set line_caps in additional_info to true if we are within the line segment and not at the end
 // -> this allows us to draw butt endings within dashed lines
 void apply_dashes(highp vec2 uv, inout VectorLayerData geom_data, lowp vec2 dash_info)
 {
@@ -647,10 +642,8 @@ void apply_dashes(highp vec2 uv, inout VectorLayerData geom_data, lowp vec2 dash
     // force line_cap to true if we are within a dash (not at the line end)
     // if line_cap was set and we are at the end of the line -> we do need to keep the line_cap set from preprocessor
     // apparently |= does not work for bools in glsl?
-    geom_data.line_cap0 = geom_data.line_cap0 || (dash_gap_index > 0);
-    geom_data.line_cap1 = geom_data.line_cap1 || (dash_gap_index < amount_dash_gap_pairs);
-    // geom_data.line_cap0 = true;
-    // geom_data.line_cap1 = true;//geom_data.line_cap1 || (dash_gap_index < amount_dash_gap_pairs-1);
+    geom_data.additional_info.y = geom_data.additional_info.y || (dash_gap_index > 0);
+    geom_data.additional_info.z = geom_data.additional_info.z || (dash_gap_index < amount_dash_gap_pairs);
 }
 
 
@@ -687,9 +680,13 @@ void order_halfspace_distance(highp vec3 halfspaces[3], out highp int halfspace_
     halfspace_order[1] = swap * temp + (1 - swap) * halfspace_order[1];
 }
 
-highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_order[3], highp float kernel_size)
+highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_order[3], highp float kernel_size, bool inner_edge)
 {
-    float d0 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[0]].z);
+    float d0 = 0;
+    if(inner_edge)
+        d0 = step(halfspaces[halfspace_order[0]].z, 0.0);
+    else
+        d0 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[0]].z);
     float d1 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[1]].z);
     float d2 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[2]].z);
     // float d0 = step(halfspaces[halfspace_order[0]].z, 0.0);
@@ -954,9 +951,14 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         vec3 halfspaces[3];
         halfspaces[0] = create_halfspace(geom_data.a, geom_data.b);
 
+        bool inner_edge[3];
+
 
         if(!geom_data.is_polygon)
         {
+            inner_edge[0] = false;
+            inner_edge[1] = false;
+            inner_edge[2] = false;
 
             apply_dashes(uv, geom_data, style.dash_info);
 
@@ -991,6 +993,11 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
             halfspaces[0] = create_halfspace(geom_data.b, geom_data.a);
             halfspaces[1] = create_halfspace(geom_data.c, geom_data.b);
             halfspaces[2] = create_halfspace(geom_data.a, geom_data.c);
+
+            inner_edge[0] = geom_data.additional_info.x;
+            inner_edge[1] = geom_data.additional_info.y;
+            inner_edge[2] = geom_data.additional_info.z;
+
         }
 
 
@@ -1003,7 +1010,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         highp int halfspace_order[3];
         order_halfspace_distance(halfspaces, halfspace_order);
 
-        float d = calculate_coverage(halfspaces, halfspace_order, sqrt(2.0));
+        float d = calculate_coverage(halfspaces, halfspace_order, 1.0, inner_edge[halfspace_order[0]]);
 
         intersection_percentage = max(d, intersection_percentage);
 

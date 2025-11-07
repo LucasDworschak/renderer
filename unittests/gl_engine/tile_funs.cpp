@@ -217,11 +217,7 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
         Framebuffer b(Framebuffer::DepthFormat::None, { Framebuffer::ColourFormat::RGBA8 }, { 1, 1 });
         b.bind();
 
-        glm::uvec2 packed_data;
-        if (data.is_polygon)
-            packed_data = nucleus::vector_layer::Preprocessor::pack_triangle_data(data);
-        else
-            packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(data.a, data.b, data.style_index, false, false);
+        glm::uvec2 packed_data = nucleus::vector_layer::Preprocessor::pack_shader_data(data);
 
         ShaderProgram shader = create_debug_shader(QString(R"(
             #include "vector_layer.glsl"
@@ -231,7 +227,7 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
                 lowp vec2 grid_cell = vec2(0.0,0.0);
 
                 highp uvec2 cpp_packed_data = uvec2(%1u, %2u);
-                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), %9u, bool(%10), false, false);
+                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), bvec3(false,false,false), %9u, bool(%10));
                 VectorLayerData unpacked_data = normalize_unpack_for_unittest(unpack_data(cpp_packed_data,grid_cell),grid_cell);
 
                 bool unpack_ok = data == unpacked_data;
@@ -264,11 +260,7 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
         Framebuffer b(Framebuffer::DepthFormat::None, { Framebuffer::ColourFormat::RGBA8 }, { 1, 1 });
         b.bind();
 
-        glm::uvec2 packed_data;
-        if (data.is_polygon)
-            packed_data = nucleus::vector_layer::Preprocessor::pack_triangle_data(data);
-        else
-            packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(data.a, data.b, data.style_index, false, false);
+        glm::uvec2 packed_data = nucleus::vector_layer::Preprocessor::pack_shader_data(data);
 
         ShaderProgram shader = create_debug_shader(QString(R"(
             out lowp vec4 out_color;
@@ -286,7 +278,7 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
                 lowp vec2 grid_cell = vec2(0.0,0.0);
 
                 highp uvec2 cpp_packed_data = uvec2(%1u, %2u);
-                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), %9u, bool(%10), false, false);
+                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), bvec3(false,false,false), %9u, bool(%10));
                 VectorLayerData unpacked_data = normalize_unpack_for_unittest(unpack_data(cpp_packed_data, grid_cell), grid_cell);
 
                 bool unpack_ok = data == unpacked_data;
@@ -368,36 +360,36 @@ TEST_CASE("glsl tile functions")
     SECTION("vectorlayer packing c++ same as glsl")
     {
         const auto data = std::vector<nucleus::vector_layer::VectorLayerData> {
-            { glm::ivec2(8, 3), glm::ivec2(40, 36), glm::ivec2(28, 44), 289u, true },
-            { glm::ivec2(34, 60), glm::ivec2(50, 52), glm::ivec2(1, 24), 565u, true },
-            { glm::ivec2(16, 32), glm::ivec2(40, 5), glm::ivec2(36, 46), 630u, true },
-            { glm::ivec2(46, 45), glm::ivec2(31, 4), glm::ivec2(21, 61), 546u, true },
-            { glm::ivec2(27, 16), glm::ivec2(46, 7), glm::ivec2(44, 24), 610u, true },
-            { glm::ivec2(48, 49), glm::ivec2(4, 11), glm::ivec2(25, 45), 103u, true },
-            { glm::ivec2(44, 63), glm::ivec2(2, 10), glm::ivec2(30, 24), 852u, true },
-            { glm::ivec2(55, 17), glm::ivec2(2, 47), glm::ivec2(21, 3), 912u, true },
-            { glm::ivec2(32, 56), glm::ivec2(52, 56), glm::ivec2(48, 61), 124u, true },
-            { glm::ivec2(45, 35), glm::ivec2(19, 46), glm::ivec2(55, 54), 482u, true },
-            { glm::ivec2(5, 33), glm::ivec2(14, 32), glm::ivec2(51, 4), 478u, true },
-            { glm::ivec2(43, 56), glm::ivec2(12, 49), glm::ivec2(16, 64), 389u, true },
-            { glm::ivec2(63, 38), glm::ivec2(26, 60), glm::ivec2(37, 9), 192u, true },
-            { glm::ivec2(27, 27), glm::ivec2(39, 33), glm::ivec2(63, 16), 179u, true },
-            { glm::ivec2(0, 18), glm::ivec2(55, 14), glm::ivec2(30, 57), 34u, true },
-            { glm::ivec2(17, 63), glm::ivec2(40, 33), glm::ivec2(12, 46), 15u, true },
-            { glm::ivec2(5, 19), glm::ivec2(64, 34), glm::ivec2(53, 58), 303u, true },
-            { glm::ivec2(40, 44), glm::ivec2(32, 29), glm::ivec2(38, 46), 151u, true },
-            { glm::ivec2(16, 0), glm::ivec2(44, 55), glm::ivec2(48, 46), 819u, true },
+            { glm::ivec2(8, 3), glm::ivec2(40, 36), glm::ivec2(28, 44), glm::bvec3(), 289u, true },
+            { glm::ivec2(34, 60), glm::ivec2(50, 52), glm::ivec2(1, 24), glm::bvec3(), 565u, true },
+            { glm::ivec2(16, 32), glm::ivec2(40, 5), glm::ivec2(36, 46), glm::bvec3(), 630u, true },
+            { glm::ivec2(46, 45), glm::ivec2(31, 4), glm::ivec2(21, 61), glm::bvec3(), 546u, true },
+            { glm::ivec2(27, 16), glm::ivec2(46, 7), glm::ivec2(44, 24), glm::bvec3(), 610u, true },
+            { glm::ivec2(48, 49), glm::ivec2(4, 11), glm::ivec2(25, 45), glm::bvec3(), 103u, true },
+            { glm::ivec2(44, 63), glm::ivec2(2, 10), glm::ivec2(30, 24), glm::bvec3(), 852u, true },
+            { glm::ivec2(55, 17), glm::ivec2(2, 47), glm::ivec2(21, 3), glm::bvec3(), 912u, true },
+            { glm::ivec2(32, 56), glm::ivec2(52, 56), glm::ivec2(48, 61), glm::bvec3(), 124u, true },
+            { glm::ivec2(45, 35), glm::ivec2(19, 46), glm::ivec2(55, 54), glm::bvec3(), 482u, true },
+            { glm::ivec2(5, 33), glm::ivec2(14, 32), glm::ivec2(51, 4), glm::bvec3(), 478u, true },
+            { glm::ivec2(43, 56), glm::ivec2(12, 49), glm::ivec2(16, 64), glm::bvec3(), 389u, true },
+            { glm::ivec2(63, 38), glm::ivec2(26, 60), glm::ivec2(37, 9), glm::bvec3(), 192u, true },
+            { glm::ivec2(27, 27), glm::ivec2(39, 33), glm::ivec2(63, 16), glm::bvec3(), 179u, true },
+            { glm::ivec2(0, 18), glm::ivec2(55, 14), glm::ivec2(30, 57), glm::bvec3(), 34u, true },
+            { glm::ivec2(17, 63), glm::ivec2(40, 33), glm::ivec2(12, 46), glm::bvec3(), 15u, true },
+            { glm::ivec2(5, 19), glm::ivec2(64, 34), glm::ivec2(53, 58), glm::bvec3(), 303u, true },
+            { glm::ivec2(40, 44), glm::ivec2(32, 29), glm::ivec2(38, 46), glm::bvec3(), 151u, true },
+            { glm::ivec2(16, 0), glm::ivec2(44, 55), glm::ivec2(48, 46), glm::bvec3(), 819u, true },
 
             // testing lines (note b and c coordinates need to be the same)
-            { glm::ivec2(5, 33), glm::ivec2(14, 32), glm::ivec2(0, 0), 478u, false },
-            { glm::ivec2(43, 56), glm::ivec2(12, 49), glm::ivec2(0, 0), 389u, false },
-            { glm::ivec2(63, 38), glm::ivec2(26, 60), glm::ivec2(0, 0), 192u, false },
-            { glm::ivec2(27, 27), glm::ivec2(39, 33), glm::ivec2(0, 0), 179u, false },
-            { glm::ivec2(0, 18), glm::ivec2(55, 14), glm::ivec2(0, 0), 34u, false },
-            { glm::ivec2(17, 63), glm::ivec2(40, 33), glm::ivec2(0, 0), 15u, false },
-            { glm::ivec2(5, 19), glm::ivec2(64, 34), glm::ivec2(0, 0), 303u, false },
-            { glm::ivec2(40, 44), glm::ivec2(32, 29), glm::ivec2(0, 0), 151u, false },
-            { glm::ivec2(16, 0), glm::ivec2(44, 55), glm::ivec2(0, 0), 819u, false },
+            { glm::ivec2(5, 33), glm::ivec2(14, 32), glm::ivec2(0, 0), glm::bvec3(), 478u, false },
+            { glm::ivec2(43, 56), glm::ivec2(12, 49), glm::ivec2(0, 0), glm::bvec3(), 389u, false },
+            { glm::ivec2(63, 38), glm::ivec2(26, 60), glm::ivec2(0, 0), glm::bvec3(), 192u, false },
+            { glm::ivec2(27, 27), glm::ivec2(39, 33), glm::ivec2(0, 0), glm::bvec3(), 179u, false },
+            { glm::ivec2(0, 18), glm::ivec2(55, 14), glm::ivec2(0, 0), glm::bvec3(), 34u, false },
+            { glm::ivec2(17, 63), glm::ivec2(40, 33), glm::ivec2(0, 0), glm::bvec3(), 15u, false },
+            { glm::ivec2(5, 19), glm::ivec2(64, 34), glm::ivec2(0, 0), glm::bvec3(), 303u, false },
+            { glm::ivec2(40, 44), glm::ivec2(32, 29), glm::ivec2(0, 0), glm::bvec3(), 151u, false },
+            { glm::ivec2(16, 0), glm::ivec2(44, 55), glm::ivec2(0, 0), glm::bvec3(), 819u, false },
 
         };
 

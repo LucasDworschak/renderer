@@ -467,26 +467,13 @@ VectorLayers Preprocessor::get_debug_vector_tiles(tile::Id id)
 }
 #endif
 
-glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_index, bool line_cap0, bool line_cap1)
-{
-
-    glm::u32vec2 data = pack_triangle_data({ a, b, b, style_index, false });
-
-    if (line_cap0)
-        data.y |= line_cap0_mask;
-    if (line_cap1)
-        data.y |= line_cap1_mask;
-
-    return data;
-}
-
 /*
  * in order to minimize the divergence between lines and polygons, we pack the data as follows:
  *
  * triangle packing:
  * data:
  * x0 | y0 | x1 | y1
- * x2 | y2 | free | is_polygon | style_index
+ * x2 | y2 | inner_edges | is_polygon | style_index
  * bits:
  * 8 | 8 | 8 | 8
  * 8 | 8 | 3 | 1 | 12
@@ -501,7 +488,7 @@ glm::u32vec2 Preprocessor::pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16
  * NOTE: a line stores the data in two separate locations x0_0 x0_1
  *       coordinate "_0" are the 8 least significant bits, and "_1" are the more significant bits of the coordinate
  */
-glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
+glm::u32vec2 Preprocessor::pack_shader_data(VectorLayerData data)
 {
 
     glm::u32vec2 packed_data;
@@ -554,6 +541,13 @@ glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
         packed_data.y = packed_data.y | ((uint(data.b.y) >> constants::coordinate_bits_polygons) << coordinate_shift4_lines);
     }
 
+    if (data.additional_info.x)
+        packed_data.y |= additonal_info0_mask;
+    if (data.additional_info.y)
+        packed_data.y |= additonal_info1_mask;
+    if (data.additional_info.z)
+        packed_data.y |= additonal_info2_mask;
+
     const uint is_polygon = (data.is_polygon ? 1u : 0u) << constants::style_bits;
 
     packed_data.y = packed_data.y | is_polygon | data.style_index;
@@ -561,7 +555,7 @@ glm::u32vec2 Preprocessor::pack_triangle_data(VectorLayerData data)
     return packed_data;
 }
 
-VectorLayerData Preprocessor::unpack_data(glm::uvec2 packed_data)
+VectorLayerData Preprocessor::unpack_shader_data(glm::uvec2 packed_data)
 {
     VectorLayerData unpacked_data;
 
@@ -577,6 +571,10 @@ VectorLayerData Preprocessor::unpack_data(glm::uvec2 packed_data)
     unpacked_data.style_index = packed_data.y & ((1u << constants::style_bits) - 1u);
 
     unpacked_data.is_polygon = (packed_data.y & is_polygon_bitmask) != 0u;
+
+    unpacked_data.additional_info.x = (packed_data.y & additonal_info0_mask) != 0u;
+    unpacked_data.additional_info.y = (packed_data.y & additonal_info1_mask) != 0u;
+    unpacked_data.additional_info.z = (packed_data.y & additonal_info2_mask) != 0u;
 
     if (unpacked_data.is_polygon) {
         unpacked_data.a -= geometry_offset_polygons;
@@ -596,6 +594,11 @@ VectorLayerData Preprocessor::unpack_data(glm::uvec2 packed_data)
     return unpacked_data;
 }
 
+// we can have multiple polygon rings for one geometry. (outer edge and inner hole)
+// earcut gives us an index that concatenates those rings together -> we have to split them again here
+// return pair of indices.
+// pair.first == polygon ring index
+// pair.second == index within polygon ring
 std::pair<uint32_t, uint32_t> Preprocessor::get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes)
 {
     // first index test different since we use the previous size in the for loop
@@ -612,6 +615,23 @@ std::pair<uint32_t, uint32_t> Preprocessor::get_split_index(uint32_t index, cons
     // should not happen -> the index does not match a valid polygon point
     assert(false);
     return { 0, 0 };
+}
+
+bool Preprocessor::check_inner_polygon_edge(std::pair<uint32_t, uint32_t> ind0, std::pair<uint32_t, uint32_t> ind1, uint32_t max_indices)
+{
+    // both indices come from different polygon rings -> it has to be an inner edge
+    if (ind0.first != ind1.first)
+        return true;
+
+    // special case that two edges are first and last index in array
+    if ((ind0.second == 0 && ind1.second == max_indices - 1) || (ind1.second == 0 && ind0.second == max_indices - 1))
+        return false;
+
+    // if diff of two indices is 1 -> they are an outer edge
+    if (ind0.second > ind1.second)
+        return (ind0.second - ind1.second) != 1;
+    else
+        return (ind1.second - ind0.second) != 1;
 }
 
 // returns how many triangles have been generated;
@@ -639,8 +659,13 @@ size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, Vect
         const auto& p1 = polygon_points[ind1.first][ind1.second];
         const auto& p2 = polygon_points[ind2.first][ind2.second];
 
-        const auto& data
-            = nucleus::vector_layer::Preprocessor::pack_triangle_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, style_layer.style_index, true });
+        glm::bvec3 inner_edges;
+        inner_edges.x = check_inner_polygon_edge(ind0, ind1, polygon_sizes[ind0.first]);
+        inner_edges.y = check_inner_polygon_edge(ind1, ind2, polygon_sizes[ind0.first]);
+        inner_edges.z = check_inner_polygon_edge(ind2, ind0, polygon_sizes[ind0.first]);
+
+        const auto& data = nucleus::vector_layer::Preprocessor::pack_shader_data(
+            { { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, inner_edges, style_layer.style_index, true });
 
         (*temp_cell).emplace_back(data);
     }
@@ -793,8 +818,10 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                         const glm::ivec2 c = { -geometry_offset_polygons, max_cell_width_polygons - geometry_offset_polygons - 1 };
                         const glm::ivec2 d = { max_cell_width_polygons - geometry_offset_polygons - 1, max_cell_width_polygons - geometry_offset_polygons - 1 };
 
-                        const auto& data1 = nucleus::vector_layer::Preprocessor::pack_triangle_data({ a, b, c, style_layer.style_index, true });
-                        const auto& data2 = nucleus::vector_layer::Preprocessor::pack_triangle_data({ d, c, b, style_layer.style_index, true });
+                        const glm::bvec3 inner_edges { 0, 1, 0 };
+
+                        const auto& data1 = nucleus::vector_layer::Preprocessor::pack_shader_data({ a, b, c, inner_edges, style_layer.style_index, true });
+                        const auto& data2 = nucleus::vector_layer::Preprocessor::pack_shader_data({ d, c, b, inner_edges, style_layer.style_index, true });
 
                         cell.cell_data.push_back(data1);
                         cell.cell_data.push_back(data2);
@@ -845,14 +872,17 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                     }
 
                     for (const auto& index : indices) {
-                        const auto packed_data = nucleus::vector_layer::Preprocessor::pack_line_data(
-                            { long(vertices[index.x][index.y].x) - cell.rect_lines.left - cell_width_lines * constants::aa_border,
-                                long(vertices[index.x][index.y].y) - cell.rect_lines.top - cell_width_lines * constants::aa_border },
-                            { long(vertices[index.x][index.y + 1].x) - cell.rect_lines.left - cell_width_lines * constants::aa_border,
-                                long(vertices[index.x][index.y + 1].y) - cell.rect_lines.top - cell_width_lines * constants::aa_border },
-                            style_layer.style_index,
+
+                        const auto a = glm::ivec2 { long(vertices[index.x][index.y].x) - cell.rect_lines.left - cell_width_lines * constants::aa_border,
+                            long(vertices[index.x][index.y].y) - cell.rect_lines.top - cell_width_lines * constants::aa_border };
+                        const auto b = glm::ivec2 { long(vertices[index.x][index.y + 1].x) - cell.rect_lines.left - cell_width_lines * constants::aa_border,
+                            long(vertices[index.x][index.y + 1].y) - cell.rect_lines.top - cell_width_lines * constants::aa_border };
+
+                        const auto line_caps = glm::bvec3(false, // first bool not used
                             index.y == 0,
                             index.y == vertices[index.x].size() - 2); // -2 because the index we get does not use the last element of a line segment
+
+                        const auto packed_data = nucleus::vector_layer::Preprocessor::pack_shader_data({ a, b, b, line_caps, style_layer.style_index, false });
                         cell.cell_data.push_back(packed_data);
                         m_processed_amount++;
                     }

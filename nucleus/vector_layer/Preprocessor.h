@@ -68,8 +68,9 @@ constexpr int geometry_offset_polygons = (max_cell_width_polygons - cell_width_p
 constexpr int max_cell_width_line = (1 << (constants::coordinate_bits_lines));
 constexpr int geometry_offset_line = (max_cell_width_line - cell_width_lines) / 2;
 
-constexpr uint line_cap0_mask = 1u << (constants::style_bits + 1);
-constexpr uint line_cap1_mask = 1u << (constants::style_bits + 2);
+constexpr uint additonal_info0_mask = 1u << (constants::style_bits + 3);
+constexpr uint additonal_info1_mask = 1u << (constants::style_bits + 2);
+constexpr uint additonal_info2_mask = 1u << (constants::style_bits + 1);
 
 //
 // end constants for data packing/unpacking
@@ -79,6 +80,10 @@ struct VectorLayerData {
     glm::ivec2 a;
     glm::ivec2 b;
     glm::ivec2 c;
+
+    // lines -> line_cap0, line_cap1
+    // polygon -> inner_edge0(a,b), inner_edge1(b,c), inner_edge2(c,a)
+    glm::bvec3 additional_info;
 
     uint32_t style_index;
     bool is_polygon;
@@ -159,9 +164,8 @@ public:
     static float polygon_area(const ClipperPath& vertices);
     static std::vector<ClipperPaths> separate_vertex_groups(const ClipperPaths& vertices);
 
-    static glm::u32vec2 pack_triangle_data(VectorLayerData data);
-    static glm::u32vec2 pack_line_data(glm::i64vec2 a, glm::i64vec2 b, uint16_t style_layer, bool line_cap0, bool line_cap1);
-    static VectorLayerData unpack_data(glm::uvec2 packed_data);
+    static glm::u32vec2 pack_shader_data(VectorLayerData data);
+    static VectorLayerData unpack_shader_data(glm::uvec2 packed_data);
 
     static bool fully_covers(const ClipperPaths& solution, const ClipperRect& rect);
     static size_t line_fully_covers(const ClipperPaths& solution, float line_width, const ClipperRect& rect);
@@ -180,7 +184,8 @@ private:
     VectorLayers get_debug_vector_tiles(tile::Id id);
 #endif
 
-    std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes);
+    static std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes);
+    static bool check_inner_polygon_edge(std::pair<uint32_t, uint32_t> ind0, std::pair<uint32_t, uint32_t> ind1, uint32_t max_indices);
 
     size_t triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const StyleLayerIndex& style_layer);
 
