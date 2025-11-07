@@ -680,18 +680,23 @@ void order_halfspace_distance(highp vec3 halfspaces[3], out highp int halfspace_
     halfspace_order[1] = swap * temp + (1 - swap) * halfspace_order[1];
 }
 
+highp float halfspace_coverage(highp float kernel_size, highp float distance)
+{
+    // linear interpolation (currently kernel_size is alway 1 here)
+    return clamp((1-(distance*0.5+0.5)), 0,1);
+    // smooth interpolation
+    // return smoothstep(kernel_size,-kernel_size, distance);
+}
+
 highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_order[3], highp float kernel_size, bool inner_edge)
 {
     float d0 = 0;
     if(inner_edge)
         d0 = step(halfspaces[halfspace_order[0]].z, 0.0);
     else
-        d0 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[0]].z);
-    float d1 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[1]].z);
-    float d2 = smoothstep(kernel_size,-kernel_size, halfspaces[halfspace_order[2]].z);
-    // float d0 = step(halfspaces[halfspace_order[0]].z, 0.0);
-    // float d1 = step(halfspaces[halfspace_order[1]].z, 0.0);
-    // float d2 = step(halfspaces[halfspace_order[2]].z, 0.0);
+        d0 = halfspace_coverage(kernel_size, halfspaces[halfspace_order[0]].z);
+    float d1 = halfspace_coverage(kernel_size, halfspaces[halfspace_order[1]].z);
+    float d2 = halfspace_coverage(kernel_size, halfspaces[halfspace_order[2]].z);
 
     // determine if we need to subtract or multiply remaining two half spaces
     // -> this depends if the normal is orthogonal or not to normal of nearest halfspace
