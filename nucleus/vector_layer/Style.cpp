@@ -31,6 +31,44 @@
 #include <cmath>
 #include <regex>
 
+namespace {
+static inline uint8_t clamp_u8(int v) { return static_cast<uint8_t>(std::min(std::max(v, 0), 255)); }
+
+static inline float srgb_to_linear(float cs)
+{
+    // cs in [0,1]
+    return (cs <= 0.04045f) ? (cs / 12.92f) : std::pow((cs + 0.055f) / 1.055f, 2.4f);
+}
+
+static inline uint32_t gamma_decode(uint32_t colour)
+{
+    // Unpack (0xRRGGBBAA)
+    uint8_t r = static_cast<uint8_t>((colour >> 24) & 0xFF);
+    uint8_t g = static_cast<uint8_t>((colour >> 16) & 0xFF);
+    uint8_t b = static_cast<uint8_t>((colour >> 8) & 0xFF);
+    uint8_t a = static_cast<uint8_t>(colour & 0xFF); // unchanged
+
+    // Normalize to [0,1]
+    double rf = r / 255.0;
+    double gf = g / 255.0;
+    double bf = b / 255.0;
+
+    // sRGB gamma decode -> linear
+    rf = srgb_to_linear(rf);
+    gf = srgb_to_linear(gf);
+    bf = srgb_to_linear(bf);
+
+    // Convert back to 8-bit (still representing linear light)
+    // Round to nearest and clamp
+    uint8_t r_lin = clamp_u8(static_cast<int>(std::lround(rf * 255.0)));
+    uint8_t g_lin = clamp_u8(static_cast<int>(std::lround(gf * 255.0)));
+    uint8_t b_lin = clamp_u8(static_cast<int>(std::lround(bf * 255.0)));
+
+    // Repack as 0xRRGGBBAA
+    return (static_cast<uint32_t>(r_lin) << 24) | (static_cast<uint32_t>(g_lin) << 16) | (static_cast<uint32_t>(b_lin) << 8) | static_cast<uint32_t>(a);
+}
+} // namespace
+
 namespace nucleus::vector_layer {
 
 // https://maplibre.org/maplibre-style-spec/
@@ -625,9 +663,9 @@ uint32_t Style::parse_color(const QJsonValue& value)
             colorValue = "#" + std::string(2, colorValue[1]) + std::string(2, colorValue[2]) + std::string(2, colorValue[3]);
 
         if (colorValue.length() == 7)
-            return (std::stoul(colorValue.substr(1), nullptr, 16) << 8) | 255;
+            return gamma_decode((std::stoul(colorValue.substr(1), nullptr, 16) << 8) | 255);
         else if (colorValue.length() == 9)
-            return std::stoul(colorValue.substr(1), nullptr, 16);
+            return gamma_decode(std::stoul(colorValue.substr(1), nullptr, 16));
         else {
             qDebug() << "cannot parse hex color: " << colorValue;
             return 0ul;
@@ -668,7 +706,7 @@ uint32_t Style::parse_color(const QJsonValue& value)
         if (count == 3) // only rgb was given -> add full transparancy
             out = (out << 8) | 255;
 
-        return out;
+        return gamma_decode(out);
     } else if (colorValue.starts_with("hsl")) {
         const std::regex regex("hsla?\\((\\d+),\\s?(\\d+)%,\\s?(\\d+)%(?:,\\s?(\\d+.?\\d*))?\\)");
         std::smatch matches;
