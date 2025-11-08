@@ -34,6 +34,7 @@ public:
     enum class Format {
         RGBA8, // normalised on gpu
         RGB565, // normalised on gpu
+        SRGBA8, // normalised on gpu
         CompressedRGBA8, // normalised on gpu, compression format depends on desktop/mobile
         RGBA8UI,
         RGBA32F,
