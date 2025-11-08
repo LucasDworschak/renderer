@@ -263,8 +263,8 @@ void main() {
 #if SDF_MODE == 0
     calculate_samples(meta, uv);
 #else
-    // meta.uv2fragspace_normal_matrix = create_uv2fragspace_normal_matrix(normal_by_fragment_position_interpolation(), tile_id.z, var_pos_cws, uv);
-    meta.uv2fragspace_normal_matrix = create_uv2fragspace_normal_matrix(var_normal, tile_id.z, var_pos_cws, uv);
+    meta.uv2fragspace_normal_matrix = create_uv2fragspace_normal_matrix(normal_by_fragment_position_interpolation(), tile_id.z, var_pos_cws, uv);
+    // meta.uv2fragspace_normal_matrix = create_uv2fragspace_normal_matrix(var_normal, tile_id.z, var_pos_cws, uv);
 #endif
 
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
