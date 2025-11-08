@@ -544,6 +544,7 @@ highp vec3 create_line_segment_end_halfspace(highp vec2 uv, VectorLayerData geom
 {
     // TODO this adds shader divergence and worsens performance by about 10% -> maybe we can improve it a bit
     // e.g. always calculate halfspace for 1) round 2) butt 3) square (for round approx) -> decide which one to return using bool var
+    // RATHER: make it such, that all threads enter create_halfspace_with_normal at the same time (compute params, then call)
     // TODO 2: if we render a round line cap do we also want to change the other halfspaces?
 
     // {// TEST with only butt line cap
@@ -730,9 +731,9 @@ highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_ord
     }
 
 
-    // return (d0 - paralell_subractions) * perpendicular_multiplications;
-    // return (d0 - paralell_subractions);
-    return d0;
+    return (d0 - paralell_subractions) * perpendicular_multiplications; // no flickering
+    // return (d0 - paralell_subractions);  // less flickering
+    // return d0; // loads of flickering
 }
 
 #endif
