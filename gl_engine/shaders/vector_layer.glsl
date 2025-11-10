@@ -24,7 +24,7 @@
 // SDF_MODE 0: naive multisample antialiasing (golden -> but worse performnace)
 // SDF_MODE 1: screenspace transformation -> smoothstep
 #ifndef SDF_MODE
-#define SDF_MODE 0
+#define SDF_MODE 1
 #endif
 
 // 0 ortho only
@@ -38,6 +38,13 @@
 // SAMPLE_DISTRIBUTION 1: RANDOM SAMPLES
 #ifndef SAMPLE_DISTRIBUTION
 #define SAMPLE_DISTRIBUTION 1
+#endif
+
+// COVERAGE_SIMPLE
+// 0 -> we are using subtraction and multiplication of other halfspaces (correct but costly)
+// 1 -> we are only computing the coverage of the biggest halfspace distance (expect aliasing at thin lines) -> less noticeable if we reduce opacity of far away geometry at shallow angles (cos_smoothing_factor)
+#ifndef COVERAGE_SIMPLE
+#define COVERAGE_SIMPLE 1
 #endif
 
 uniform highp usampler2D styles_sampler;
@@ -137,14 +144,17 @@ struct DrawMeta
     highp uint tile_zoom;
     lowp vec4 ortho_color;
     lowp vec2 grid_cell_float;
+#if SDF_MODE == 0
     highp vec2 aa_sample_multipliers[n_aa_samples];
     highp vec2 aa_sample_positions[n_aa_samples];
-    mediump float cos_smoothing_factor;
     highp vec2 duvdx;
     highp vec2 duvdy;
+#else
+    highp mat3x3 uv2fragspace_normal_matrix;
+#endif
+    mediump float cos_smoothing_factor;
     mediump float zoom_offset;
     mediump float zoom_blend;
-    highp mat3x3 uv2fragspace_normal_matrix;
 };
 
 
@@ -396,6 +406,7 @@ highp vec2 random_gaussian_point(ivec2 offset, highp vec2 uv)
 
 }
 
+#if SDF_MODE == 0
 void calculate_samples(inout DrawMeta meta, highp vec2 uv)
 {
     if(n_aa_samples <= 1)
@@ -436,7 +447,6 @@ void calculate_samples(inout DrawMeta meta, highp vec2 uv)
     }
 }
 
-#if SDF_MODE == 0
 SDFData prepare_sd_Line_Triangle(VectorLayerData geom_data)
 {
     SDFData data;
@@ -681,6 +691,12 @@ void order_halfspace_distance(highp vec3 halfspaces[3], out highp int halfspace_
     halfspace_order[1] = swap * temp + (1 - swap) * halfspace_order[1];
 }
 
+// adapted from https://computergraphics.stackexchange.com/a/13665
+lowp uint max_index(highp float x, highp float y, highp float z)
+{
+   return uint((y>z)&&(y>x)) + (uint((z>y)&&(z>x))*2u);
+}
+
 highp float halfspace_coverage(highp float kernel_size, highp float distance)
 {
     // linear interpolation (currently kernel_size is alway 1 here)
@@ -734,6 +750,18 @@ highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_ord
     return (d0 - paralell_subractions) * perpendicular_multiplications; // no flickering
     // return (d0 - paralell_subractions);  // less flickering
     // return d0; // loads of flickering
+}
+
+// we only want to compute the coverage of the halfspace with the largest distance
+// if it is outside it depends how much outside it is (if it is not a triangle with an inner_edge)
+// if it is inside we only care for the closest halfspace distance
+// biggest problem with this is, that thin lines will have aliasing artifacts (because it depends where we sample the thin line)
+highp float calculate_coverage_simple(highp float d, highp float kernel_size, bool inner_edge)
+{
+    if(inner_edge)
+        return step(d, 0.0);
+    else
+        return halfspace_coverage(kernel_size, d);
 }
 
 #endif
@@ -1012,21 +1040,18 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         halfspace_uv_to_fragspace(halfspaces[1], meta.uv2fragspace_normal_matrix);
         halfspace_uv_to_fragspace(halfspaces[2], meta.uv2fragspace_normal_matrix);
 
+#if COVERAGE_SIMPLE == 0
         // order halfspaces -> index 0 is always the nearest
         highp int halfspace_order[3];
         order_halfspace_distance(halfspaces, halfspace_order);
 
         highp float d = calculate_coverage(halfspaces, halfspace_order, 1.0, inner_edge[halfspace_order[0]]);
+#else
+        lowp uint biggest_halfspace_distance_index = max_index(halfspaces[0].z,halfspaces[1].z,halfspaces[2].z);
+        highp float d = calculate_coverage_simple(halfspaces[biggest_halfspace_distance_index].z, 1.0, inner_edge[biggest_halfspace_distance_index]);
+#endif
 
         intersection_percentage = max(d, intersection_percentage);
-
-
-        // TODOs
-        // - dashes
-        // - triangles
-        //      -> inner edge visible
-        //      -> what happens if two normals look in roughly the same direction
-        // - try out linear interpolation instead of smoothstep (performance)
 
     }
 

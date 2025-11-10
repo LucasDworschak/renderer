@@ -19,6 +19,7 @@
 *****************************************************************************/
 
 #define n_multisamples 4
+#define SDF_MODE 0
 
 #include "camera_config.glsl"
 #include "shared_config.glsl"
@@ -120,8 +121,10 @@ void main() {
     // VECTOR color
 
     // calculate uv derivatives
+#if SDF_MODE == 0
     meta.duvdx = dFdx(uv);
     meta.duvdy = dFdy(uv);
+#endif
 
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, 0), 0).xy;
 
@@ -141,8 +144,9 @@ void main() {
     /////////////////////////
     // anti-alialing
     meta.cos_smoothing_factor = 1.0;
-
+#if SDF_MODE == 0
     calculate_samples(meta, uv);
+#endif
 
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
     if(offset_size.y != uint(0)) // only if we have data here
@@ -169,13 +173,22 @@ void main() {
         style.dash_info = vec2(1.0, 0.0);
         style.round_line_caps = false;
 
+#if SDF_MODE == 0
         highp uint intersections = 0u;
+#else
+        highp float intersections = 0.0;
+#endif
 
         for(highp uint i = offset_size.x + min(offset_size.y, uint(min_vector_geometry)); i < offset_size.x + min(max_vector_geometry,offset_size.y); i++) // show only x layers
         {
             debug_draw_calls++;
-            if(draw_layer(pixel_color, intersections, style, uv, i, meta))
-                break; // pixel is finished -> we can exit the loop early
+#if SDF_MODE == 0
+           if(draw_layer(pixel_color, intersections, style, gl_FragCoord.xy, i, meta))
+               break; // pixel is finished -> we can exit the loop early
+#else
+           if(draw_layer(pixel_color, intersections, style, gl_FragCoord.xy, uv, i, meta))
+               break; // pixel is finished -> we can exit the loop early
+#endif
         }
 
         // blend the last layer (this only does something if we did not break out of the loop early)

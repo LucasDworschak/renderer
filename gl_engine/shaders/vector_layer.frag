@@ -124,7 +124,7 @@ void debug_calculate_cell_size(out lowp vec3 debug_cell_size, mediump uint offse
         debug_cell_size = vec3(1,0,1); // purple -> should never happen -> unrecognized index
 }
 
-lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallback_uv, DrawMeta meta, highp float float_zoom)
+lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallback_uv, highp float zoom_blend, highp float float_zoom)
 {
     highp vec2 duvdx = dFdx(fallback_uv);
     highp vec2 duvdy = dFdy(fallback_uv);
@@ -142,7 +142,7 @@ lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallb
         fallback_level_offset= min(uint(max_offset_levels)-1u, uint(ceil(float(temp_tile_id_fallback.z)-float_zoom)));
 
     // for the case that tiles haven't been loaded yet, we only render the highest zoom level available -> there will be no interpolation
-    highp float fallback_interpolation = mix(meta.zoom_blend, 1.0, float(float_zoom>float(temp_tile_id_fallback.z+1u)));
+    highp float fallback_interpolation = mix(zoom_blend, 1.0, float(float_zoom>float(temp_tile_id_fallback.z+1u)));
 
     highp uint texture_layer_fallback = texelFetch(instanced_texture_array_index_sampler_vector_fallback, ivec2(instance_id, fallback_level_offset), 0).x;
 
@@ -221,8 +221,10 @@ void main() {
     // calculate uv derivatives before we apply level offsets -> otherwise we have discontinous areas at border
     // and correct uv derivatives scaling with level offsets
     // TODO instead of pow we could use bitshifting and than only divide once
+#if SDF_MODE == 0
     meta.duvdx = dFdx(uv) * pow(0.5, float(tile_level_offset));
     meta.duvdy = dFdy(uv) * pow(0.5, float(tile_level_offset));
+#endif
 
     // fetch the layer indices of the acceleration grid (.x) and the geometry buffer (.y)
     highp uvec2 texture_layer = texelFetch(instanced_texture_array_index_sampler_vector, ivec2(instance_id, tile_level_offset), 0).xy;
@@ -243,7 +245,7 @@ void main() {
 
     /////////////////////////
     // FALLBACK COLOR
-    lowp vec3 fallback_color = get_fallback_color(temp_tile_id_fallback, fallback_uv, meta, float_zoom);
+    lowp vec3 fallback_color = get_fallback_color(temp_tile_id_fallback, fallback_uv, meta.zoom_blend, float_zoom);
 
 
 
@@ -257,8 +259,13 @@ void main() {
 
     /////////////////////////
     // anti-alialing
+#if COVERAGE_SIMPLE == 1
     meta.cos_smoothing_factor = calculate_cos_smoothing();
+#else
+    // we only need cos smoothing if we use the simple coverage
+    // the complex coverage accounts for smaller lines
     meta.cos_smoothing_factor = 1.0;
+#endif
 
 #if SDF_MODE == 0
     calculate_samples(meta, uv);
@@ -296,7 +303,6 @@ void main() {
         highp uint intersections = 0u;
 #else
         highp float intersections = 0.0;
-        // highp vec2 smallest_v = vec2(10000.0);
 #endif
 
         for(highp uint i = offset_size.x; i < offset_size.x + min(uint(max_vector_geometry),offset_size.y); i++) // show only x layers
