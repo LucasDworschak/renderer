@@ -552,67 +552,53 @@ highp vec3 create_round_cap(highp vec2 uv, highp vec2 point, highp float line_wi
 
 highp vec3 create_line_segment_end_halfspace(highp vec2 uv, VectorLayerData geom_data, highp vec2 n_line, highp float line_width, bool round_line_caps)
 {
-    // TODO this adds shader divergence and worsens performance by about 10% -> maybe we can improve it a bit
-    // e.g. always calculate halfspace for 1) round 2) butt 3) square (for round approx) -> decide which one to return using bool var
-    // RATHER: make it such, that all threads enter create_halfspace_with_normal at the same time (compute params, then call)
-    // TODO 2: if we render a round line cap do we also want to change the other halfspaces?
-
-    // {// TEST with only butt line cap
-    //     highp vec3 closer_point = mix(vec3(geom_data.b, 1), vec3(geom_data.a,-1), step(length(uv-geom_data.a), length(uv-geom_data.b)));
-    //     return create_halfspace_with_normal(closer_point.xy, vec2(n_line.y, -n_line.x) * closer_point.z);
-    // }
-
-
     // calculate the sign between current uv and the two normals for line endings
     highp vec2 n_line_end = vec2(n_line.y, -n_line.x);
 
     highp float dist_a = dot(uv-geom_data.a, -n_line_end);
     highp float dist_b = dot(uv-geom_data.b, n_line_end);
 
-    highp vec3 nearest_p = mix(vec3(geom_data.a, -1), vec3(geom_data.b, 1), step(dist_a,dist_b));
-    n_line_end *= nearest_p.z;
+    // step gives us 0 or 1 -> depending which value is higher
+    // mix gives us either first or second vec4 depending if step is 0 or 1
+    // nearest_p.xy = coordinates
+    // nearest_p.z = store choice -> we want to know if we chose a or b
+    // nearest_p.w = dist to point
+    highp vec4 nearest_p = mix(vec4(geom_data.a, -1, dist_a), vec4(geom_data.b, 1, dist_b), step(dist_a,dist_b));
+    n_line_end *= nearest_p.z; // invert normal direction depending on which vertice we chose
 
-    if(dist_a > 0.0 || dist_b > 0.0)
-    {
-        // we are at the end point of a line segment
+    // we are evaluating inside the line if dist to point is negative
+    bool inside_line = nearest_p.w < 0.0;
 
-        if(!round_line_caps && ((geom_data.additional_info.y && dist_a > 0.0) || (geom_data.additional_info.z && dist_b > 0.0)))
-        {
-            // we have to use butt line cap
+    // determine if the nearest point is a middle segment of a longer line or if we are at the end
+    bool end_cap = bool(mix(float(geom_data.additional_info.y), float(geom_data.additional_info.z), step(0.0, nearest_p.z)));
 
-            return create_halfspace_with_normal(nearest_p.xy, n_line_end);
-            // square line ending -> needs to be set in style though
-            // return create_halfspace_with_normal(nearest_p.xy + n_line_end * line_width, n_line_end);
-        }
-        else
-        {
-            // we are outside of the current line
-            // regardless if we are at the end of a polyline or not -> we want round line caps here
+    // logic table
+    // butt  +  end_cap + !inside = butt
+    // butt  +  end_cap +  inside = butt
+    // butt  + !end_cap + !inside = round
+    // butt  + !end_cap +  inside = square
+    // round +  end_cap + !inside = round
+    // round +  end_cap +  inside = square
+    // round + !end_cap + !inside = round
+    // round + !end_cap +  inside = square
 
-            return create_round_cap(uv, nearest_p.xy, line_width);
-        }
-    }
-    else if(round_line_caps)
-    {
-        // we are not outside but want round line caps
-        // -> move halfspace by line width to approximate influence
-        return create_halfspace_with_normal(nearest_p.xy + n_line_end * line_width, n_line_end);
-    }
+    // 0u butt
+    // 1u round
+    // 2u square (round but inside line -> approximate round cap by square)
+    //
+    // (!round_line_caps && end_cap) -> we want a butt ending -> we negate it and multiply with previous type to force it to be 0u
+    // for round vs square -> if we are inside we approximate with square (2u) otherwise we want it round (1u)
+    lowp uint ending_type = (1u + uint(inside_line)) * uint(!(!round_line_caps && end_cap));
 
-    // we are not outside but want butt line ending
-    // return create_halfspace_with_normal(nearest_p.xy, n_line_end);
-    if(bool(mix(float(geom_data.additional_info.y), float(geom_data.additional_info.z), step(0.0, nearest_p.z))))
-    {
-        // nearest point is a line cap and we want butt line caps
-        return create_halfspace_with_normal(nearest_p.xy, n_line_end);
-    }
+    // ending_type = 2u; // force specific cap (for debug)
+
+    if(ending_type == 0u)
+        // return create_halfspace_with_normal(nearest_p.xy, n_line_end);
+        return create_halfspace_with_normal(nearest_p.xy + n_line_end * line_width/12.0, n_line_end);
+    else if(ending_type == 1u)
+        return create_round_cap(uv, nearest_p.xy, line_width);
     else
-    {
-        // nearest point is not a line cap -> approximate it in a way that it is round
-        // if this is not done we see a little bit missing between line and round end
         return create_halfspace_with_normal(nearest_p.xy + n_line_end * line_width, n_line_end);
-    }
-
 }
 
 // if we have dashes we are changing the a and b vertices to the nearest dash
