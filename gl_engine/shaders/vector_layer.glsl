@@ -100,7 +100,7 @@ struct VectorLayerData{
     highp vec2 b;
     highp vec2 c;
 
-    highp bvec3 additional_info;
+    bvec3 additional_info;
 
     highp uint style_index;
     bool is_polygon;
@@ -520,7 +520,7 @@ highp float sd_Line_Triangle( in highp vec2 uv, SDFData data, bool triangle, hig
 
 highp vec3 create_halfspace_with_normal(highp vec2 a, highp vec2 n)
 {
-    float distance = dot(a, n);
+    highp float distance = dot(a, n);
 
     return vec3(n, -distance);
 }
@@ -540,7 +540,7 @@ highp vec3 create_round_cap(highp vec2 uv, highp vec2 point, highp float line_wi
     return vec3(n, -dist);
 }
 
-highp vec3 create_line_segment_end_halfspace(highp vec2 uv, VectorLayerData geom_data, vec2 n_line, highp float line_width, bool round_line_caps)
+highp vec3 create_line_segment_end_halfspace(highp vec2 uv, VectorLayerData geom_data, highp vec2 n_line, highp float line_width, bool round_line_caps)
 {
     // TODO this adds shader divergence and worsens performance by about 10% -> maybe we can improve it a bit
     // e.g. always calculate halfspace for 1) round 2) butt 3) square (for round approx) -> decide which one to return using bool var
@@ -562,11 +562,11 @@ highp vec3 create_line_segment_end_halfspace(highp vec2 uv, VectorLayerData geom
     highp vec3 nearest_p = mix(vec3(geom_data.a, -1), vec3(geom_data.b, 1), step(dist_a,dist_b));
     n_line_end *= nearest_p.z;
 
-    if(dist_a > 0 || dist_b > 0)
+    if(dist_a > 0.0 || dist_b > 0.0)
     {
         // we are at the end point of a line segment
 
-        if(!round_line_caps && ((geom_data.additional_info.y && dist_a > 0) || (geom_data.additional_info.z && dist_b > 0)))
+        if(!round_line_caps && ((geom_data.additional_info.y && dist_a > 0.0) || (geom_data.additional_info.z && dist_b > 0.0)))
         {
             // we have to use butt line cap
 
@@ -591,7 +591,7 @@ highp vec3 create_line_segment_end_halfspace(highp vec2 uv, VectorLayerData geom
 
     // we are not outside but want butt line ending
     // return create_halfspace_with_normal(nearest_p.xy, n_line_end);
-    if(bool(mix(float(geom_data.additional_info.y), float(geom_data.additional_info.z), step(0, nearest_p.z))))
+    if(bool(mix(float(geom_data.additional_info.y), float(geom_data.additional_info.z), step(0.0, nearest_p.z))))
     {
         // nearest point is a line cap and we want butt line caps
         return create_halfspace_with_normal(nearest_p.xy, n_line_end);
@@ -619,7 +619,7 @@ void apply_dashes(highp vec2 uv, inout VectorLayerData geom_data, lowp vec2 dash
     highp float squared_dist = dot(e,e);
 
     // value between 0 and 1, depending on where on the line we are (start point geom_data.a)
-    highp float t = clamp(dot(uv - geom_data.a, e)/squared_dist, 0.0,1.0);
+    highp float t = clamp(dot(uv - geom_data.a, e)/squared_dist, 0.0, 1.0);
 
     // how many dash_gap pairs can we fit
     highp float amount_dash_gap_pairs = ceil(sqrt(squared_dist)/dash_info.y);
@@ -630,7 +630,7 @@ void apply_dashes(highp vec2 uv, inout VectorLayerData geom_data, lowp vec2 dash
 
     // which dash_gap_pair index are we on
     highp float dash_size = dash_gap_pair_size * dash_info.x/2.0;
-    lowp float dash_gap_index = floor(1 + (t+ dash_size)/dash_gap_pair_size )-1;
+    lowp float dash_gap_index = floor(1.0 + (t + dash_size) / dash_gap_pair_size) - 1.0;
 
     highp float t0 = max(0.0, dash_gap_index * dash_gap_pair_size - dash_size);
     highp float t1 = min(1.0, dash_gap_index * dash_gap_pair_size + dash_size);
@@ -643,13 +643,13 @@ void apply_dashes(highp vec2 uv, inout VectorLayerData geom_data, lowp vec2 dash
     // force line_cap to true if we are within a dash (not at the line end)
     // if line_cap was set and we are at the end of the line -> we do need to keep the line_cap set from preprocessor
     // apparently |= does not work for bools in glsl?
-    geom_data.additional_info.y = geom_data.additional_info.y || (dash_gap_index > 0);
+    geom_data.additional_info.y = geom_data.additional_info.y || (dash_gap_index > 0.0);
     geom_data.additional_info.z = geom_data.additional_info.z || (dash_gap_index < amount_dash_gap_pairs);
 }
 
 
 
-void halfspace_uv_to_fragspace(inout highp vec3 halfspace, mat3x3 matrix)
+void halfspace_uv_to_fragspace(inout highp vec3 halfspace, highp mat3x3 matrix)
 {
     halfspace = matrix * halfspace;
     halfspace /= length(halfspace.xy);
@@ -684,25 +684,25 @@ void order_halfspace_distance(highp vec3 halfspaces[3], out highp int halfspace_
 highp float halfspace_coverage(highp float kernel_size, highp float distance)
 {
     // linear interpolation (currently kernel_size is alway 1 here)
-    return clamp((1-(distance*0.5+0.5)), 0,1);
+    return clamp((1.0 - (distance * 0.5 + 0.5)), 0.0, 1.0);
     // smooth interpolation
     // return smoothstep(kernel_size,-kernel_size, distance);
 }
 
 highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_order[3], highp float kernel_size, bool inner_edge)
 {
-    float d0 = 0;
+    highp float d0 = 0.0;
     if(inner_edge)
         d0 = step(halfspaces[halfspace_order[0]].z, 0.0);
     else
         d0 = halfspace_coverage(kernel_size, halfspaces[halfspace_order[0]].z);
-    float d1 = halfspace_coverage(kernel_size, halfspaces[halfspace_order[1]].z);
-    float d2 = halfspace_coverage(kernel_size, halfspaces[halfspace_order[2]].z);
+    highp float d1 = halfspace_coverage(kernel_size, halfspaces[halfspace_order[1]].z);
+    highp float d2 = halfspace_coverage(kernel_size, halfspaces[halfspace_order[2]].z);
 
     // determine if we need to subtract or multiply remaining two half spaces
     // -> this depends if the normal is orthogonal or not to normal of nearest halfspace
-    float perpendicular_multiplications = 1.0;
-    float paralell_subractions = 0.0;
+    highp float perpendicular_multiplications = 1.0;
+    highp float paralell_subractions = 0.0;
 
     highp float dot_01 = dot(halfspaces[halfspace_order[0]].xy, halfspaces[halfspace_order[1]].xy);
     highp float dot_02 = dot(halfspaces[halfspace_order[0]].xy, halfspaces[halfspace_order[2]].xy);
@@ -716,7 +716,7 @@ highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_ord
         // TODO is case:
         // - triangle normal of a triangle -> both normals look in same direction
         // correctly handled?
-        paralell_subractions = (1.0-d1);
+        paralell_subractions = (1.0 - d1);
     }
     // TODO for the second case we only want to use it if we choose the other method as the first case
     // -> min and max are here to prevent this for now but there should be better method where if 1 sets mult 2 checks only for sub and only sets this
@@ -727,7 +727,7 @@ highp float calculate_coverage(highp vec3 halfspaces[3], highp int halfspace_ord
     else
     {
         // TODO same as above
-        paralell_subractions = max(paralell_subractions, (1.0-d2));
+        paralell_subractions = max(paralell_subractions, (1.0 - d2));
     }
 
 
@@ -775,8 +775,8 @@ void parse_style(out LayerStyle style, highp uint style_index, mediump float zoo
 {
     // calculate an integer zoom offset for lower and higher style indices and clamp
     // TODO I think it should not be necessary to clamp the zoom offset anymore
-    lowp int zoom_offset_lower = max(int(floor(zoom_offset-1.0)), -max_offset_levels+1);
-    lowp int zoom_offset_higher = max(int(floor(zoom_offset-0.0)), -max_offset_levels+1);
+    lowp int zoom_offset_lower = max(int(floor(zoom_offset - 1.0)), -max_offset_levels + 1);
+    lowp int zoom_offset_higher = max(int(floor(zoom_offset - 0.0)), -max_offset_levels + 1);
 
     highp uint style_index_lower = uint(int(style_index) + zoom_offset_lower);
     highp uint style_index_higher = uint(int(style_index) + zoom_offset_higher);
@@ -797,8 +797,8 @@ void parse_style(out LayerStyle style, highp uint style_index, mediump float zoo
     // by further dividing the tile_extent by 2^zoom_offset, we reduce the tile_extent and increase the line width.
     // we have to increase the zoom_offset by one in order to use the same size as in the preprocessor
     // by using inv_tile_extent and 0.5 as base for pow, we essentially convert a division to a multiplication operation
-    mediump float zoomed_tile_extent_lower = inv_tile_extent * pow(0.5, float(zoom_offset_lower+1));
-    mediump float zoomed_tile_extent_higher = inv_tile_extent * pow(0.5, float(zoom_offset_higher+1));
+    mediump float zoomed_tile_extent_lower = inv_tile_extent * pow(0.5, float(zoom_offset_lower + 1));
+    mediump float zoomed_tile_extent_higher = inv_tile_extent * pow(0.5, float(zoom_offset_higher + 1));
 
     lowp float outline_width_lower = float(style_data_lower.g >> style_width_offset) * style_precision_mult * zoomed_tile_extent_lower;
     lowp float outline_width_higher = float(style_data_higher.g >> style_width_offset) * style_precision_mult * zoomed_tile_extent_higher;
@@ -859,7 +859,7 @@ void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp float inte
 
 // frag space -> origin is fragment (~pixel) center. going 0.5 units to left, right, up or down -> you reached the border of the fragment
 // additionally since we are transforming normals we need to inverse and transpose the matrix
-mat3x3 create_uv2fragspace_normal_matrix(in highp vec3 normal, in highp uint zoom_level, in highp vec3 ws_position, in highp vec2 uv_position)
+highp mat3x3 create_uv2fragspace_normal_matrix(in highp vec3 normal, in highp uint zoom_level, in highp vec3 ws_position, in highp vec2 uv_position)
 {
     highp float scale = tile_size(zoom_level);
 
@@ -954,7 +954,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         // three half spaces
         // half space definition: xy=normalized normal; z=distance between origin and nearest point on line
         // distance negative implies that we are within the shape
-        vec3 halfspaces[3];
+        highp vec3 halfspaces[3];
         halfspaces[0] = create_halfspace(geom_data.a, geom_data.b);
 
         bool inner_edge[3];
@@ -1016,7 +1016,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         highp int halfspace_order[3];
         order_halfspace_distance(halfspaces, halfspace_order);
 
-        float d = calculate_coverage(halfspaces, halfspace_order, 1.0, inner_edge[halfspace_order[0]]);
+        highp float d = calculate_coverage(halfspaces, halfspace_order, 1.0, inner_edge[halfspace_order[0]]);
 
         intersection_percentage = max(d, intersection_percentage);
 

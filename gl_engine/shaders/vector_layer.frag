@@ -258,7 +258,7 @@ void main() {
     /////////////////////////
     // anti-alialing
     meta.cos_smoothing_factor = calculate_cos_smoothing();
-    meta.cos_smoothing_factor = 1;
+    meta.cos_smoothing_factor = 1.0;
 
 #if SDF_MODE == 0
     calculate_samples(meta, uv);
