@@ -617,8 +617,28 @@ std::pair<uint32_t, uint32_t> Preprocessor::get_split_index(uint32_t index, cons
     return { 0, 0 };
 }
 
-bool Preprocessor::check_inner_polygon_edge(std::pair<uint32_t, uint32_t> ind0, std::pair<uint32_t, uint32_t> ind1, uint32_t max_indices)
+bool Preprocessor::check_inner_polygon_edge(
+    const ClipperPaths& polygon_points, std::pair<uint32_t, uint32_t> ind0, std::pair<uint32_t, uint32_t> ind1, uint32_t max_indices)
 {
+    {
+        // if the edge is fully outside of the cell -> we do not care if it is an actual inner edge or not, we handle it as if it is an inner edge
+        // this avoids artifacts when viewed at a shallow angle (-> cell edge clipping was interpreted as an outside edge -> smoothstep was applied)
+        const auto p0 = polygon_points[ind0.first][ind0.second];
+        const auto p1 = polygon_points[ind1.first][ind1.second];
+        if (p0.x < 0 && p1.x < 0) {
+            return true;
+        }
+        if (p0.y < 0 && p1.y < 0) {
+            return true;
+        }
+        if (p0.x > cell_width_polygons && p1.x > cell_width_polygons) {
+            return true;
+        }
+        if (p0.y > cell_width_polygons && p1.y > cell_width_polygons) {
+            return true;
+        }
+    }
+
     // both indices come from different polygon rings -> it has to be an inner edge
     if (ind0.first != ind1.first)
         return true;
@@ -660,9 +680,9 @@ size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, Vect
         const auto& p2 = polygon_points[ind2.first][ind2.second];
 
         glm::bvec3 inner_edges;
-        inner_edges.x = check_inner_polygon_edge(ind0, ind1, polygon_sizes[ind0.first]);
-        inner_edges.y = check_inner_polygon_edge(ind1, ind2, polygon_sizes[ind0.first]);
-        inner_edges.z = check_inner_polygon_edge(ind2, ind0, polygon_sizes[ind0.first]);
+        inner_edges.x = check_inner_polygon_edge(polygon_points, ind0, ind1, polygon_sizes[ind0.first]);
+        inner_edges.y = check_inner_polygon_edge(polygon_points, ind1, ind2, polygon_sizes[ind0.first]);
+        inner_edges.z = check_inner_polygon_edge(polygon_points, ind2, ind0, polygon_sizes[ind0.first]);
 
         const auto& data = nucleus::vector_layer::Preprocessor::pack_shader_data(
             { { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, inner_edges, style_layer.style_index, true });

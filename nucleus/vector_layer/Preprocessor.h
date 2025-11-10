@@ -185,7 +185,8 @@ private:
 #endif
 
     static std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes);
-    static bool check_inner_polygon_edge(std::pair<uint32_t, uint32_t> ind0, std::pair<uint32_t, uint32_t> ind1, uint32_t max_indices);
+    static bool check_inner_polygon_edge(
+        const ClipperPaths& polygon_points, std::pair<uint32_t, uint32_t> ind0, std::pair<uint32_t, uint32_t> ind1, uint32_t max_indices);
 
     size_t triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const StyleLayerIndex& style_layer);
 
