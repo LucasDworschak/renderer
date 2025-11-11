@@ -18,7 +18,10 @@
             "comment": "local dev server. maputnik does not allow // comments so we use key/value pairs. In order to use this remove dev- from the key and add it to tiles",
             "url": "http://localhost:8090",
             "comment2": "production server. if we use z/x/y tile server we need to use the tiles key with an array value",
-            "asdf-tiles": [ "https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/{z}/{x}/{y}"]
+            "asdf-tiles":
+            [
+                "https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/{z}/{x}/{y}"
+            ]
         }
     },
     "glyphs": "{fontstack}/{range}.pbf",
@@ -2525,7 +2528,11 @@
                         "designated"
                     ]
                 ]
-            ]
+            ],
+            "layout":
+            {
+                "line-cap": "round"
+            }
         },
         {
             "id": "tunnel_path_bridleway",
@@ -2607,7 +2614,11 @@
                     "bicycle",
                     "designated"
                 ]
-            ]
+            ],
+            "layout":
+            {
+                "line-cap": "round"
+            }
         },
         {
             "id": "tunnel_path_footway",
@@ -2687,7 +2698,11 @@
                     "horse",
                     "designated"
                 ]
-            ]
+            ],
+            "layout":
+            {
+                "line-cap": "round"
+            }
         },
         {
             "id": "tunnel_motorway_link",
@@ -2698,7 +2713,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -2780,7 +2796,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -2840,7 +2857,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -2904,7 +2922,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -2963,7 +2982,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3014,7 +3034,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3070,7 +3091,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3140,7 +3162,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3216,7 +3239,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3299,7 +3323,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3387,7 +3412,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3475,7 +3501,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3567,7 +3594,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3667,7 +3695,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3759,7 +3788,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3822,7 +3852,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3889,7 +3920,8 @@
             "source-layer": "transportation",
             "layout":
             {
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -3939,7 +3971,8 @@
             "minzoom": 9,
             "layout":
             {
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -8641,7 +8674,11 @@
                         "designated"
                     ]
                 ]
-            ]
+            ],
+            "layout":
+            {
+                "line-cap": "round"
+            }
         },
         {
             "id": "bridge_path_bridleway",
@@ -8723,7 +8760,11 @@
                     "bicycle",
                     "designated"
                 ]
-            ]
+            ],
+            "layout":
+            {
+                "line-cap": "round"
+            }
         },
         {
             "id": "bridge_path_footway",
@@ -8803,7 +8844,11 @@
                     "horse",
                     "designated"
                 ]
-            ]
+            ],
+            "layout":
+            {
+                "line-cap": "round"
+            }
         },
         {
             "id": "bridge_motorway_link",
@@ -8813,7 +8858,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -8885,7 +8931,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -8936,7 +8983,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -8992,7 +9040,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9045,7 +9094,8 @@
             "source-layer": "transportation",
             "layout":
             {
-                "line-join": "round"
+                "line-join": "round",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9096,7 +9146,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9153,7 +9204,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9224,7 +9276,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9297,7 +9350,8 @@
             "source-layer": "transportation",
             "layout":
             {
-                "line-join": "round"
+                "line-join": "round",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9351,7 +9405,8 @@
             "source-layer": "transportation",
             "layout":
             {
-                "line-join": "round"
+                "line-join": "round",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9406,7 +9461,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9476,7 +9532,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9542,7 +9599,8 @@
             "layout":
             {
                 "line-join": "round",
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9597,7 +9655,8 @@
             "source-layer": "transportation",
             "layout":
             {
-                "line-join": "round"
+                "line-join": "round",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9664,7 +9723,8 @@
             "source-layer": "transportation",
             "layout":
             {
-                "line-join": "round"
+                "line-join": "round",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9736,7 +9796,8 @@
             "source-layer": "transportation",
             "layout":
             {
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {
@@ -9803,7 +9864,8 @@
             "minzoom": 8,
             "layout":
             {
-                "visibility": "visible"
+                "visibility": "visible",
+                "line-cap": "round"
             },
             "paint":
             {

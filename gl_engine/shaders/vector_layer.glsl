@@ -593,8 +593,7 @@ highp vec3 create_line_segment_end_halfspace(highp vec2 uv, VectorLayerData geom
     // ending_type = 2u; // force specific cap (for debug)
 
     if(ending_type == 0u)
-        // return create_halfspace_with_normal(nearest_p.xy, n_line_end);
-        return create_halfspace_with_normal(nearest_p.xy + n_line_end * line_width/12.0, n_line_end);
+        return create_halfspace_with_normal(nearest_p.xy, n_line_end);
     else if(ending_type == 1u)
         return create_round_cap(uv, nearest_p.xy, line_width);
     else
@@ -953,7 +952,6 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         // we changed style -> blend previous style, reset layer infos and parse the new style
 
         alpha_blend(pixel_color, style, intersection_percentage);
-        // smallest_v = vec2(10000.0);
         intersection_percentage = 0.0;
         if (pixel_color.a > full_threshold) {
             return true;
