@@ -235,7 +235,7 @@ void Style::load()
         if (widths.empty())
             widths.push_back({ 255, 0 });
         if (dashes.empty())
-            dashes.push_back({ 255, { 1 * constants::style_precision, 0.1 } });
+            dashes.push_back({ 255, { 1 * constants::style_precision, 1 } });
         if (opacities.empty())
             opacities.push_back({ 255, 255 });
 
@@ -546,6 +546,14 @@ uint32_t Style::get_style_index(const uint32_t style_index, const uint zoom_leve
 
 float Style::get_style_width(const glm::u32vec2& style) { return float(style.y >> 17) / float(constants::style_precision); }
 
+std::pair<float, float> Style::get_style_dashes(const glm::u32vec2& style)
+{
+    const auto dash_gap_ratio = (style.y >> 9) & ((1u << (17 - 9)) - 1u);
+    const auto dash_sum = (style.y >> 1) & ((1u << (9 - 1)) - 1u);
+
+    return std::make_pair(float(dash_gap_ratio) / float(constants::style_precision), float(dash_sum));
+}
+
 bool Style::uses_dashes(const glm::u32vec2& style) { return float((style.y & ((1u << 17) - 1u)) >> 9) < constants::style_precision; }
 
 // uses https://github.com/maplibre/maplibre-style-spec/blob/main/src/expression/definitions/interpolate.ts -> exponentialInterpolation()
@@ -795,7 +803,6 @@ std::pair<uint8_t, float> Style::parse_dash(const QJsonValue& dash_values)
     const auto dash_array = dash_values.toArray();
     if (dash_array.size() < 2) {
         return { 1 * constants::style_precision, 1 };
-        qDebug() << dash_array; // TODO herehow are empty jsonarrays possible
     }
     assert(dash_array.size() >= 2);
 

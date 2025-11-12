@@ -192,6 +192,8 @@ private:
 
     void generate_preprocess_grid();
 
+    std::vector<GeometryData> apply_dashes(const std::vector<GeometryData>& geometry, const StyleLayerIndex& style_layer, uint zoom_level, bool is_polygon);
+
     Style m_style;
     const std::vector<glm::u32vec2> m_style_buffer;
 

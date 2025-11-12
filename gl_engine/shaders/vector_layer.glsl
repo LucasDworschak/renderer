@@ -978,7 +978,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
             inner_edge[1] = false;
             inner_edge[2] = false;
 
-            apply_dashes(uv, geom_data, style.dash_info);
+            // apply_dashes(uv, geom_data, style.dash_info);
 
             halfspaces[2] = create_line_segment_end_halfspace(uv, geom_data, halfspaces[0].xy, style.line_width, style.round_line_caps);
 

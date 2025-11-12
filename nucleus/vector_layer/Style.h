@@ -114,6 +114,7 @@ public:
 
     static uint32_t get_style_index(const uint32_t style_index, const uint zoom_level);
     static float get_style_width(const glm::u32vec2& style);
+    static std::pair<float, float> get_style_dashes(const glm::u32vec2& style);
     static bool uses_dashes(const glm::u32vec2& style);
 
     static uint32_t premultiply_alpha(uint32_t color);
