@@ -424,6 +424,8 @@ void VectorLayer::update_fallback_textures(const std::vector<IdLayer>& tiles_to_
         for (int level = 0; level < mipmap_levels; level++) {
             int mipmapped_resolution = m_fallback_resolution >> level;
             f->glViewport(0, 0, mipmapped_resolution, mipmapped_resolution);
+            m_fallback_shader->set_uniform("fallback_resolution", mipmapped_resolution);
+
             m_fallback_texture_array_higher->bind_layer_to_frame_buffer(0, tiles_to_render[i].layer, level);
 
             f->glClearBufferfv(GL_COLOR, 0, clearAlbedoColor);
@@ -437,6 +439,8 @@ void VectorLayer::update_fallback_textures(const std::vector<IdLayer>& tiles_to_
         for (int level = 1; level < mipmap_levels; level++) {
             int mipmapped_resolution = m_fallback_resolution >> level;
             f->glViewport(0, 0, mipmapped_resolution, mipmapped_resolution);
+            m_fallback_shader->set_uniform("fallback_resolution", mipmapped_resolution);
+
             m_fallback_texture_array_lower->bind_layer_to_frame_buffer(0, tiles_to_render[i].layer, level - 1);
 
             f->glClearBufferfv(GL_COLOR, 0, clearAlbedoColor);

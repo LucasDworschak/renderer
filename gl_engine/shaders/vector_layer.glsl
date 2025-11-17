@@ -870,6 +870,16 @@ void alpha_blend(inout lowp vec4 pixel_color, LayerStyle style, highp float inte
     pixel_color = pixel_color + ((1.0-pixel_color.a) * style.color * intersection_percentage);
 }
 
+highp mat3x3 create_uv2fragspace_normal_matrix_fallback(in highp int fallback_resolution)
+{
+    highp mat3x3 uv2fragspace = mat3x3(  vec3(fallback_resolution,       0,         0),
+                                         vec3(0,       fallback_resolution,         0),
+                                         vec3(      -gl_FragCoord.xy      ,         1)
+                                      );
+
+    return inverse(transpose(uv2fragspace));
+}
+
 // frag space -> origin is fragment (~pixel) center. going 0.5 units to left, right, up or down -> you reached the border of the fragment
 // additionally since we are transforming normals we need to inverse and transpose the matrix
 highp mat3x3 create_uv2fragspace_normal_matrix(in highp vec3 normal, in highp uint zoom_level, in highp vec3 ws_position, in highp vec2 uv_position)

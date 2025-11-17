@@ -18,8 +18,8 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *****************************************************************************/
 
+#define SDF_MODE 1
 #define n_multisamples 4
-#define SDF_MODE 0
 
 #include "camera_config.glsl"
 #include "shared_config.glsl"
@@ -51,6 +51,8 @@ uniform bool lower_zoom;
 
 uniform highp int min_vector_geometry;
 const lowp uint max_vector_geometry = 255u;
+
+uniform highp int fallback_resolution;
 
 
 void debug_calculate_cascade_layer(out lowp vec3 debug_cacscade_layer, lowp uint sampler_buffer_index)
@@ -146,6 +148,8 @@ void main() {
     meta.cos_smoothing_factor = 1.0;
 #if SDF_MODE == 0
     calculate_samples(meta, uv);
+#else
+    meta.uv2fragspace_normal_matrix = create_uv2fragspace_normal_matrix_fallback(fallback_resolution);
 #endif
 
     // using the grid data we now want to traverse all triangles referenced in grid cell and draw them.
