@@ -988,6 +988,48 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
     }
 }
 
+// https://fgiesen.wordpress.com/2022/09/09/morton-codes-addendum/
+glm::uvec2 Preprocessor::get_z_order_coordinate(uint32_t index)
+{
+    // Separate even and odd bits to top and bottom half, respectively
+    uint32_t t = (index & 0x5555) | ((index & 0xaaaa) << 15);
+
+    // Decode passes
+    t = (t ^ (t >> 1)) & 0x33333333;
+    t = (t ^ (t >> 2)) & 0x0f0f0f0f;
+    t ^= t >> 4; // No final mask, we mask next anyway:
+
+    // Return x and y
+    return glm::uvec2(t & 0xff, (t >> 16) & 0xff);
+}
+
+glm::uvec2 Preprocessor::get_z_order_coordinate_32bit_index(uint32_t index)
+{
+    const auto a = get_z_order_coordinate(index);
+    auto b = get_z_order_coordinate(index >> 16);
+    b.x = b.x << 8;
+    b.y = b.y << 8;
+
+    return a + b;
+}
+
+template <typename T>
+std::vector<T> Preprocessor::to_z_order_curve(const std::vector<T>& data, unsigned width)
+{
+    std::vector<T> ordered_data;
+    ordered_data.resize(data.size());
+
+    for (size_t i = 0; i < data.size(); i++) {
+        const auto coord = get_z_order_coordinate_32bit_index(i);
+        const auto coord_1d = coord.y * width + coord.x;
+        // qDebug() << coord_1d;
+        ordered_data[coord_1d] = data[i];
+        ordered_data[0] = data[i];
+    }
+
+    return ordered_data;
+}
+
 /*
  * Function condenses data and fills the GpuVectorLayerTile.
  * condensing:
@@ -1063,6 +1105,8 @@ GpuVectorLayerTile Preprocessor::create_gpu_tile()
     // make sure that the buffer size is still like we expected and resize the data to actual buffer size
     assert(geometry_buffer.size() <= constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index]);
     geometry_buffer.resize(constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index], glm::u32vec2(-1u));
+
+    geometry_buffer = to_z_order_curve<glm::u32vec2>(geometry_buffer, constants::data_size[fitting_cascade_index]);
 
     tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size, std::move(acceleration_grid)));
     tile.geometry_buffer = std::make_shared<const nucleus::Raster<glm::u32vec2>>(

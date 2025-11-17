@@ -756,11 +756,38 @@ highp uvec2 to_offset_size(highp uint combined) {
     return uvec2(uint(combined >> 8), uint(combined & 255u));
 }
 
+// https://fgiesen.wordpress.com/2022/09/09/morton-codes-addendum/
+highp ivec2 get_z_order_coordinate(highp uint index)
+{
+    // Separate even and odd bits to top and bottom half, respectively
+    highp uint t = (index & uint(0x5555)) | ((index & uint(0xaaaa)) << 15);
+
+    // Decode passes
+    t = (t ^ (t >> 1)) & uint(0x33333333);
+    t = (t ^ (t >> 2)) & uint(0x0f0f0f0f);
+    t ^= t >> 4; // No final mask, we mask next anyway:
+
+    // Return x and y
+    return ivec2(int(t & uint(0xff)), int((t >> 16) & uint(0xff)));
+}
+
+highp ivec2 get_z_order_coordinate_32bit_index(highp uint index)
+{
+    highp ivec2 a = get_z_order_coordinate(index);
+    highp ivec2 b = get_z_order_coordinate(index >> 16);
+    b.x = b.x << 8;
+    b.y = b.y << 8;
+
+    return a + b;
+}
+
 highp uvec2 fetch_raw_geometry_data(lowp uint sampler_index, highp uint index, highp uint texture_layer)
 {
 
     // for constants::data_size: 128u, 256u, 512u
-    mediump ivec3 dict_px = ivec3(int(index & ((128u<<sampler_index)-1u)), int(index >> (7u+sampler_index)), texture_layer);
+    // mediump ivec3 dict_px = ivec3(int(index & ((128u<<sampler_index)-1u)), int(index >> (7u+sampler_index)), texture_layer);
+    mediump ivec3 dict_px = ivec3(get_z_order_coordinate_32bit_index(index), texture_layer);
+
 
      // for constants::data_size: 64u, 128u, 256u
     // highp ivec3 dict_px = ivec3(int(index & ((64u<<sampler_index)-1u)), int(index >> (6u+sampler_index)), texture_layer);
