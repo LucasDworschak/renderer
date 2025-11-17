@@ -553,7 +553,7 @@ highp vec3 create_round_cap(highp vec2 uv, highp vec2 point, highp float line_wi
 highp vec3 create_line_segment_end_halfspace(highp vec2 uv, VectorLayerData geom_data, highp vec2 n_line, highp float line_width, bool round_line_caps)
 {
     // calculate the sign between current uv and the two normals for line endings
-    highp vec2 n_line_end = vec2(n_line.y, -n_line.x);
+    highp vec2 n_line_end = vec2(-n_line.y, n_line.x);
 
     highp float dist_a = dot(uv-geom_data.a, -n_line_end);
     highp float dist_b = dot(uv-geom_data.b, n_line_end);
@@ -644,10 +644,14 @@ void apply_dashes(highp vec2 uv, inout VectorLayerData geom_data, lowp vec2 dash
 
 
 
-void halfspace_uv_to_fragspace(inout highp vec3 halfspace, highp mat3x3 matrix)
+void halfspaces_uv_to_fragspace(inout highp vec3 halfspaces[3], highp mat3x3 matrix)
 {
-    halfspace = matrix * halfspace;
-    halfspace /= length(halfspace.xy);
+    halfspaces[0] = matrix * halfspaces[0];
+    halfspaces[1] = matrix * halfspaces[1];
+    halfspaces[2] = matrix * halfspaces[2];
+    halfspaces[0] /= length(halfspaces[0].xy);
+    halfspaces[1] /= length(halfspaces[1].xy);
+    halfspaces[2] /= length(halfspaces[2].xy);
 }
 
 // orders the halfspaces acccording to distance
@@ -953,19 +957,16 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
 
 }
 #else
-bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_percentage, inout LayerStyle style, highp vec2 screenspace_coord, highp vec2 uv, highp uint i, DrawMeta meta)
+void draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_percentage, inout LayerStyle style, highp vec2 screenspace_coord, highp vec2 uv, highp uint i, DrawMeta meta)
 {
     highp uvec2 raw_geom_data = fetch_raw_geometry_data(meta.sampler_buffer_index, i, meta.texture_layer);
     highp uint style_index = unpack_style_index(raw_geom_data) + meta.tile_zoom;
 
-    if (style_index != style.index) {
         // we changed style -> blend previous style, reset layer infos and parse the new style
 
+    if (style_index != style.index) {
         alpha_blend(pixel_color, style, intersection_percentage);
         intersection_percentage = 0.0;
-        if (pixel_color.a > full_threshold) {
-            return true;
-        }
 
         parse_style(style, style_index, meta.zoom_offset, meta.zoom_blend, meta.ortho_color, meta.cos_smoothing_factor, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
     }
@@ -977,10 +978,9 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         // half space definition: xy=normalized normal; z=distance between origin and nearest point on line
         // distance negative implies that we are within the shape
         highp vec3 halfspaces[3];
-        halfspaces[0] = create_halfspace(geom_data.a, geom_data.b);
+        halfspaces[0] = create_halfspace(geom_data.b, geom_data.a);
 
         bool inner_edge[3];
-
 
         if(!geom_data.is_polygon)
         {
@@ -993,46 +993,22 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
             halfspaces[2] = create_line_segment_end_halfspace(uv, geom_data, halfspaces[0].xy, style.line_width, style.round_line_caps);
 
             halfspaces[1] = -halfspaces[0];
-            halfspaces[0].z -= style.line_width;
             halfspaces[1].z -= style.line_width;
-
-
-            // // TODO calculate dashes and change a and b location
-
-
-            // {// DEBUG value testing
-            //     halfspace_uv_to_fragspace(halfspaces[0], meta.uv2fragspace_normal_matrix);
-            //     halfspace_uv_to_fragspace(halfspaces[1], meta.uv2fragspace_normal_matrix);
-            //     halfspace_uv_to_fragspace(halfspaces[2], meta.uv2fragspace_normal_matrix);
-
-            //     // determine if if the current fragment is within the negative or the positive side of all halfspaces
-            //     // if all negative -> we are within the line
-            //     highp float test0 = step(halfspaces[0].z,0.0);
-            //     highp float test1 = step(halfspaces[1].z,0.0);
-            //     highp float test2 = step(halfspaces[2].z,0.0);
-            //     highp float test = test0*test1*test2;
-
-            //     pixel_color = vec4(vec3(test),1.0);
-            //     return true;
-            // }
+            halfspaces[0].z -= style.line_width;
         }
         else
         {
-            halfspaces[0] = create_halfspace(geom_data.b, geom_data.a);
-            halfspaces[1] = create_halfspace(geom_data.c, geom_data.b);
-            halfspaces[2] = create_halfspace(geom_data.a, geom_data.c);
-
             inner_edge[0] = geom_data.additional_info.x;
             inner_edge[1] = geom_data.additional_info.y;
             inner_edge[2] = geom_data.additional_info.z;
 
+            halfspaces[2] = create_halfspace(geom_data.a, geom_data.c);
+            halfspaces[1] = create_halfspace(geom_data.c, geom_data.b);
+
         }
 
-
         // convert half spaces into fragspace
-        halfspace_uv_to_fragspace(halfspaces[0], meta.uv2fragspace_normal_matrix);
-        halfspace_uv_to_fragspace(halfspaces[1], meta.uv2fragspace_normal_matrix);
-        halfspace_uv_to_fragspace(halfspaces[2], meta.uv2fragspace_normal_matrix);
+        halfspaces_uv_to_fragspace(halfspaces, meta.uv2fragspace_normal_matrix);
 
 #if COVERAGE_SIMPLE == 0
         // order halfspaces -> index 0 is always the nearest
@@ -1041,15 +1017,13 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
 
         highp float d = calculate_coverage(halfspaces, halfspace_order, 1.0, inner_edge[halfspace_order[0]]);
 #else
-        lowp uint biggest_halfspace_distance_index = max_index(halfspaces[0].z,halfspaces[1].z,halfspaces[2].z);
+        lowp uint biggest_halfspace_distance_index = max_index(halfspaces[0].z, halfspaces[1].z, halfspaces[2].z);
         highp float d = calculate_coverage_simple(halfspaces[biggest_halfspace_distance_index].z, 1.0, inner_edge[biggest_halfspace_distance_index]);
 #endif
 
         intersection_percentage = max(d, intersection_percentage);
 
     }
-
-    return false;
 }
 #endif
 

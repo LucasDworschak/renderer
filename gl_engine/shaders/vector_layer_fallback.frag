@@ -190,8 +190,7 @@ void main() {
            if(draw_layer(pixel_color, intersections, style, gl_FragCoord.xy, i, meta))
                break; // pixel is finished -> we can exit the loop early
 #else
-           if(draw_layer(pixel_color, intersections, style, gl_FragCoord.xy, uv, i, meta))
-               break; // pixel is finished -> we can exit the loop early
+           draw_layer(pixel_color, intersections, style, gl_FragCoord.xy, uv, i, meta);
 #endif
         }
 

@@ -312,8 +312,7 @@ void main() {
             if(draw_layer(pixel_color, intersections, style, gl_FragCoord.xy, i, meta))
                 break; // pixel is finished -> we can exit the loop early
 #else
-            if(draw_layer(pixel_color, intersections, style, gl_FragCoord.xy, uv, i, meta))
-                break; // pixel is finished -> we can exit the loop early
+            draw_layer(pixel_color, intersections, style, gl_FragCoord.xy, uv, i, meta);
 #endif
         }
 
@@ -333,24 +332,6 @@ void main() {
     else
         texout_albedo = vec3(pixel_color.rgb) + ((1.0-pixel_color.a) * background_color * meta.ortho_color.rgb);
 #endif
-
-
-
-    // {
-    //     // DEFINE POINTS AND HALF SPACE
-    //     vec2 uv_a = vec2(0.0, 0.5);
-    //     vec2 uv_b = vec2(1.0, 0.5);
-    //     vec3 h = create_halfspace(uv_a, uv_b);
-
-    //     // TRANSFORM HALF SPACE
-    //     halfspace_to_fragspace(h, meta.uv2fragspace_normal_matrix);
-
-    //     // VISUALIZE
-    //     texout_albedo = vec3(abs(h.z) / 50);
-    //     texout_albedo = vec3(step(0.0,h.z));
-    // }
-
-
 
 
     if (conf.overlay_mode > 199u && conf.overlay_mode < 300u) {
