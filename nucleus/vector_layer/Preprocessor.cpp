@@ -216,81 +216,6 @@ std::vector<StyleLayerIndex> Preprocessor::simplify_styles(
     return out_styles;
 }
 
-std::vector<GeometryData> Preprocessor::apply_dashes(
-    const std::vector<GeometryData>& geometry, const StyleLayerIndex& style_layer, uint zoom_level, bool is_polygon)
-{
-    if (is_polygon)
-        return geometry; // we are not changing polygons
-
-    const auto& dash_info = Style::get_style_dashes(m_style_buffer[Style::get_style_index(style_layer.style_index, zoom_level)]);
-
-    if (dash_info.first >= 0.99 || dash_info.second < 0.01)
-        return geometry; // line does not have dashes
-
-    std::vector<GeometryData> dashed_geometry;
-
-    for (const auto& geom_data : geometry) { // there should only be one for lines but just in case iterate
-
-        auto current_geom_data = &dashed_geometry.emplace_back();
-
-        // set previous data
-        // not needed -> currently handled later
-        // current_geom_data->full_opaque = geom_data.full_opaque;
-        // current_geom_data->is_polygon = geom_data.is_polygon;
-        // current_geom_data->style_layer = geom_data.style_layer;
-
-        current_geom_data->vertices = ClipperPaths();
-
-        for (size_t i = 0; i < geom_data.vertices.size(); i++) { // iterate over all polyline segments
-
-            // we are in a new line segment -> we need to also create a new line segment in our output data
-            auto current_line_segment = &current_geom_data->vertices.emplace_back();
-
-            for (size_t j = 0; j < geom_data.vertices[i].size() - 1; j++) { // iterate over all vertices of line segment
-                const auto& a = geom_data.vertices[i][j];
-                const auto& b = geom_data.vertices[i][j + 1];
-
-                // we need the edge in floating point form -> otherwise we accumulate errors
-                const auto e = glm::vec2(b.x - a.x, b.y - a.y);
-
-                // we want the squared distance since t calculation needs it
-                const float line_length = glm::length(e);
-
-                // how many dash_gap pairs can we fit
-                float amount_dash_gap_pairs = ceil(line_length / (dash_info.second * 10.0));
-
-                // vector in line direction that encodes the whole dash_gap pair
-                // NOTE: every line segment has slightly different dash gap sizes
-                auto dash_gap_pair_vector = e / amount_dash_gap_pairs;
-                // vector that only encodes the gap
-                auto dash_vector = dash_gap_pair_vector * dash_info.first;
-                auto gap_vector = dash_gap_pair_vector - dash_vector;
-
-                const auto offset_a = glm::vec2(a.x, a.y) - dash_vector / 2.0f;
-
-                // add the first vertex
-                // NOTE first vertex is also the last vertex of the previous segment of this polyline
-                current_line_segment->push_back(a);
-
-                for (size_t k = 1; k < amount_dash_gap_pairs + 1; k++) {
-                    // also add the end of the line segment
-                    const auto new_b = offset_a + (dash_gap_pair_vector * float(k)) - gap_vector;
-                    current_line_segment->push_back(ClipperPoint(new_b.x, new_b.y));
-                    current_line_segment = &current_geom_data->vertices.emplace_back();
-
-                    const auto new_a = offset_a + dash_gap_pair_vector * float(k);
-                    current_line_segment->push_back(ClipperPoint(new_a.x, new_a.y));
-                }
-            }
-
-            // add the last vertex of this polyline
-            current_line_segment->push_back(geom_data.vertices[i][geom_data.vertices[i].size() - 1]);
-        }
-    }
-
-    return dashed_geometry;
-}
-
 VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile_data)
 {
     const auto d = vector_tile_data.toStdString();
@@ -354,13 +279,11 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
 
             for (const auto& style_layer : style_and_layer_indices) {
 
-                const auto dashed_geometry = apply_dashes(all_geometry_data, style_layer, id.zoom_level, is_polygon);
-
                 const auto opacity_lower = m_style_buffer[Style::get_style_index(style_layer.style_index, id.zoom_level) - 1].x & 255;
                 const auto opacity_higher = m_style_buffer[Style::get_style_index(style_layer.style_index, id.zoom_level)].x & 255;
                 const auto full_opaque = opacity_lower + opacity_higher == (255 + 255);
 
-                for (const auto& geom_data : dashed_geometry) {
+                for (const auto& geom_data : all_geometry_data) {
                     data[style_layer.layer_index].emplace_back(geom_data.vertices, geom_data.bounds, geom_data.aabb, style_layer, is_polygon, full_opaque);
                 }
             }
@@ -988,48 +911,6 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
     }
 }
 
-// https://fgiesen.wordpress.com/2022/09/09/morton-codes-addendum/
-glm::uvec2 Preprocessor::get_z_order_coordinate(uint32_t index)
-{
-    // Separate even and odd bits to top and bottom half, respectively
-    uint32_t t = (index & 0x5555) | ((index & 0xaaaa) << 15);
-
-    // Decode passes
-    t = (t ^ (t >> 1)) & 0x33333333;
-    t = (t ^ (t >> 2)) & 0x0f0f0f0f;
-    t ^= t >> 4; // No final mask, we mask next anyway:
-
-    // Return x and y
-    return glm::uvec2(t & 0xff, (t >> 16) & 0xff);
-}
-
-glm::uvec2 Preprocessor::get_z_order_coordinate_32bit_index(uint32_t index)
-{
-    const auto a = get_z_order_coordinate(index);
-    auto b = get_z_order_coordinate(index >> 16);
-    b.x = b.x << 8;
-    b.y = b.y << 8;
-
-    return a + b;
-}
-
-template <typename T>
-std::vector<T> Preprocessor::to_z_order_curve(const std::vector<T>& data, unsigned width)
-{
-    std::vector<T> ordered_data;
-    ordered_data.resize(data.size());
-
-    for (size_t i = 0; i < data.size(); i++) {
-        const auto coord = get_z_order_coordinate_32bit_index(i);
-        const auto coord_1d = coord.y * width + coord.x;
-        // qDebug() << coord_1d;
-        ordered_data[coord_1d] = data[i];
-        ordered_data[0] = data[i];
-    }
-
-    return ordered_data;
-}
-
 /*
  * Function condenses data and fills the GpuVectorLayerTile.
  * condensing:
@@ -1105,8 +986,6 @@ GpuVectorLayerTile Preprocessor::create_gpu_tile()
     // make sure that the buffer size is still like we expected and resize the data to actual buffer size
     assert(geometry_buffer.size() <= constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index]);
     geometry_buffer.resize(constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index], glm::u32vec2(-1u));
-
-    geometry_buffer = to_z_order_curve<glm::u32vec2>(geometry_buffer, constants::data_size[fitting_cascade_index]);
 
     tile.acceleration_grid = std::make_shared<const nucleus::Raster<uint32_t>>(nucleus::Raster<uint32_t>(constants::grid_size, std::move(acceleration_grid)));
     tile.geometry_buffer = std::make_shared<const nucleus::Raster<glm::u32vec2>>(

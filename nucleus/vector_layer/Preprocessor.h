@@ -192,13 +192,6 @@ private:
 
     void generate_preprocess_grid();
 
-    glm::uvec2 get_z_order_coordinate(uint32_t index);
-    glm::uvec2 get_z_order_coordinate_32bit_index(uint32_t index);
-    template <typename T>
-    std::vector<T> to_z_order_curve(const std::vector<T>& data, unsigned width);
-
-    std::vector<GeometryData> apply_dashes(const std::vector<GeometryData>& geometry, const StyleLayerIndex& style_layer, uint zoom_level, bool is_polygon);
-
     Style m_style;
     const std::vector<glm::u32vec2> m_style_buffer;
 
