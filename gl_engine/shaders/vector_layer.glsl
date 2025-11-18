@@ -925,11 +925,22 @@ highp mat3x3 create_uv2fragspace_normal_matrix(in highp vec3 normal, in highp ui
 // we are using RGB565 to store fallback images.
 // this causes dark areas of gray scale images to have a slight magenta tint
 // in order to circumvent this we map colors that are near 0 to larger values
-vec3 encode_fallback(vec3 color) {
-    return sqrt(color);
+// https://gamedev.stackexchange.com/a/194038
+lowp vec3 encode_fallback(lowp vec3 color)
+{
+    bvec3 cutoff = lessThan(color, vec3(0.0031308));
+    lowp vec3 higher = vec3(1.055)*pow(color, vec3(1.0/2.4)) - vec3(0.055);
+    lowp vec3 lower = color * vec3(12.92);
+
+    return mix(higher, lower, cutoff);
 }
-vec3 decode_fallback(vec3 color) {
-    return color*color;
+lowp vec3 decode_fallback(lowp vec3 color)
+{
+    bvec3 cutoff = lessThan(color, vec3(0.04045));
+    lowp vec3 higher = pow((color + vec3(0.055))/vec3(1.055), vec3(2.4));
+    lowp vec3 lower = color/vec3(12.92);
+
+    return mix(higher, lower, cutoff);
 }
 
 #if SDF_MODE == 0
