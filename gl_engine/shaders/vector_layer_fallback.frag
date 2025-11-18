@@ -207,6 +207,8 @@ void main() {
     // the alpha value is 1 if we encountered a line (with at least 0.2 percentage summed up) or 0 if only polygons have been encountered
     // -> important for ortho color mixing
     texout_albedo = vec3(pixel_color.rgb + ((1.0-pixel_color.a)*background_color * meta.ortho_color.rgb)).rgb;
+
+    texout_albedo = encode_fallback(texout_albedo);
 #endif
 
 

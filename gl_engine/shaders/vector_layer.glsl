@@ -922,6 +922,16 @@ highp mat3x3 create_uv2fragspace_normal_matrix(in highp vec3 normal, in highp ui
 
 #endif
 
+// we are using RGB565 to store fallback images.
+// this causes dark areas of gray scale images to have a slight magenta tint
+// in order to circumvent this we map colors that are near 0 to larger values
+vec3 encode_fallback(vec3 color) {
+    return sqrt(color);
+}
+vec3 decode_fallback(vec3 color) {
+    return color*color;
+}
+
 #if SDF_MODE == 0
 bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
 {

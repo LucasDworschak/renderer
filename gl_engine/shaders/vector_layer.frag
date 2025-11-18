@@ -156,7 +156,7 @@ lowp vec3 get_fallback_color(highp uvec3 temp_tile_id_fallback, highp vec2 fallb
     lowp vec3 fallback_color0 = textureGrad(fallback_texture_array_higher, vec3(fallback_uv, texture_layer_fallback & layer_mask), duvdx, duvdy).rgb;
     lowp vec3 fallback_color1 = textureGrad(fallback_texture_array_lower, vec3(fallback_uv, texture_layer_fallback & layer_mask), duvdx, duvdy).rgb;
 
-    return mix(fallback_color1, fallback_color0, fallback_interpolation).rgb;
+    return decode_fallback(mix(fallback_color1, fallback_color0, fallback_interpolation));
 }
 
 
