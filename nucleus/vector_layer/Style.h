@@ -107,14 +107,15 @@ public:
     void parse_opacities(const QJsonValue& value, std::vector<std::pair<uint8_t, uint8_t>>& opacities, float& base);
     void parse_dashes(const QJsonValue& value, std::vector<std::pair<uint8_t, std::pair<uint8_t, float>>>& dashes, float& base);
     void parse_line_widths(const QJsonValue& value, std::vector<std::pair<uint8_t, uint16_t>>& widths, float& base);
+    static uint32_t gamma_decode(uint32_t colour);
     uint32_t parse_color(const QJsonValue& value);
     uint8_t parse_opacity(const QJsonValue& value);
     std::pair<uint8_t, float> parse_dash(const QJsonValue& value);
     uint16_t parse_line_width(const QJsonValue& value);
 
-    static uint32_t get_style_index(const uint32_t style_index, const uint zoom_level);
-    static float get_style_width(const glm::u32vec2& style);
-    static std::pair<float, float> get_style_dashes(const glm::u32vec2& style);
+    static uint32_t style_buffer_index(const uint32_t style_index, const uint zoom_level);
+    static float style_width(const glm::u32vec2& style);
+    static std::pair<float, float> style_dashes(const glm::u32vec2& style);
     static bool uses_dashes(const glm::u32vec2& style);
 
     static uint32_t premultiply_alpha(uint32_t color);
@@ -139,6 +140,8 @@ signals:
 private:
     // sets alpha to 0 on a 32 bit color
     static constexpr uint remove_alpha_mask = 4294967040u;
+    // determines how many styles per zoom level exist
+    static constexpr auto num_zooms_per_style = constants::style_zoom_range.y + 1;
 
     float interpolation_factor(uint8_t zoom, float base, uint8_t zoom1, uint8_t zoom2);
     uint32_t interpolate_color(float t, uint32_t color1, uint32_t color2);

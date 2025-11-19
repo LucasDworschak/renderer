@@ -93,7 +93,7 @@ std::map<std::string, uint32_t> parse_tile(
             int index = 0;
 
             for (const auto& style : style_indices) {
-                const uint32_t style_index = Style::get_style_index(style.style_index, zoom);
+                const uint32_t style_index = Style::style_buffer_index(style.style_index, zoom);
                 std::string indexed_key = key + "_" + std::to_string(index);
                 if (feature_to_style.contains(indexed_key)) // make sure that all features with the same key share the style (if not we have to expand how we generate the key)
                 {
@@ -111,17 +111,20 @@ std::map<std::string, uint32_t> parse_tile(
     return feature_to_style;
 }
 
-void create_debug_filter_checks(std::map<std::string, uint32_t> feature_to_style, const std::vector<glm::u32vec4> style_buffer)
+uint32_t get_color(Style& style, QString color_value) { return Style::premultiply_alpha(Style::gamma_decode(style.parse_color(color_value))); }
+
+void create_debug_filter_checks(std::map<std::string, uint32_t> feature_to_style, const std::vector<glm::u32vec2> style_buffer)
 {
     std::cout << "CHECK(feature_to_style.size()==" << std::dec << feature_to_style.size() << ");" << std::endl;
     for (const auto& el : feature_to_style) {
 
         if (el.second == -1u)
             continue;
-
         // easy to renew check:
-        std::cout << "CHECK(style_buffer[feature_to_style.at(\"" << el.first << "\")].x == s.parse_color(\"#" << std::hex << style_buffer[el.second].x << "\"));" << std::endl;
-        // std::cout << "CHECK((style_buffer[feature_to_style.at(\"" << el.first << "\")].z  / nucleus::vector_layer::constants::style_precision) == " << std::dec
+        std::cout << "CHECK(style_buffer[feature_to_style.at(\"" << el.first << "\")].x == s.parse_color(\"#" << std::hex << style_buffer[el.second].x
+                  << "\"));" << std::endl;
+        // std::cout << "CHECK((style_buffer[feature_to_style.at(\"" << el.first << "\")].z  / nucleus::vector_layer::constants::style_precision) == " <<
+        // std::dec
         // << (float(style_buffer[el.second].z) / nucleus::vector_layer::constants::style_precision) << ");" << std::endl;
 
         // simple output to check:
@@ -193,9 +196,9 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[10].x == 0); // z 10
         CHECK(style_buffer[11].x == 0); // z 11
         CHECK(style_buffer[12].x == 0); // z 12
-        CHECK(style_buffer[13].x == 0xbbbbbbff); // z 13
-        CHECK(style_buffer[14].x == 0xbbbbbbff); // z 14
-        CHECK(style_buffer[15].x == 0xbbbbbbff); // z 15
+        CHECK(style_buffer[13].x == Style::gamma_decode(0xbbbbbbff)); // z 13
+        CHECK(style_buffer[14].x == Style::gamma_decode(0xbbbbbbff)); // z 14
+        CHECK(style_buffer[15].x == Style::gamma_decode(0xbbbbbbff)); // z 15
         CHECK(style_buffer[16].x == 0); // z 16
         CHECK(style_buffer[17].x == 0); // z 17
         CHECK(style_buffer[18].x == 0); // z 18
@@ -203,7 +206,7 @@ TEST_CASE("nucleus/vector_style")
         // reuse style if no blending
 
         CHECK(style_buffer[19].x == 0); // z0 // make sure that we are in the right style instruction here (not using other style)
-        CHECK(Style::get_style_width(style_buffer[19]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 0
+        CHECK(Style::style_width(style_buffer[19]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 0
         CHECK(style_buffer[20].x == 0); // z1
         CHECK(style_buffer[21].x == 0); // z2
         CHECK(style_buffer[22].x == 0); // z3
@@ -214,20 +217,60 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[27].x == 0); // z8
         CHECK(style_buffer[28].x == 0); // z9
         CHECK(style_buffer[29].x == 0); // z10
-        CHECK(style_buffer[30].x == 0xaaaaaaff); // z 11 // color
-        CHECK(Style::get_style_width(style_buffer[30]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 11
-        CHECK(Style::get_style_width(style_buffer[31]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 12
-        CHECK(Style::get_style_width(style_buffer[32]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 13
-        CHECK(Style::get_style_width(style_buffer[33]) == (9 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 14
-        CHECK(style_buffer[34].x == 0xaaaaaaff); // z 15 color
-        CHECK(Style::get_style_width(style_buffer[34]) == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 15
+        CHECK(style_buffer[30].x == Style::gamma_decode(0xaaaaaaff)); // z 11 // color
+        CHECK(Style::style_width(style_buffer[30]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 11
+        CHECK(Style::style_width(style_buffer[31]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 12
+        CHECK(Style::style_width(style_buffer[32]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 13
+        CHECK(Style::style_width(style_buffer[33]) == (9 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 14
+        CHECK(style_buffer[34].x == Style::gamma_decode(0xaaaaaaff)); // z 15 color
+        CHECK(Style::style_width(style_buffer[34]) == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 15
         CHECK(style_buffer[35].x == 0); // z 16
-        CHECK(Style::get_style_width(style_buffer[35]) == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 16
+        CHECK(Style::style_width(style_buffer[35]) == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 16
         CHECK(style_buffer[36].x == 0); // z 17
         CHECK(style_buffer[37].x == 0); // z 18
 
         CHECK(style_buffer[38].x == -1u); // no data
         CHECK(style_buffer[39].y == -1u); // no data
+    }
+
+    SECTION("Simple style parsing2")
+    {
+        // this test mainly shows that the buffer is written correctly and corresponds with style_buffer_index
+        Style s(":/test_data/vector_layer/test-style2.json");
+        s.load();
+
+        const auto style_buffer = s.styles()->buffer();
+
+        // styles are written in the style buffer from top-down -> last in the json file will be looked at first
+        std::vector<uint32_t> expected_colors = {
+            get_color(s, "#FFFFFF"),
+            get_color(s, "#EEEEEE"),
+            get_color(s, "#DDDDDD"),
+            get_color(s, "#CCCCCC"),
+            get_color(s, "#BBBBBB"),
+            get_color(s, "#AAAAAA"),
+            get_color(s, "#999999"),
+            get_color(s, "#888888"),
+            get_color(s, "#777777"),
+            get_color(s, "#666666"),
+            get_color(s, "#555555"),
+            get_color(s, "#444444"),
+            get_color(s, "#333333"),
+            get_color(s, "#222222"),
+            get_color(s, "#111111"),
+            get_color(s, "#000000"),
+        };
+
+        const auto num_styles = 16;
+        for (size_t i = 0; i < num_styles; i++) {
+            auto zoom0_index = Style::style_buffer_index(i, 0);
+            auto zoom1_index = Style::style_buffer_index(i, 18);
+
+            // qDebug() << zoom0_index;
+
+            CHECK(expected_colors[i] == style_buffer[zoom0_index].x);
+            CHECK(expected_colors[i] == style_buffer[zoom1_index].x);
+        }
     }
 
     SECTION("Simple style parsing - merge similar instructions")
@@ -244,9 +287,15 @@ TEST_CASE("nucleus/vector_style")
         constexpr auto z_per_style = 19;
 
         // there are slight os differences in this test -> we do not care on the order in the style -> but we want to test if a style is handled correctly
-        const auto index_a = (style_buffer[(z_per_style * 0) + 14].x == 0xaaaaaaff) ? 0 : ((style_buffer[(z_per_style * 1) + 14].x == 0xaaaaaaff) ? 1 : 2);
-        const auto index_b = (style_buffer[(z_per_style * 0) + 14].x == 0xbbbbbbff) ? 0 : ((style_buffer[(z_per_style * 1) + 14].x == 0xbbbbbbff) ? 1 : 2);
-        const auto index_c = (style_buffer[(z_per_style * 0) + 14].x == 0xccccccff) ? 0 : ((style_buffer[(z_per_style * 1) + 14].x == 0xccccccff) ? 1 : 2);
+        const auto index_a = (style_buffer[(z_per_style * 0) + 14].x == Style::gamma_decode(0xaaaaaaff))
+            ? 0
+            : ((style_buffer[(z_per_style * 1) + 14].x == Style::gamma_decode(0xaaaaaaff)) ? 1 : 2);
+        const auto index_b = (style_buffer[(z_per_style * 0) + 14].x == Style::gamma_decode(0xbbbbbbff))
+            ? 0
+            : ((style_buffer[(z_per_style * 1) + 14].x == Style::gamma_decode(0xbbbbbbff)) ? 1 : 2);
+        const auto index_c = (style_buffer[(z_per_style * 0) + 14].x == Style::gamma_decode(0xccccccff))
+            ? 0
+            : ((style_buffer[(z_per_style * 1) + 14].x == Style::gamma_decode(0xccccccff)) ? 1 : 2);
 
         CHECK(style_buffer[(z_per_style * index_a) + 0].x == 0); // z 0
         CHECK(style_buffer[(z_per_style * index_a) + 1].x == 0); // z 1
@@ -262,11 +311,11 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[(z_per_style * index_a) + 11].x == 0); // z 11
         CHECK(style_buffer[(z_per_style * index_a) + 12].x == 0); // z 12
         CHECK(style_buffer[(z_per_style * index_a) + 13].x == 0); // z 13
-        CHECK(style_buffer[(z_per_style * index_a) + 14].x == 0xaaaaaaff); // z 14
-        CHECK(style_buffer[(z_per_style * index_a) + 15].x == 0xaaaaaaff); // z 15
-        CHECK(style_buffer[(z_per_style * index_a) + 16].x == 0xaaaaaaff); // z 16
-        CHECK(style_buffer[(z_per_style * index_a) + 17].x == 0xaaaaaaff); // z 17
-        CHECK(style_buffer[(z_per_style * index_a) + 18].x == 0xaaaaaaff); // z 18
+        CHECK(style_buffer[(z_per_style * index_a) + 14].x == Style::gamma_decode(0xaaaaaaff)); // z 14
+        CHECK(style_buffer[(z_per_style * index_a) + 15].x == Style::gamma_decode(0xaaaaaaff)); // z 15
+        CHECK(style_buffer[(z_per_style * index_a) + 16].x == Style::gamma_decode(0xaaaaaaff)); // z 16
+        CHECK(style_buffer[(z_per_style * index_a) + 17].x == Style::gamma_decode(0xaaaaaaff)); // z 17
+        CHECK(style_buffer[(z_per_style * index_a) + 18].x == Style::gamma_decode(0xaaaaaaff)); // z 18
 
         CHECK(style_buffer[(z_per_style * index_b) + 0].x == 0); // z 0
         CHECK(style_buffer[(z_per_style * index_b) + 1].x == 0); // z 1
@@ -281,9 +330,9 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[(z_per_style * index_b) + 10].x == 0); // z 10
         CHECK(style_buffer[(z_per_style * index_b) + 11].x == 0); // z 11
         CHECK(style_buffer[(z_per_style * index_b) + 12].x == 0); // z 12
-        CHECK(style_buffer[(z_per_style * index_b) + 13].x == 0xbbbbbbff); // z 13
-        CHECK(style_buffer[(z_per_style * index_b) + 14].x == 0xbbbbbbff); // z 14
-        CHECK(style_buffer[(z_per_style * index_b) + 15].x == 0xbbbbbbff); // z 15
+        CHECK(style_buffer[(z_per_style * index_b) + 13].x == Style::gamma_decode(0xbbbbbbff)); // z 13
+        CHECK(style_buffer[(z_per_style * index_b) + 14].x == Style::gamma_decode(0xbbbbbbff)); // z 14
+        CHECK(style_buffer[(z_per_style * index_b) + 15].x == Style::gamma_decode(0xbbbbbbff)); // z 15
         CHECK(style_buffer[(z_per_style * index_b) + 16].x == 0); // z 16
         CHECK(style_buffer[(z_per_style * index_b) + 17].x == 0); // z 17
         CHECK(style_buffer[(z_per_style * index_b) + 18].x == 0); // z 18
@@ -301,12 +350,12 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[(z_per_style * index_c) + 10].x == 0); // z 10
         CHECK(style_buffer[(z_per_style * index_c) + 11].x == 0); // z 11
         CHECK(style_buffer[(z_per_style * index_c) + 12].x == 0); // z 12
-        CHECK(style_buffer[(z_per_style * index_c) + 13].x == 0xccccccff); // z 13
-        CHECK(style_buffer[(z_per_style * index_c) + 14].x == 0xccccccff); // z 14
-        CHECK(style_buffer[(z_per_style * index_c) + 15].x == 0xccccccff); // z 15
-        CHECK(style_buffer[(z_per_style * index_c) + 16].x == 0xccccccff); // z 16
-        CHECK(style_buffer[(z_per_style * index_c) + 17].x == 0xccccccff); // z 17
-        CHECK(style_buffer[(z_per_style * index_c) + 18].x == 0xccccccff); // z 18
+        CHECK(style_buffer[(z_per_style * index_c) + 13].x == Style::gamma_decode(0xccccccff)); // z 13
+        CHECK(style_buffer[(z_per_style * index_c) + 14].x == Style::gamma_decode(0xccccccff)); // z 14
+        CHECK(style_buffer[(z_per_style * index_c) + 15].x == Style::gamma_decode(0xccccccff)); // z 15
+        CHECK(style_buffer[(z_per_style * index_c) + 16].x == Style::gamma_decode(0xccccccff)); // z 16
+        CHECK(style_buffer[(z_per_style * index_c) + 17].x == Style::gamma_decode(0xccccccff)); // z 17
+        CHECK(style_buffer[(z_per_style * index_c) + 18].x == Style::gamma_decode(0xccccccff)); // z 18
 
         CHECK(style_buffer[(z_per_style * 3) + 0].x == -1u); // no data
         CHECK(style_buffer[(z_per_style * 3) + 1].x == -1u); // no data
@@ -446,156 +495,156 @@ TEST_CASE("nucleus/vector_style")
         const auto style_buffer = s.styles()->buffer();
 
         CHECK(feature_to_style.size() == 150);
-        CHECK(style_buffer[feature_to_style.at("fill__building__null__null_0")].x == s.parse_color("#ded5cfff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__farmland__farmland_0")].x == s.parse_color("#eef0d5ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__farmland__farmland_1")].x == s.parse_color("#eef0d5ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__farmland__vineyard_0")].x == s.parse_color("#aedfa3ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__farmland__vineyard_1")].x == s.parse_color("#eef0d5ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_0")].x == s.parse_color("#cdebb0ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_1")].x == s.parse_color("#cdebb0ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_0")].x == s.parse_color("#cdebb0ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_1")].x == s.parse_color("#cdebb0ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_0")].x == s.parse_color("#cdebb0ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_1")].x == s.parse_color("#cdebb0ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__park_0")].x == s.parse_color("#c8faccff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__park_1")].x == s.parse_color("#cdebb0ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__scrub_0")].x == s.parse_color("#c8d7abff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__scrub_1")].x == s.parse_color("#cdebb0ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__rock__bare_rock_0")].x == s.parse_color("#eee5dcff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__rock__bare_rock_1")].x == s.parse_color("#eee5dcff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__wetland__wetland_0")].x == s.parse_color("#add19eff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__wetland__wetland_1")].x == s.parse_color("#add19eff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__forest_0")].x == s.parse_color("#add19eff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__forest_1")].x == s.parse_color("#add19eff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__wood_0")].x == s.parse_color("#add19eff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__wood_1")].x == s.parse_color("#add19eff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__commercial__null_0")].x == s.parse_color("#f2dad9ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__industrial__null_0")].x == s.parse_color("#ebdbe8ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__pitch__null_0")].x == s.parse_color("#aae0cbff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__residential__null_0")].x == s.parse_color("#e0dfdfff"));
-        CHECK(style_buffer[feature_to_style.at("fill__transportation__bridge__null__bridge__1_0")].x == s.parse_color("#b8b8b8ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__transportation__pier__null_0")].x == s.parse_color("#f6f1e5ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__lake__null__0_0")].x == s.parse_color("#aad3dfff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__0_0")].x == s.parse_color("#aad3dfff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__1_0")].x == s.parse_color("#91b8d4d8"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__river__null__0_0")].x == s.parse_color("#aad3dfff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__swimming_pool__null__0_0")].x == s.parse_color("#aad3dfff"));
+        CHECK(style_buffer[feature_to_style.at("fill__building__null__null_0")].x == s.parse_color("#baaa9fff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__farmland__farmland_0")].x == s.parse_color("#dadeaaff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__farmland__farmland_1")].x == s.parse_color("#dadeaaff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__farmland__vineyard_0")].x == s.parse_color("#6cbc5dff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__farmland__vineyard_1")].x == s.parse_color("#dadeaaff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_0")].x == s.parse_color("#9cd46fff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_1")].x == s.parse_color("#9cd46fff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_0")].x == s.parse_color("#9cd46fff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_1")].x == s.parse_color("#9cd46fff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_0")].x == s.parse_color("#9cd46fff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_1")].x == s.parse_color("#9cd46fff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__park_0")].x == s.parse_color("#93f49aff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__park_1")].x == s.parse_color("#9cd46fff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__scrub_0")].x == s.parse_color("#93ad68ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__scrub_1")].x == s.parse_color("#9cd46fff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__rock__bare_rock_0")].x == s.parse_color("#dac8b7ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__rock__bare_rock_1")].x == s.parse_color("#dac8b7ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__wetland__wetland_0")].x == s.parse_color("#6ba357ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__wetland__wetland_1")].x == s.parse_color("#6ba357ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__forest_0")].x == s.parse_color("#6ba357ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__forest_1")].x == s.parse_color("#6ba357ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__wood_0")].x == s.parse_color("#6ba357ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__wood_1")].x == s.parse_color("#6ba357ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__commercial__null_0")].x == s.parse_color("#e2b3b1ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__industrial__null_0")].x == s.parse_color("#d4b5ceff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__pitch__null_0")].x == s.parse_color("#67be98ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__residential__null_0")].x == s.parse_color("#bebcbcff"));
+        CHECK(style_buffer[feature_to_style.at("fill__transportation__bridge__null__bridge__1_0")].x == s.parse_color("#7a7a7aff"));
+        CHECK(style_buffer[feature_to_style.at("fill__transportation__pier__null_0")].x == s.parse_color("#ebe0c8ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__lake__null__0_0")].x == s.parse_color("#67a6bcff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__0_0")].x == s.parse_color("#67a6bcff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__1_0")].x == s.parse_color("#5897d0d8"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__river__null__0_0")].x == s.parse_color("#67a6bcff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__swimming_pool__null__0_0")].x == s.parse_color("#67a6bcff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1__paved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1__paved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__bridge__1_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__bridge__1__paved_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__no__no__paved__1_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__no__no__paved__1_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__no__no__paved__1_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__no__yes__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__no__yes__paved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__no__yes__paved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__paved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__paved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__tunnel__-1_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__tunnel__-1__paved_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__unpaved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__unpaved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__bridge__yes__1__paved_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__ford__yes__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__ford__yes__paved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__ford__yes__paved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__paved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__paved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes__paved_1")].x == s.parse_color("#bbbbbbff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__1__paved__1_0")].x == s.parse_color("#e892a2ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__1__paved__1_1")].x == s.parse_color("#dc2a67ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__paved__1_0")].x == s.parse_color("#e892a2ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__paved__1_1")].x == s.parse_color("#dc2a67ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__1__paved__1_0")].x == s.parse_color("#e892a2ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__1__paved__1_1")].x == s.parse_color("#dc2a67ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__paved__1_0")].x == s.parse_color("#e892a2ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes__paved_1")].x == s.parse_color("#7f7f7fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__1__paved__1_0")].x == s.parse_color("#ce495cff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__1__paved__1_1")].x == s.parse_color("#b70623ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__paved__1_0")].x == s.parse_color("#ce495cff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__paved__1_1")].x == s.parse_color("#b70623ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__1__paved__1_0")].x == s.parse_color("#ce495cff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__1__paved__1_1")].x == s.parse_color("#b70623ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__paved__1_0")].x == s.parse_color("#ce495cff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__paved__1_1")].x == s.parse_color("#000000ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__tunnel__-1__1__paved__1_0")].x == s.parse_color("#f1bcc6ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__tunnel__-1__1__paved__1_1")].x == s.parse_color("#c24e6bff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path_0")].x == s.parse_color("#fa8072ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path_1")].x == s.parse_color("#8d8d8d99"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no_0")].x == s.parse_color("#fa8072ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no_1")].x == s.parse_color("#8d8d8d99"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1_0")].x == s.parse_color("#fa8072ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1_1")].x == s.parse_color("#8d8d8d99"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1__unpaved_0")].x == s.parse_color("#fa8072ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1__unpaved_1")].x == s.parse_color("#8d8d8d99"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__2_0")].x == s.parse_color("#fa8072ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__2_1")].x == s.parse_color("#8d8d8d99"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__no__no__unpaved_0")].x == s.parse_color("#fa8072ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__no__no__unpaved_1")].x == s.parse_color("#8d8d8d99"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__unpaved_0")].x == s.parse_color("#fa8072ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__unpaved_1")].x == s.parse_color("#8d8d8d99"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__yes__no__2_0")].x == s.parse_color("#fa8072ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__yes__no__2_1")].x == s.parse_color("#8d8d8d99"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__unpaved_0")].x == s.parse_color("#fa8072ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__unpaved_1")].x == s.parse_color("#8d8d8d99"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__yes_0")].x == s.parse_color("#fa8072ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__yes_1")].x == s.parse_color("#8d8d8d99"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__unpaved_0")].x == s.parse_color("#fa8072ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__unpaved_1")].x == s.parse_color("#8d8d8d99"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__yes__no__unpaved_0")].x == s.parse_color("#fa8072ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__yes__no__unpaved_1")].x == s.parse_color("#8d8d8d99"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null_0")].x == s.parse_color("#fcd6a4ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null_1")].x == s.parse_color("#a07400ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__1__1__paved_0")].x == s.parse_color("#fcd6a4ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__1__1__paved_1")].x == s.parse_color("#a06b00ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1_0")].x == s.parse_color("#fcd6a4ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__tunnel__-1__1__paved__1_0")].x == s.parse_color("#e08090ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__tunnel__-1__1__paved__1_1")].x == s.parse_color("#8a1325ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path_0")].x == s.parse_color("#f4372bff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path_1")].x == s.parse_color("#80808099"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no_0")].x == s.parse_color("#f4372bff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no_1")].x == s.parse_color("#80808099"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1_0")].x == s.parse_color("#f4372bff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1_1")].x == s.parse_color("#80808099"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1__unpaved_0")].x == s.parse_color("#f4372bff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1__unpaved_1")].x == s.parse_color("#80808099"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__2_0")].x == s.parse_color("#f4372bff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__2_1")].x == s.parse_color("#80808099"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__no__no__unpaved_0")].x == s.parse_color("#f4372bff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__no__no__unpaved_1")].x == s.parse_color("#80808099"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__unpaved_0")].x == s.parse_color("#f4372bff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__unpaved_1")].x == s.parse_color("#80808099"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__yes__no__2_0")].x == s.parse_color("#f4372bff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__yes__no__2_1")].x == s.parse_color("#80808099"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__unpaved_0")].x == s.parse_color("#f4372bff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__unpaved_1")].x == s.parse_color("#80808099"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__yes_0")].x == s.parse_color("#f4372bff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__yes_1")].x == s.parse_color("#80808099"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__unpaved_0")].x == s.parse_color("#f4372bff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__unpaved_1")].x == s.parse_color("#80808099"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__yes__no__unpaved_0")].x == s.parse_color("#f4372bff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__yes__no__unpaved_1")].x == s.parse_color("#80808099"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null_0")].x == s.parse_color("#f8ab5fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null_1")].x == s.parse_color("#5a2d00ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__1__1__paved_0")].x == s.parse_color("#f8ab5fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__1__1__paved_1")].x == s.parse_color("#5a2500ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1_0")].x == s.parse_color("#f8ab5fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1_1")].x == s.parse_color("#000000ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1__paved_0")].x == s.parse_color("#fcd6a4ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1__paved_0")].x == s.parse_color("#f8ab5fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1__paved_1")].x == s.parse_color("#000000ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__paved_0")].x == s.parse_color("#fcd6a4ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__paved_1")].x == s.parse_color("#a07400ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__raceway__null__unpaved_0")].x == s.parse_color("#febec8ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__1__paved_0")].x == s.parse_color("#f7fabfff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__1__paved_1")].x == s.parse_color("#707d05ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_0")].x == s.parse_color("#f7fabfff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_1")].x == s.parse_color("#c3bdbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__paved_0")].x == s.parse_color("#f8ab5fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__paved_1")].x == s.parse_color("#5a2d00ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__raceway__null__unpaved_0")].x == s.parse_color("#fd8393ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__1__paved_0")].x == s.parse_color("#edf485ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__1__paved_1")].x == s.parse_color("#293400ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_0")].x == s.parse_color("#edf485ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_1")].x == s.parse_color("#8b827fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_2")].x == s.parse_color("#000000ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_0")].x == s.parse_color("#f7fabfff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_1")].x == s.parse_color("#707d05ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_0")].x == s.parse_color("#edf485ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_1")].x == s.parse_color("#293400ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__alley_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__alley_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__alley_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__unpaved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__unpaved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__alley_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__alley_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__alley_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__1_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__1_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__1_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__no__no__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__no__no__paved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__no__no__paved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__paved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__paved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__unpaved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__unpaved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__yes_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__yes_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__yes_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_1")].x == s.parse_color("#8f8f8fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_1")].x == s.parse_color("#464646ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null__paved_1")].x == s.parse_color("#8f8f8fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null__paved_1")].x == s.parse_color("#464646ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__1__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__1__unpaved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__1__unpaved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__unpaved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__unpaved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__unpaved_1")].x == s.parse_color("#bbbbbbff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__unpaved_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__yes__yes__no__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__yes__yes__no__unpaved_1")].x == s.parse_color("#bbbbbbff"));
-        CHECK(style_buffer[feature_to_style.at("line__waterway__river__null__0_0")].x == s.parse_color("#a0c8f0ff"));
-        CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__0_0")].x == s.parse_color("#a0c8f0ff"));
-        CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__1_0")].x == s.parse_color("#a0c8f0ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__yes__yes__no__unpaved_1")].x == s.parse_color("#7f7f7fff"));
+        CHECK(style_buffer[feature_to_style.at("line__waterway__river__null__0_0")].x == s.parse_color("#5a93deff"));
+        CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__0_0")].x == s.parse_color("#5a93deff"));
+        CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__1_0")].x == s.parse_color("#5a93deff"));
 
         // DEBUG show all keys to styles
         // create_debug_filter_checks(feature_to_style, style_buffer);
@@ -648,66 +697,66 @@ TEST_CASE("nucleus/vector_style")
         const auto style_buffer = s.styles()->buffer();
 
         CHECK(feature_to_style.size() == 125);
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_0")].x == s.parse_color("#e0f2d3ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_0")].x == s.parse_color("#e0f2d3ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_0")].x == s.parse_color("#e0f2d3ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__park_0")].x == s.parse_color("#e0f2d3ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__scrub_0")].x == s.parse_color("#e0f2d3ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__forest_0")].x == s.parse_color("#cae4beff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__wood_0")].x == s.parse_color("#cae4beff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__commercial__null_0")].x == s.parse_color("#56524156"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__industrial__null_0")].x == s.parse_color("#56524156"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__pitch__null_0")].x == s.parse_color("#151e1533"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__residential__null_0")].x == s.parse_color("#5554545c"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__zoo__null_0")].x == s.parse_color("#0a02040c"));
-        CHECK(style_buffer[feature_to_style.at("fill__transportation__bridge__null__bridge__1_0")].x == s.parse_color("#d4d4d4e5"));
-        CHECK(style_buffer[feature_to_style.at("fill__transportation__pier__null_0")].x == s.parse_color("#f8f4f0ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__lake__null__0_0")].x == s.parse_color("#bbe0fcff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__0_0")].x == s.parse_color("#bbe0fcff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__1_0")].x == s.parse_color("#bbe0fcff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__river__null__0_0")].x == s.parse_color("#bbe0fcff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__swimming_pool__null__0_0")].x == s.parse_color("#bbe0fcff"));
-        CHECK(style_buffer[feature_to_style.at("line__boundary__null__null__6__0__0_0")].x == s.parse_color("#9e9cabff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_0")].x == s.parse_color("#bee2a6ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_0")].x == s.parse_color("#bee2a6ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_0")].x == s.parse_color("#bee2a6ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__park_0")].x == s.parse_color("#bee2a6ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__scrub_0")].x == s.parse_color("#bee2a6ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__forest_0")].x == s.parse_color("#97c683ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__wood_0")].x == s.parse_color("#97c683ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__commercial__null_0")].x == s.parse_color("#564d2e56"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__industrial__null_0")].x == s.parse_color("#564d2e56"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__pitch__null_0")].x == s.parse_color("#070f0733"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__residential__null_0")].x == s.parse_color("#4d4b4b5c"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__zoo__null_0")].x == s.parse_color("#0900010c"));
+        CHECK(style_buffer[feature_to_style.at("fill__transportation__bridge__null__bridge__1_0")].x == s.parse_color("#c1c1c1e5"));
+        CHECK(style_buffer[feature_to_style.at("fill__transportation__pier__null_0")].x == s.parse_color("#efe7deff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__lake__null__0_0")].x == s.parse_color("#7fbef8ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__0_0")].x == s.parse_color("#7fbef8ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__1_0")].x == s.parse_color("#7fbef8ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__river__null__0_0")].x == s.parse_color("#7fbef8ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__swimming_pool__null__0_0")].x == s.parse_color("#7fbef8ff"));
+        CHECK(style_buffer[feature_to_style.at("line__boundary__null__null__6__0__0_0")].x == s.parse_color("#575568ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1__paved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1__paved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__bridge__1_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__bridge__1_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__bridge__1_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__bridge__1__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__bridge__1__paved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__bridge__1__paved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__no__no__paved__1_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__no__no__paved__1_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__no__no__paved__1_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__no__yes__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__no__yes__paved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__no__yes__paved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__paved_1")].x == s.parse_color("#edededff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__tunnel__-1_0")].x == s.parse_color("#cfcdcaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__tunnel__-1__paved_0")].x == s.parse_color("#cfcdcaff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__paved_1")].x == s.parse_color("#d8d8d8ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__tunnel__-1_0")].x == s.parse_color("#9f9c97ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__tunnel__-1__paved_0")].x == s.parse_color("#9f9c97ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__unpaved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__unpaved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__bridge__yes__1__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__bridge__yes__1__paved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__bridge__yes__1__paved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__ford__yes__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__ford__yes__paved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__ford__yes__paved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__paved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__paved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes__paved_1")].x == s.parse_color("#edededff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__1__paved__1_0")].x == s.parse_color("#ffcc88ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__1__paved__1_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__paved__1_0")].x == s.parse_color("#ffcc88ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__paved__1_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__1__paved__1_0")].x == s.parse_color("#ffcc88ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__1__paved__1_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__paved__1_0")].x == s.parse_color("#ffcc88ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__paved__1_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__tunnel__-1__1__paved__1_0")].x == s.parse_color("#ffdaa6ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__tunnel__-1__1__paved__1_1")].x == s.parse_color("#e9ac77ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes__paved_1")].x == s.parse_color("#d8d8d8ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__1__paved__1_0")].x == s.parse_color("#ff9a3fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__1__paved__1_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__paved__1_0")].x == s.parse_color("#ff9a3fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__paved__1_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__1__paved__1_0")].x == s.parse_color("#ff9a3fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__1__paved__1_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__paved__1_0")].x == s.parse_color("#ff9a3fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__paved__1_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__tunnel__-1__1__paved__1_0")].x == s.parse_color("#ffb361ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__tunnel__-1__1__paved__1_1")].x == s.parse_color("#d0692fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__path__path_0")].x == s.parse_color("#00000011"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no_0")].x == s.parse_color("#00000011"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1_0")].x == s.parse_color("#00000011"));
@@ -720,59 +769,59 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__yes_0")].x == s.parse_color("#00000011"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__unpaved_0")].x == s.parse_color("#00000011"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__yes__no__unpaved_0")].x == s.parse_color("#00000011"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null_0")].x == s.parse_color("#fdeab2ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__1__1__paved_0")].x == s.parse_color("#fdeab2ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__1__1__paved_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1_1")].x == s.parse_color("#eba76bff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1__paved_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1__paved_1")].x == s.parse_color("#eba76bff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__paved_0")].x == s.parse_color("#fdeab2ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__paved_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__1__paved_0")].x == s.parse_color("#fef1ccff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__1__paved_1")].x == s.parse_color("#fcdc7fff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_0")].x == s.parse_color("#fef1ccff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_1")].x == s.parse_color("#fcdc7fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null_0")].x == s.parse_color("#fad272ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__1__1__paved_0")].x == s.parse_color("#fad272ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__1__1__paved_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1_1")].x == s.parse_color("#d46325ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1__paved_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1__paved_1")].x == s.parse_color("#d46325ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__paved_0")].x == s.parse_color("#fad272ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__paved_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__1__paved_0")].x == s.parse_color("#fde09aff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__1__paved_1")].x == s.parse_color("#f8b736ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_0")].x == s.parse_color("#fde09aff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_1")].x == s.parse_color("#f8b736ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__alley_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__alley_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__alley_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__unpaved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__unpaved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__alley_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__alley_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__alley_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__1_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__1_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__1_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__no__no__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__no__no__paved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__no__no__paved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__paved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__paved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__unpaved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__unpaved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__yes_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__yes_1")].x == s.parse_color("#edededff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_0")].x == s.parse_color("#fef1ccff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_1")].x == s.parse_color("#fcdc7fff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null__paved_0")].x == s.parse_color("#fef1ccff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null__paved_1")].x == s.parse_color("#fcdc7fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__yes_1")].x == s.parse_color("#d8d8d8ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_0")].x == s.parse_color("#fde09aff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_1")].x == s.parse_color("#f8b736ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null__paved_0")].x == s.parse_color("#fde09aff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null__paved_1")].x == s.parse_color("#f8b736ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__1__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__1__unpaved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__1__unpaved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__unpaved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__unpaved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__unpaved_1")].x == s.parse_color("#edededff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__unpaved_1")].x == s.parse_color("#d8d8d8ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__yes__yes__no__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__yes__yes__no__unpaved_1")].x == s.parse_color("#edededff"));
-        CHECK(style_buffer[feature_to_style.at("line__waterway__river__null__0_0")].x == s.parse_color("#a0c8f0ff"));
-        CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__0_0")].x == s.parse_color("#a0c8f0ff"));
-        CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__1_0")].x == s.parse_color("#a0c8f0ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__yes__yes__no__unpaved_1")].x == s.parse_color("#d8d8d8ff"));
+        CHECK(style_buffer[feature_to_style.at("line__waterway__river__null__0_0")].x == s.parse_color("#5a93deff"));
+        CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__0_0")].x == s.parse_color("#5a93deff"));
+        CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__1_0")].x == s.parse_color("#5a93deff"));
 
         // DEBUG show all keys to styles
         // create_debug_filter_checks(feature_to_style, style_buffer);
@@ -825,24 +874,24 @@ TEST_CASE("nucleus/vector_style")
         const auto style_buffer = s.styles()->buffer();
 
         CHECK(feature_to_style.size() == 94);
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_0")].x == s.parse_color("#d8e8c8ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_0")].x == s.parse_color("#d8e8c8ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_0")].x == s.parse_color("#d8e8c8ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__park_0")].x == s.parse_color("#d8e8c8ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__scrub_0")].x == s.parse_color("#d8e8c8ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__forest_0")].x == s.parse_color("#0a100619"));
-        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__wood_0")].x == s.parse_color("#0a100619"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__commercial__null_0")].x == s.parse_color("#372d2d3a"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__industrial__null_0")].x == s.parse_color("#56524156"));
-        CHECK(style_buffer[feature_to_style.at("fill__landuse__residential__null_0")].x == s.parse_color("#5452515c"));
-        CHECK(style_buffer[feature_to_style.at("fill__transportation__bridge__null__bridge__1_0")].x == s.parse_color("#cbcbcbe5"));
-        CHECK(style_buffer[feature_to_style.at("fill__transportation__pier__null_0")].x == s.parse_color("#f8f4f0ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__lake__null__0_0")].x == s.parse_color("#bfd9f2ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__0_0")].x == s.parse_color("#bfd9f2ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__1_0")].x == s.parse_color("#8597a8b2"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__river__null__0_0")].x == s.parse_color("#bfd9f2ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__water__swimming_pool__null__0_0")].x == s.parse_color("#bfd9f2ff"));
-        CHECK(style_buffer[feature_to_style.at("line__boundary__null__null__6__0__0_0")].x == s.parse_color("#9e9cabff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_0")].x == s.parse_color("#afce93ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_0")].x == s.parse_color("#afce93ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_0")].x == s.parse_color("#afce93ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__park_0")].x == s.parse_color("#afce93ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__scrub_0")].x == s.parse_color("#afce93ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__forest_0")].x == s.parse_color("#030a0119"));
+        CHECK(style_buffer[feature_to_style.at("fill__landcover__wood__wood_0")].x == s.parse_color("#030a0119"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__commercial__null_0")].x == s.parse_color("#3322223a"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__industrial__null_0")].x == s.parse_color("#564d2e56"));
+        CHECK(style_buffer[feature_to_style.at("fill__landuse__residential__null_0")].x == s.parse_color("#4b48455c"));
+        CHECK(style_buffer[feature_to_style.at("fill__transportation__bridge__null__bridge__1_0")].x == s.parse_color("#b0b0b0e5"));
+        CHECK(style_buffer[feature_to_style.at("fill__transportation__pier__null_0")].x == s.parse_color("#efe7deff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__lake__null__0_0")].x == s.parse_color("#85b1e2ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__0_0")].x == s.parse_color("#85b1e2ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__pond__null__1_0")].x == s.parse_color("#5c7b9db2"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__river__null__0_0")].x == s.parse_color("#85b1e2ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__water__swimming_pool__null__0_0")].x == s.parse_color("#85b1e2ff"));
+        CHECK(style_buffer[feature_to_style.at("line__boundary__null__null__6__0__0_0")].x == s.parse_color("#575568ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__1__paved_0")].x == s.parse_color("#ffffffff"));
@@ -859,44 +908,44 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__paved_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__minor__null__yes__yes__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__1__paved__1_0")].x == s.parse_color("#ffcc88ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__1__paved__1_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__paved__1_0")].x == s.parse_color("#ffcc88ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__paved__1_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__1__paved__1_0")].x == s.parse_color("#ffcc88ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__1__paved__1_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__paved__1_0")].x == s.parse_color("#ffcc88ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__paved__1_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__tunnel__-1__1__paved__1_0")].x == s.parse_color("#ffdaa6ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__tunnel__-1__1__paved__1_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path_0")].x == s.parse_color("#ccbbaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no_0")].x == s.parse_color("#ccbbaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1_0")].x == s.parse_color("#ccbbaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1__unpaved_0")].x == s.parse_color("#ccbbaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__2_0")].x == s.parse_color("#ccbbaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__no__no__unpaved_0")].x == s.parse_color("#ccbbaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__unpaved_0")].x == s.parse_color("#ccbbaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__yes__no__2_0")].x == s.parse_color("#ccbbaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__unpaved_0")].x == s.parse_color("#ccbbaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__yes_0")].x == s.parse_color("#ccbbaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__unpaved_0")].x == s.parse_color("#ccbbaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__yes__no__unpaved_0")].x == s.parse_color("#ccbbaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__1__1__paved_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__1__1__paved_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1_1")].x == s.parse_color("#eba76bff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1__paved_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1__paved_1")].x == s.parse_color("#eba76bff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__paved_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__paved_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__1__paved_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__1__paved_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_1")].x == s.parse_color("#e9ac77ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__1__paved__1_0")].x == s.parse_color("#ff9a3fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__1__paved__1_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__paved__1_0")].x == s.parse_color("#ff9a3fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__1__paved__1_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__1__paved__1_0")].x == s.parse_color("#ff9a3fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__1__paved__1_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__paved__1_0")].x == s.parse_color("#ff9a3fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__bridge__1__1__paved__1_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__tunnel__-1__1__paved__1_0")].x == s.parse_color("#ffb361ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__motorway__null__tunnel__-1__1__paved__1_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path_0")].x == s.parse_color("#9a7f67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no_0")].x == s.parse_color("#9a7f67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1_0")].x == s.parse_color("#9a7f67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__1__unpaved_0")].x == s.parse_color("#9a7f67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__2_0")].x == s.parse_color("#9a7f67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__no__no__unpaved_0")].x == s.parse_color("#9a7f67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__unpaved_0")].x == s.parse_color("#9a7f67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__no__yes__no__2_0")].x == s.parse_color("#9a7f67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__unpaved_0")].x == s.parse_color("#9a7f67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__no__yes_0")].x == s.parse_color("#9a7f67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__unpaved_0")].x == s.parse_color("#9a7f67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__path__path__yes__no__unpaved_0")].x == s.parse_color("#9a7f67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__1__1__paved_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__1__1__paved_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1_1")].x == s.parse_color("#d46325ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1__paved_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__bridge__1__paved_1")].x == s.parse_color("#d46325ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__paved_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__primary__null__paved_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__1__paved_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__1__paved_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_1")].x == s.parse_color("#d0692fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__alley_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__unpaved_0")].x == s.parse_color("#ffffffff"));
@@ -907,18 +956,18 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__paved_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__unpaved_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__yes_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_1")].x == s.parse_color("#e9ac77ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null__paved_0")].x == s.parse_color("#ffeeaaff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null__paved_1")].x == s.parse_color("#e9ac77ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_1")].x == s.parse_color("#d0692fff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null__paved_0")].x == s.parse_color("#ffda67ff"));
+        CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null__paved_1")].x == s.parse_color("#d0692fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__1__unpaved_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__no__yes__no__unpaved_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__unpaved_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__track__null__yes__yes__no__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__waterway__river__null__0_0")].x == s.parse_color("#a0c8f0ff"));
-        CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__0_0")].x == s.parse_color("#a0c8f0ff"));
-        CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__1_0")].x == s.parse_color("#a0c8f0ff"));
+        CHECK(style_buffer[feature_to_style.at("line__waterway__river__null__0_0")].x == s.parse_color("#5a93deff"));
+        CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__0_0")].x == s.parse_color("#5a93deff"));
+        CHECK(style_buffer[feature_to_style.at("line__waterway__stream__null__1_0")].x == s.parse_color("#5a93deff"));
 
         // DEBUG show all keys to styles
         // create_debug_filter_checks(feature_to_style, style_buffer);
@@ -953,45 +1002,45 @@ TEST_CASE("nucleus/vector_style")
         const auto style_buffer = s.styles()->buffer();
 
         CHECK(feature_to_style.size() == 39);
-        CHECK(style_buffer[feature_to_style.at("fill__GEBAEUDE_F_AGG__0_0")].x == s.parse_color("#edcacaff"));
-        CHECK(style_buffer[feature_to_style.at("fill__GEBAEUDE_F_AGG__1_0")].x == s.parse_color("#e6b8b8ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__GEWAESSER_F_GEWF__1_0")].x == s.parse_color("#b3d9ffff"));
-        CHECK(style_buffer[feature_to_style.at("fill__GEWAESSER_F_GEWF__3_0")].x == s.parse_color("#b3d9ffff"));
+        CHECK(style_buffer[feature_to_style.at("fill__GEBAEUDE_F_AGG__0_0")].x == s.parse_color("#d89797ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__GEBAEUDE_F_AGG__1_0")].x == s.parse_color("#ca7a7aff"));
+        CHECK(style_buffer[feature_to_style.at("fill__GEWAESSER_F_GEWF__1_0")].x == s.parse_color("#73b1ffff"));
+        CHECK(style_buffer[feature_to_style.at("fill__GEWAESSER_F_GEWF__3_0")].x == s.parse_color("#73b1ffff"));
         CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__0_0")].x == s.parse_color("#00000000"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__0_1")].x == s.parse_color("#efebe9ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__1_0")].x == s.parse_color("#2132193f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__2_0")].x == s.parse_color("#3a3f2a3f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__3_0")].x == s.parse_color("#112c043f"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__0_1")].x == s.parse_color("#dcd4d0ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__1_0")].x == s.parse_color("#0f26083f"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__2_0")].x == s.parse_color("#343f193f"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__3_0")].x == s.parse_color("#031c003f"));
         CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__5_0")].x == s.parse_color("#3f3f3f3f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__6_0")].x == s.parse_color("#283f1c3f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__7_0")].x == s.parse_color("#251e133f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__8_0")].x == s.parse_color("#1925133f"));
-        CHECK(style_buffer[feature_to_style.at("line__BEV_BEZIRK_L_BEZIRKSGRENZE__0_0")].x == s.parse_color("#b094a0ff"));
-        CHECK(style_buffer[feature_to_style.at("line__BEV_BEZIRK_L_BEZIRKSGRENZE__0_1")].x == s.parse_color("#eae0efff"));
-        CHECK(style_buffer[feature_to_style.at("line__BEV_BEZIRK_L_BEZIRKSGRENZE__0_2")].x == s.parse_color("#b094a0ff"));
-        CHECK(style_buffer[feature_to_style.at("line__BEV_GEMEINDE_L_GEMEINDEGRENZE__0_0")].x == s.parse_color("#b094a0ff"));
-        CHECK(style_buffer[feature_to_style.at("line__BEV_GEMEINDE_L_GEMEINDEGRENZE__0_1")].x == s.parse_color("#eae0efff"));
-        CHECK(style_buffer[feature_to_style.at("line__GEWAESSER_L_GEWL __4_0")].x == s.parse_color("#b3d9ffff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__0_0")].x == s.parse_color("#ffd37fff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__0_1")].x == s.parse_color("#cd8966ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__1_0")].x == s.parse_color("#ffd37fff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__1_1")].x == s.parse_color("#cd8966ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__3_0")].x == s.parse_color("#ffff99ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__3_1")].x == s.parse_color("#cdaa66ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_TUNNEL_BRUNNENCLA__0_0")].x == s.parse_color("#feefd8ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_TUNNEL_BRUNNENCLA__0_1")].x == s.parse_color("#cd8966ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_TUNNEL_BRUNNENCLA__0_2")].x == s.parse_color("#feefd8ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__0_0")].x == s.parse_color("#ffd37fff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__0_1")].x == s.parse_color("#cd8966ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__1_0")].x == s.parse_color("#ffd37fff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__1_1")].x == s.parse_color("#cd8966ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__3_0")].x == s.parse_color("#ffff99ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__3_1")].x == s.parse_color("#cdaa66ff"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__6_0")].x == s.parse_color("#163f0a3f"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__7_0")].x == s.parse_color("#140c043f"));
+        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__8_0")].x == s.parse_color("#0814043f"));
+        CHECK(style_buffer[feature_to_style.at("line__BEV_BEZIRK_L_BEZIRKSGRENZE__0_0")].x == s.parse_color("#6f4c5aff"));
+        CHECK(style_buffer[feature_to_style.at("line__BEV_BEZIRK_L_BEZIRKSGRENZE__0_1")].x == s.parse_color("#d2bedcff"));
+        CHECK(style_buffer[feature_to_style.at("line__BEV_BEZIRK_L_BEZIRKSGRENZE__0_2")].x == s.parse_color("#6f4c5aff"));
+        CHECK(style_buffer[feature_to_style.at("line__BEV_GEMEINDE_L_GEMEINDEGRENZE__0_0")].x == s.parse_color("#6f4c5aff"));
+        CHECK(style_buffer[feature_to_style.at("line__BEV_GEMEINDE_L_GEMEINDEGRENZE__0_1")].x == s.parse_color("#d2bedcff"));
+        CHECK(style_buffer[feature_to_style.at("line__GEWAESSER_L_GEWL __4_0")].x == s.parse_color("#73b1ffff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__0_0")].x == s.parse_color("#ffa636ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__0_1")].x == s.parse_color("#9c4022ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__1_0")].x == s.parse_color("#ffa636ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__1_1")].x == s.parse_color("#9c4022ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__3_0")].x == s.parse_color("#ffff51ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__3_1")].x == s.parse_color("#9c6722ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_TUNNEL_BRUNNENCLA__0_0")].x == s.parse_color("#fddcafff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_TUNNEL_BRUNNENCLA__0_1")].x == s.parse_color("#9c4022ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_TUNNEL_BRUNNENCLA__0_2")].x == s.parse_color("#fddcafff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__0_0")].x == s.parse_color("#ffa636ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__0_1")].x == s.parse_color("#9c4022ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__1_0")].x == s.parse_color("#ffa636ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__1_1")].x == s.parse_color("#9c4022ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__3_0")].x == s.parse_color("#ffff51ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__3_1")].x == s.parse_color("#9c6722ff"));
         CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__4_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__4_1")].x == s.parse_color("#b2b2b2ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__4_1")].x == s.parse_color("#727272ff"));
         CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__5_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__5_1")].x == s.parse_color("#b2b2b2ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__6_0")].x == s.parse_color("#b2b2b2ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__5_1")].x == s.parse_color("#727272ff"));
+        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__6_0")].x == s.parse_color("#727272ff"));
 
         // DEBUG show all keys to styles
         // create_debug_filter_checks(feature_to_style, style_buffer);
@@ -1052,16 +1101,16 @@ TEST_CASE("nucleus/vector_style")
         // checking forest with minzoom 13
         // style at z12 is transparent, (premultiplied alpha means that color is black)
         CHECK(visible_style_buffer[forest0_style_index - 1].x == 0); // z 12
-        CHECK(visible_style_buffer[forest0_style_index + 0].x == s.parse_color("#add19eff")); // z 13
+        CHECK(visible_style_buffer[forest0_style_index + 0].x == s.parse_color("#6ba357ff")); // z 13
         CHECK(style_buffer[forest0_style_index - 1].x == 0); // z 12
-        CHECK(style_buffer[forest0_style_index + 0].x == s.parse_color("#add19eff")); // z 13
+        CHECK(style_buffer[forest0_style_index + 0].x == s.parse_color("#6ba357ff")); // z 13
 
         // checking forest with maxzoom 13
         // maxzoom is 13 -> 13 is still visible and 14 will blend out -> but since we blend only with the rest of the available alpha, this does not matter
         CHECK(visible_style_buffer[forest1_style_index - 1].x == 0); // z 12
-        CHECK(visible_style_buffer[forest1_style_index + 0].x == s.parse_color("#add19eff")); // z 13
-        CHECK(style_buffer[forest1_style_index - 1].x == s.parse_color("#add19eff")); // z 12
-        CHECK(style_buffer[forest1_style_index + 0].x == s.parse_color("#add19eff")); // z 13
+        CHECK(visible_style_buffer[forest1_style_index + 0].x == s.parse_color("#6ba357ff")); // z 13
+        CHECK(style_buffer[forest1_style_index - 1].x == s.parse_color("#6ba357ff")); // z 12
+        CHECK(style_buffer[forest1_style_index + 0].x == s.parse_color("#6ba357ff")); // z 13
 
         CHECK(visible_style_buffer[service_style_index - 2].x == 0); // z 12
         CHECK(visible_style_buffer[service_style_index - 1].x == 0); // z 12

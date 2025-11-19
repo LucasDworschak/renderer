@@ -227,11 +227,11 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
                 lowp vec2 grid_cell = vec2(0.0,0.0);
 
                 highp uvec2 cpp_packed_data = uvec2(%1u, %2u);
-                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), bvec3(false,false,false), %9u, bool(%10));
+                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), bvec3(false,false,false), bool(%10));
                 VectorLayerData unpacked_data = normalize_unpack_for_unittest(unpack_data(cpp_packed_data,grid_cell),grid_cell);
 
                 bool unpack_ok = data == unpacked_data;
-                highp uvec2 packed_data = pack_vectorlayer_data(data);
+                highp uvec2 packed_data = pack_vectorlayer_data(data, %9u);
                 bool pack_ok = packed_data == cpp_packed_data;
                 out_color = vec4(unpack_ok ? 121.0 / 255.0 : 9.0 / 255.0, pack_ok ? 122.0 / 255.0 : 9.0 / 255.0, 0, 1);
             }
@@ -247,59 +247,6 @@ void vectorlayer_packing_cpp_same_as_glsl(const nucleus::vector_layer::VectorLay
                                                        .arg(data.style_index)
                                                        .arg(data.is_polygon),
             default_vertex_shader,
-            defines);
-        shader.bind();
-        gl_engine::helpers::create_screen_quad_geometry().draw();
-
-        const QImage render_result = b.read_colour_attachment(0);
-        Framebuffer::unbind();
-        CHECK(qRed(render_result.pixel(0, 0)) == 121);
-        CHECK(qGreen(render_result.pixel(0, 0)) == 122);
-    }
-    {
-        Framebuffer b(Framebuffer::DepthFormat::None, { Framebuffer::ColourFormat::RGBA8 }, { 1, 1 });
-        b.bind();
-
-        glm::uvec2 packed_data = nucleus::vector_layer::Preprocessor::pack_shader_data(data);
-
-        ShaderProgram shader = create_debug_shader(QString(R"(
-            out lowp vec4 out_color;
-            flat in lowp vec2 ok;
-            void main() {
-                out_color = vec4(ok, 0, 1);
-            }
-            )"),
-            QString(R"(
-            #include "vector_layer.glsl"
-
-            out highp vec2 texcoords;
-            flat out lowp vec2 ok;
-            void main() {
-                lowp vec2 grid_cell = vec2(0.0,0.0);
-
-                highp uvec2 cpp_packed_data = uvec2(%1u, %2u);
-                VectorLayerData data = VectorLayerData(vec2(%3, %4),vec2(%5, %6),vec2(%7, %8), bvec3(false,false,false), %9u, bool(%10));
-                VectorLayerData unpacked_data = normalize_unpack_for_unittest(unpack_data(cpp_packed_data, grid_cell), grid_cell);
-
-                bool unpack_ok = data == unpacked_data;
-                highp uvec2 packed_data = pack_vectorlayer_data(data);
-                bool pack_ok = packed_data == cpp_packed_data;
-                ok = vec2(unpack_ok ? 121.0 / 255.0 : 9.0 / 255.0, pack_ok ? 122.0 / 255.0 : 9.0 / 255.0);
-
-                vec2 vertices[3]=vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
-                gl_Position = vec4(vertices[gl_VertexID], 0.0, 1.0);
-                texcoords = 0.5 * gl_Position.xy + vec2(0.5);
-            })")
-                .arg(packed_data.x)
-                .arg(packed_data.y)
-                .arg(data.a.x)
-                .arg(data.a.y)
-                .arg(data.b.x)
-                .arg(data.b.y)
-                .arg(data.c.x)
-                .arg(data.c.y)
-                .arg(data.style_index)
-                .arg(data.is_polygon),
             defines);
         shader.bind();
         gl_engine::helpers::create_screen_quad_geometry().draw();

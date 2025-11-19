@@ -1,0 +1,293 @@
+{
+    "layers":
+    [
+        {
+            "id": "style0",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#000000"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    0
+                ]
+            ]
+        },
+        {
+            "id": "style1",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#111111"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    1
+                ]
+            ]
+        },
+        {
+            "id": "style2",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#222222"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    2
+                ]
+            ]
+        },
+        {
+            "id": "style3",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#333333"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    3
+                ]
+            ]
+        },
+        {
+            "id": "style4",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#444444"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    4
+                ]
+            ]
+        },
+        {
+            "id": "style5",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#555555"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    5
+                ]
+            ]
+        },
+        {
+            "id": "style6",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#666666"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    6
+                ]
+            ]
+        },
+        {
+            "id": "style7",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#777777"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    7
+                ]
+            ]
+        },
+        {
+            "id": "style8",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#888888"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    8
+                ]
+            ]
+        },
+        {
+            "id": "style9",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#999999"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    9
+                ]
+            ]
+        },
+        {
+            "id": "style10",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#AAAAAA"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    10
+                ]
+            ]
+        },
+        {
+            "id": "style11",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#BBBBBB"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    11
+                ]
+            ]
+        },
+        {
+            "id": "style12",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#CCCCCC"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    12
+                ]
+            ]
+        },
+        {
+            "id": "style13",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#DDDDDD"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    13
+                ]
+            ]
+        },
+        {
+            "id": "style14",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#EEEEEE"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    14
+                ]
+            ]
+        },
+        {
+            "id": "style15",
+            "type": "fill",
+            "source-layer": "landcover",
+            "paint":
+            {
+                "fill-color": "#FFFFFF"
+            },
+            "filter":
+            [
+                "all",
+                [
+                    "==",
+                    "test",
+                    15
+                ]
+            ]
+        }
+    ]
+}

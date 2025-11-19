@@ -49,6 +49,7 @@ std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
     std::unordered_map<QString, QString> defines;
 
     defines[QString("style_bits")] = QString::number(constants::style_bits);
+    defines[QString("style_buffer_width")] = QString::number(constants::style_buffer_size);
     defines[QString("style_precision")] = QString::number(constants::style_precision);
     defines[QString("max_zoom")] = QString::number(constants::style_zoom_range.y);
     defines[QString("tile_extent")] = QString("float(%1)").arg(constants::tile_extent);

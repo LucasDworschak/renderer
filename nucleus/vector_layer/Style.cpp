@@ -40,33 +40,6 @@ static inline float srgb_to_linear(float cs)
     return (cs <= 0.04045f) ? (cs / 12.92f) : std::pow((cs + 0.055f) / 1.055f, 2.4f);
 }
 
-static inline uint32_t gamma_decode(uint32_t colour)
-{
-    // Unpack (0xRRGGBBAA)
-    uint8_t r = static_cast<uint8_t>((colour >> 24) & 0xFF);
-    uint8_t g = static_cast<uint8_t>((colour >> 16) & 0xFF);
-    uint8_t b = static_cast<uint8_t>((colour >> 8) & 0xFF);
-    uint8_t a = static_cast<uint8_t>(colour & 0xFF); // unchanged
-
-    // Normalize to [0,1]
-    double rf = r / 255.0;
-    double gf = g / 255.0;
-    double bf = b / 255.0;
-
-    // sRGB gamma decode -> linear
-    rf = srgb_to_linear(rf);
-    gf = srgb_to_linear(gf);
-    bf = srgb_to_linear(bf);
-
-    // Convert back to 8-bit (still representing linear light)
-    // Round to nearest and clamp
-    uint8_t r_lin = clamp_u8(static_cast<int>(std::lround(rf * 255.0)));
-    uint8_t g_lin = clamp_u8(static_cast<int>(std::lround(gf * 255.0)));
-    uint8_t b_lin = clamp_u8(static_cast<int>(std::lround(bf * 255.0)));
-
-    // Repack as 0xRRGGBBAA
-    return (static_cast<uint32_t>(r_lin) << 24) | (static_cast<uint32_t>(g_lin) << 16) | (static_cast<uint32_t>(b_lin) << 8) | static_cast<uint32_t>(a);
-}
 } // namespace
 
 namespace nucleus::vector_layer {
@@ -304,9 +277,9 @@ void Style::load()
                 fill_color |= opacity;
             }
 
-            // premultiply alpha
+            // premultiply alpha + gamma_decode
             // done outside of above if because opacity might be declared in fill_color only
-            fill_color = premultiply_alpha(fill_color);
+            fill_color = premultiply_alpha(gamma_decode(fill_color));
 
             // make sure that dash_sum with style_precision is not bigger than available bits
             uint8_t dash_sum = 255;
@@ -333,14 +306,10 @@ void Style::load()
         zoom_to_style.push_back(current_style_map);
     }
 
-    // determines how many styles per zoom level exist
-    constexpr auto style_zoom_multiplier = constants::style_zoom_range.y + 1;
+    std::vector<std::vector<glm::u32vec2>> temp_styles;
+    temp_styles.reserve(255);
 
     for (const auto& [key, layer_indices] : layerid_filter_to_layer_indices) {
-
-        // we now know that we have valid styles -> create a new StyleFilter for this layer
-        // if (!m_layer_to_style.contains(key.first))
-        //     m_layer_to_style[key.first] = StyleFilter();
 
         for (const auto& layer_index : layer_indices) {
 
@@ -353,18 +322,21 @@ void Style::load()
             const uint first_zoom = style_map.begin()->first;
             const auto first_style = style_map.at(first_zoom);
 
-            const uint32_t style_index = style_values.size() / style_zoom_multiplier;
+            // const uint32_t style_index = style_values.size() / num_zooms_per_style;
+            const uint32_t style_index = temp_styles.size();
+            auto* current_style = &temp_styles.emplace_back();
+            current_style->reserve(num_zooms_per_style);
 
             for (uint i = 0; i < first_zoom; i++) {
                 // duplicate first style with alpha 0
                 // since we premultiply alpha -> alpha: 0 = color: 0,0,0
-                style_values.push_back({ 0, first_style.buffer_alignment().y });
+                current_style->push_back({ 0, first_style.buffer_alignment().y });
             }
 
             for (const auto& [zoom, style] : style_map) {
 
                 // add a new style every loop iteration
-                style_values.push_back({ style.buffer_alignment() });
+                current_style->push_back({ style.buffer_alignment() });
 
                 // add the styles to the data structure where we later can find the relevant style_index
                 m_layer_to_style[key.first].add_filter({ { style_index, layer_index }, key.second }, zoom);
@@ -374,31 +346,73 @@ void Style::load()
             // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
             // -> according to style.json there is no style for those values, we only need to add them for blending purposes
             const uint last_zoom = style_map.rbegin()->first;
-            const auto last_style = style_values[style_values.size() - 1];
+            const auto last_style = current_style->at(current_style->size() - 1);
 
-            for (uint i = last_zoom + 1; i < constants::style_zoom_range.y + 1; i++) {
+            for (uint i = last_zoom + 1; i < num_zooms_per_style; i++) {
                 // duplicate last style with alpha 0 (if we are not yet at maxzoom)
                 // since we premultiply alpha -> alpha: 0 = color: 0,0,0
-                style_values.push_back({ 0, last_style.y });
+                current_style->push_back({ 0, last_style.y });
                 if (i == last_zoom + 1)
                     m_layer_to_style[key.first].add_filter({ { style_index, layer_index }, key.second }, i);
             }
             // set it to the highest value
-            m_lowest_encountered_zoom[layer_index] = constants::style_zoom_range.y + 1;
+            m_lowest_encountered_zoom[layer_index] = num_zooms_per_style;
 
-            // make sure that layer_index also fits into style_bits (we use this in preprocess)
-            assert(layer_index < ((1u << constants::style_bits) - 1u)); // TODO why layer_index???
+            // qDebug() << "style_index" << style_index;
         }
     }
 
+    // qDebug() << "num styles: " << temp_styles.size();
+
+    {
+        // goal: storing all zooms of a style in a row
+        // -> improve performance by never needing to make big jumps in memory if higher and lower zoom are located on different rows
+        // (previously it was possible that one zoom of a style was stored at x:127,y:0 and the next zoom was stored on x:0,y:1)
+        // other tests to consider:
+        //   - storing the next style in the row below
+        //   - storing the next style in same row just after
+        //   - storing all zooms in a column, next style is in the next column
+        // problems:
+        // storing 6*19 values = 114 in a row that supports 128
+        // -> we are waisting about 11% of the storage
+        // possible improvement -> do not store zoom 0 -> 7*18 values = 126 out of 128 values in a row -> 1.5% wastage
+        // nevertheless we would still need 128x128 textures since 64x64 textures are not able to store all the values
+        // currently all style values with 19 zooms = 4636 values -> the wastage does not really matter for now
+        // possible improvement: only store 16 zooms -> we can use 64x64 textures for openmaptiles style
+
+        constexpr auto styles_per_row = int(constants::style_buffer_size / float(num_zooms_per_style));
+        constexpr auto wasted_cells_per_row = constants::style_buffer_size - (styles_per_row * num_zooms_per_style);
+        const auto needed_rows = ceil(float(temp_styles.size()) / float(styles_per_row));
+
+        style_values.reserve(temp_styles.size() * num_zooms_per_style + styles_per_row * wasted_cells_per_row);
+
+        for (size_t i = 0; i < needed_rows; i++) {
+            for (size_t j = 0; j < styles_per_row; j++) {
+                const auto style_index = i * styles_per_row + j;
+                if (style_index < temp_styles.size())
+                    style_values.insert(style_values.end(), temp_styles[style_index].cbegin(), temp_styles[style_index].cend());
+            }
+            // fill the rest of the row with default -1u values
+            style_values.resize((i + 1) * constants::style_buffer_size, glm::u32vec2(-1u));
+
+            // qDebug() << style_values.size();
+        }
+        // qDebug() << style_values.size() << temp_styles.size() << needed_rows;
+
+        // qDebug() << "styles_per_row" << styles_per_row;
+        // qDebug() << "wasted_cells_per_row" << wasted_cells_per_row;
+        // qDebug() << "needed_rows" << needed_rows;
+        // qDebug() << "temp_styles.size()" << temp_styles.size();
+    }
+
+    // visible styles set the color to 0 for now -> only set to higher value if encountered from server
+    // this allows to fade out styles that were not encountered on lower zoom levels
     auto visible_style_values = std::vector<glm::u32vec2>(style_values);
     for (auto& v : visible_style_values) {
         // set color alpha to 0 for fadeout
         // since we premultiply alpha -> alpha: 0 = color: 0,0,0
         v.x = 0;
     }
-
-    // qDebug() << "style_values: " << style_values.size();
 
     // make sure that the style values are within the buffer size; resize them to this size and create the raster images
     assert(style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
@@ -487,10 +501,10 @@ bool Style::update_visible_styles()
 
         const auto encountered_zoom = m_lowest_encountered_zoom[indices.layer_index];
 
-        // we only save one index per 0-18 zoom range -> we have to multiply the style_index with the zoom range to get the index in the buffer
-        const auto zooms_per_style = constants::style_zoom_range.y + 1;
+        const auto start_index = style_buffer_index(indices.style_index, encountered_zoom);
+        const auto updateable_styles = num_zooms_per_style - encountered_zoom;
 
-        for (auto i = indices.style_index * zooms_per_style + encountered_zoom; i <= indices.style_index * zooms_per_style + zooms_per_style; i++) {
+        for (auto i = start_index; i <= start_index + updateable_styles; i++) {
             visible_style_buffer[i] = style_buffer[i];
         }
     }
@@ -542,11 +556,25 @@ uint32_t Style::interpolate_color(float t, uint32_t color1, uint32_t color2)
     return interpolated;
 }
 
-uint32_t Style::get_style_index(const uint32_t style_index, const uint zoom_level) { return style_index * (constants::style_zoom_range.y + 1) + zoom_level; }
+uint32_t Style::style_buffer_index(const uint32_t style_index, const uint zoom_level)
+{
+    constexpr auto styles_per_row = int(constants::style_buffer_size / float(num_zooms_per_style));
 
-float Style::get_style_width(const glm::u32vec2& style) { return float(style.y >> 17) / float(constants::style_precision); }
+    const auto style_buffer_col = (style_index % styles_per_row) * num_zooms_per_style;
+    const auto style_buffer_row = uint(style_index / styles_per_row);
 
-std::pair<float, float> Style::get_style_dashes(const glm::u32vec2& style)
+    return style_buffer_col + (style_buffer_row * constants::style_buffer_size) + zoom_level;
+}
+
+float Style::style_width(const glm::u32vec2& style)
+{
+
+    // if (style.y == -1u)
+    //     qDebug() << "line_width is -1";
+    return float(style.y >> 17) / float(constants::style_precision);
+}
+
+std::pair<float, float> Style::style_dashes(const glm::u32vec2& style)
 {
     const auto dash_gap_ratio = (style.y >> 9) & ((1u << (17 - 9)) - 1u);
     const auto dash_sum = (style.y >> 1) & ((1u << (9 - 1)) - 1u);
@@ -655,6 +683,34 @@ void Style::parse_line_widths(const QJsonValue& value, std::vector<std::pair<uin
     }
 }
 
+uint32_t Style::gamma_decode(uint32_t colour)
+{
+    // Unpack (0xRRGGBBAA)
+    uint8_t r = static_cast<uint8_t>((colour >> 24) & 0xFF);
+    uint8_t g = static_cast<uint8_t>((colour >> 16) & 0xFF);
+    uint8_t b = static_cast<uint8_t>((colour >> 8) & 0xFF);
+    uint8_t a = static_cast<uint8_t>(colour & 0xFF); // unchanged
+
+    // Normalize to [0,1]
+    double rf = r / 255.0;
+    double gf = g / 255.0;
+    double bf = b / 255.0;
+
+    // sRGB gamma decode -> linear
+    rf = srgb_to_linear(rf);
+    gf = srgb_to_linear(gf);
+    bf = srgb_to_linear(bf);
+
+    // Convert back to 8-bit (still representing linear light)
+    // Round to nearest and clamp
+    uint8_t r_lin = clamp_u8(static_cast<int>(std::lround(rf * 255.0)));
+    uint8_t g_lin = clamp_u8(static_cast<int>(std::lround(gf * 255.0)));
+    uint8_t b_lin = clamp_u8(static_cast<int>(std::lround(bf * 255.0)));
+
+    // Repack as 0xRRGGBBAA
+    return (static_cast<uint32_t>(r_lin) << 24) | (static_cast<uint32_t>(g_lin) << 16) | (static_cast<uint32_t>(b_lin) << 8) | static_cast<uint32_t>(a);
+}
+
 uint32_t Style::parse_color(const QJsonValue& value)
 {
     std::string colorValue;
@@ -671,9 +727,9 @@ uint32_t Style::parse_color(const QJsonValue& value)
             colorValue = "#" + std::string(2, colorValue[1]) + std::string(2, colorValue[2]) + std::string(2, colorValue[3]);
 
         if (colorValue.length() == 7)
-            return gamma_decode((std::stoul(colorValue.substr(1), nullptr, 16) << 8) | 255);
+            return (std::stoul(colorValue.substr(1), nullptr, 16) << 8) | 255;
         else if (colorValue.length() == 9)
-            return gamma_decode(std::stoul(colorValue.substr(1), nullptr, 16));
+            return std::stoul(colorValue.substr(1), nullptr, 16);
         else {
             qDebug() << "cannot parse hex color: " << colorValue;
             return 0ul;
@@ -714,7 +770,7 @@ uint32_t Style::parse_color(const QJsonValue& value)
         if (count == 3) // only rgb was given -> add full transparancy
             out = (out << 8) | 255;
 
-        return gamma_decode(out);
+        return out;
     } else if (colorValue.starts_with("hsl")) {
         const std::regex regex("hsla?\\((\\d+),\\s?(\\d+)%,\\s?(\\d+)%(?:,\\s?(\\d+.?\\d*))?\\)");
         std::smatch matches;

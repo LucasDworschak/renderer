@@ -21,9 +21,7 @@
 #define SDF_MODE 1
 #define n_multisamples 4
 
-#include "camera_config.glsl"
 #include "shared_config.glsl"
-#include "tile_id.glsl"
 #include "vector_layer.glsl"
 #include "hashing.glsl" // DEBUG
 
