@@ -324,19 +324,19 @@ void Style::load()
 
             // const uint32_t style_index = style_values.size() / num_zooms_per_style;
             const uint32_t style_index = temp_styles.size();
-            auto* current_style = &temp_styles.emplace_back();
-            current_style->reserve(num_zooms_per_style);
+            auto& current_style = temp_styles.emplace_back();
+            current_style.resize(constants::buffer_entries_per_style, glm::u32vec2(-1u)); // fill all with -1
 
-            for (uint i = 0; i < first_zoom; i++) {
+            for (size_t i = 0; i < first_zoom; i++) {
                 // duplicate first style with alpha 0
                 // since we premultiply alpha -> alpha: 0 = color: 0,0,0
-                current_style->push_back({ 0, first_style.buffer_alignment().y });
+                current_style[i] = { 0u, first_style.buffer_alignment().y };
             }
 
             for (const auto& [zoom, style] : style_map) {
 
                 // add a new style every loop iteration
-                current_style->push_back({ style.buffer_alignment() });
+                current_style[zoom] = { style.buffer_alignment() };
 
                 // add the styles to the data structure where we later can find the relevant style_index
                 m_layer_to_style[key.first].add_filter({ { style_index, layer_index }, key.second }, zoom);
@@ -346,17 +346,17 @@ void Style::load()
             // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
             // -> according to style.json there is no style for those values, we only need to add them for blending purposes
             const uint last_zoom = style_map.rbegin()->first;
-            const auto last_style = current_style->at(current_style->size() - 1);
+            const auto last_style = current_style[last_zoom];
 
-            for (uint i = last_zoom + 1; i < num_zooms_per_style; i++) {
+            for (uint i = last_zoom + 1; i < constants::num_zooms_per_style; i++) {
                 // duplicate last style with alpha 0 (if we are not yet at maxzoom)
                 // since we premultiply alpha -> alpha: 0 = color: 0,0,0
-                current_style->push_back({ 0, last_style.y });
+                current_style[i] = { 0, last_style.y };
                 if (i == last_zoom + 1)
                     m_layer_to_style[key.first].add_filter({ { style_index, layer_index }, key.second }, i);
             }
             // set it to the highest value
-            m_lowest_encountered_zoom[layer_index] = num_zooms_per_style;
+            m_lowest_encountered_zoom[layer_index] = constants::num_zooms_per_style;
 
             // qDebug() << "style_index" << style_index;
         }
@@ -380,23 +380,22 @@ void Style::load()
         // currently all style values with 19 zooms = 4636 values -> the wastage does not really matter for now
         // possible improvement: only store 16 zooms -> we can use 64x64 textures for openmaptiles style
 
-        constexpr auto styles_per_row = int(constants::style_buffer_size / float(num_zooms_per_style));
-        constexpr auto wasted_cells_per_row = constants::style_buffer_size - (styles_per_row * num_zooms_per_style);
-        const auto needed_rows = ceil(float(temp_styles.size()) / float(styles_per_row));
+        style_values.reserve(constants::style_buffer_size * constants::style_buffer_size);
 
-        style_values.reserve(temp_styles.size() * num_zooms_per_style + styles_per_row * wasted_cells_per_row);
-
-        for (size_t i = 0; i < needed_rows; i++) {
-            for (size_t j = 0; j < styles_per_row; j++) {
-                const auto style_index = i * styles_per_row + j;
-                if (style_index < temp_styles.size())
-                    style_values.insert(style_values.end(), temp_styles[style_index].cbegin(), temp_styles[style_index].cend());
-            }
-            // fill the rest of the row with default -1u values
-            style_values.resize((i + 1) * constants::style_buffer_size, glm::u32vec2(-1u));
-
-            // qDebug() << style_values.size();
+        for (const auto& styles : temp_styles) {
+            style_values.insert(style_values.end(), styles.cbegin(), styles.cend());
         }
+
+        // for (size_t i = 0; i < needed_rows; i++) {
+        //     for (size_t j = 0; j < styles_per_row; j++) {
+        //         const auto style_index = i * styles_per_row + j;
+        //         if (style_index < temp_styles.size())
+        //             style_values.insert(style_values.end(), temp_styles[style_index].cbegin(), temp_styles[style_index].cend());
+        //     }
+        //     // fill the rest of the row with default -1u values
+
+        //     // qDebug() << style_values.size();
+        // }
         // qDebug() << style_values.size() << temp_styles.size() << needed_rows;
 
         // qDebug() << "styles_per_row" << styles_per_row;
@@ -502,7 +501,7 @@ bool Style::update_visible_styles()
         const auto encountered_zoom = m_lowest_encountered_zoom[indices.layer_index];
 
         const auto start_index = style_buffer_index(indices.style_index, encountered_zoom);
-        const auto updateable_styles = num_zooms_per_style - encountered_zoom;
+        const auto updateable_styles = constants::num_zooms_per_style - encountered_zoom;
 
         for (auto i = start_index; i <= start_index + updateable_styles; i++) {
             visible_style_buffer[i] = style_buffer[i];
@@ -558,10 +557,8 @@ uint32_t Style::interpolate_color(float t, uint32_t color1, uint32_t color2)
 
 uint32_t Style::style_buffer_index(const uint32_t style_index, const uint zoom_level)
 {
-    constexpr auto styles_per_row = int(constants::style_buffer_size / float(num_zooms_per_style));
-
-    const auto style_buffer_col = (style_index % styles_per_row) * num_zooms_per_style;
-    const auto style_buffer_row = uint(style_index / styles_per_row);
+    const auto style_buffer_col = (style_index * constants::buffer_entries_per_style) & ((1u << constants::bits_per_buffer_row) - 1u);
+    const auto style_buffer_row = (style_index * constants::buffer_entries_per_style) >> constants::bits_per_buffer_row;
 
     return style_buffer_col + (style_buffer_row * constants::style_buffer_size) + zoom_level;
 }

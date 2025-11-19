@@ -141,7 +141,6 @@ private:
     // sets alpha to 0 on a 32 bit color
     static constexpr uint remove_alpha_mask = 4294967040u;
     // determines how many styles per zoom level exist
-    static constexpr auto num_zooms_per_style = constants::style_zoom_range.y + 1;
 
     float interpolation_factor(uint8_t zoom, float base, uint8_t zoom1, uint8_t zoom2);
     uint32_t interpolate_color(float t, uint32_t color1, uint32_t color2);

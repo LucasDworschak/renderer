@@ -183,54 +183,61 @@ TEST_CASE("nucleus/vector_style")
         // the layer_index order is however preserved (just not tested in this testcase)
 
         // "opacity outside of zoom range"
-        CHECK(style_buffer[0].x == 0); // z 0
-        CHECK(style_buffer[1].x == 0); // z 1
-        CHECK(style_buffer[2].x == 0); // z 2
-        CHECK(style_buffer[3].x == 0); // z 3
-        CHECK(style_buffer[4].x == 0); // z 4
-        CHECK(style_buffer[5].x == 0); // z 5
-        CHECK(style_buffer[6].x == 0); // z 6
-        CHECK(style_buffer[7].x == 0); // z 7
-        CHECK(style_buffer[8].x == 0); // z 8
-        CHECK(style_buffer[9].x == 0); // z 9
-        CHECK(style_buffer[10].x == 0); // z 10
-        CHECK(style_buffer[11].x == 0); // z 11
-        CHECK(style_buffer[12].x == 0); // z 12
-        CHECK(style_buffer[13].x == Style::gamma_decode(0xbbbbbbff)); // z 13
-        CHECK(style_buffer[14].x == Style::gamma_decode(0xbbbbbbff)); // z 14
-        CHECK(style_buffer[15].x == Style::gamma_decode(0xbbbbbbff)); // z 15
-        CHECK(style_buffer[16].x == 0); // z 16
-        CHECK(style_buffer[17].x == 0); // z 17
-        CHECK(style_buffer[18].x == 0); // z 18
+        CHECK(style_buffer[Style::style_buffer_index(0, 0)].x == 0); // z 0
+        CHECK(style_buffer[Style::style_buffer_index(0, 1)].x == 0); // z 1
+        CHECK(style_buffer[Style::style_buffer_index(0, 2)].x == 0); // z 2
+        CHECK(style_buffer[Style::style_buffer_index(0, 3)].x == 0); // z 3
+        CHECK(style_buffer[Style::style_buffer_index(0, 4)].x == 0); // z 4
+        CHECK(style_buffer[Style::style_buffer_index(0, 5)].x == 0); // z 5
+        CHECK(style_buffer[Style::style_buffer_index(0, 6)].x == 0); // z 6
+        CHECK(style_buffer[Style::style_buffer_index(0, 7)].x == 0); // z 7
+        CHECK(style_buffer[Style::style_buffer_index(0, 8)].x == 0); // z 8
+        CHECK(style_buffer[Style::style_buffer_index(0, 9)].x == 0); // z 9
+        CHECK(style_buffer[Style::style_buffer_index(0, 10)].x == 0); // z 10
+        CHECK(style_buffer[Style::style_buffer_index(0, 11)].x == 0); // z 11
+        CHECK(style_buffer[Style::style_buffer_index(0, 12)].x == 0); // z 12
+        CHECK(style_buffer[Style::style_buffer_index(0, 13)].x == Style::gamma_decode(0xbbbbbbff)); // z 13
+        CHECK(style_buffer[Style::style_buffer_index(0, 14)].x == Style::gamma_decode(0xbbbbbbff)); // z 14
+        CHECK(style_buffer[Style::style_buffer_index(0, 15)].x == Style::gamma_decode(0xbbbbbbff)); // z 15
+        CHECK(style_buffer[Style::style_buffer_index(0, 16)].x == 0); // z 16
+        CHECK(style_buffer[Style::style_buffer_index(0, 17)].x == 0); // z 17
+        CHECK(style_buffer[Style::style_buffer_index(0, 18)].x == 0); // z 18
 
         // reuse style if no blending
 
-        CHECK(style_buffer[19].x == 0); // z0 // make sure that we are in the right style instruction here (not using other style)
-        CHECK(Style::style_width(style_buffer[19]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 0
-        CHECK(style_buffer[20].x == 0); // z1
-        CHECK(style_buffer[21].x == 0); // z2
-        CHECK(style_buffer[22].x == 0); // z3
-        CHECK(style_buffer[23].x == 0); // z4
-        CHECK(style_buffer[24].x == 0); // z5
-        CHECK(style_buffer[25].x == 0); // z6
-        CHECK(style_buffer[26].x == 0); // z7
-        CHECK(style_buffer[27].x == 0); // z8
-        CHECK(style_buffer[28].x == 0); // z9
-        CHECK(style_buffer[29].x == 0); // z10
-        CHECK(style_buffer[30].x == Style::gamma_decode(0xaaaaaaff)); // z 11 // color
-        CHECK(Style::style_width(style_buffer[30]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 11
-        CHECK(Style::style_width(style_buffer[31]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 12
-        CHECK(Style::style_width(style_buffer[32]) == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 13
-        CHECK(Style::style_width(style_buffer[33]) == (9 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 14
-        CHECK(style_buffer[34].x == Style::gamma_decode(0xaaaaaaff)); // z 15 color
-        CHECK(Style::style_width(style_buffer[34]) == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 15
-        CHECK(style_buffer[35].x == 0); // z 16
-        CHECK(Style::style_width(style_buffer[35]) == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 16
-        CHECK(style_buffer[36].x == 0); // z 17
-        CHECK(style_buffer[37].x == 0); // z 18
+        CHECK(style_buffer[Style::style_buffer_index(1, 0)].x == 0); // z0 // make sure that we are in the right style instruction here (not using other style)
+        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 0)])
+            == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 0
+        CHECK(style_buffer[Style::style_buffer_index(1, 1)].x == 0); // z1
+        CHECK(style_buffer[Style::style_buffer_index(1, 2)].x == 0); // z2
+        CHECK(style_buffer[Style::style_buffer_index(1, 3)].x == 0); // z3
+        CHECK(style_buffer[Style::style_buffer_index(1, 4)].x == 0); // z4
+        CHECK(style_buffer[Style::style_buffer_index(1, 5)].x == 0); // z5
+        CHECK(style_buffer[Style::style_buffer_index(1, 6)].x == 0); // z6
+        CHECK(style_buffer[Style::style_buffer_index(1, 7)].x == 0); // z7
+        CHECK(style_buffer[Style::style_buffer_index(1, 8)].x == 0); // z8
+        CHECK(style_buffer[Style::style_buffer_index(1, 9)].x == 0); // z9
+        CHECK(style_buffer[Style::style_buffer_index(1, 10)].x == 0); // z10
+        CHECK(style_buffer[Style::style_buffer_index(1, 11)].x == Style::gamma_decode(0xaaaaaaff)); // z 11 // color
+        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 11)])
+            == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 11
+        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 12)])
+            == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 12
+        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 13)])
+            == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 13
+        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 14)])
+            == (9 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 14
+        CHECK(style_buffer[Style::style_buffer_index(1, 15)].x == Style::gamma_decode(0xaaaaaaff)); // z 15 color
+        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 15)])
+            == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 15
+        CHECK(style_buffer[Style::style_buffer_index(1, 16)].x == 0); // z 16
+        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 16)])
+            == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 16
+        CHECK(style_buffer[Style::style_buffer_index(1, 17)].x == 0); // z 17
+        CHECK(style_buffer[Style::style_buffer_index(1, 18)].x == 0); // z 18
 
-        CHECK(style_buffer[38].x == -1u); // no data
-        CHECK(style_buffer[39].y == -1u); // no data
+        CHECK(style_buffer[Style::style_buffer_index(2, 0)].x == -1u); // no data
+        CHECK(style_buffer[Style::style_buffer_index(2, 1)].y == -1u); // no data
     }
 
     SECTION("Simple style parsing2")
@@ -266,7 +273,7 @@ TEST_CASE("nucleus/vector_style")
             auto zoom0_index = Style::style_buffer_index(i, 0);
             auto zoom1_index = Style::style_buffer_index(i, 18);
 
-            // qDebug() << zoom0_index;
+            qDebug() << zoom0_index;
 
             CHECK(expected_colors[i] == style_buffer[zoom0_index].x);
             CHECK(expected_colors[i] == style_buffer[zoom1_index].x);
@@ -284,81 +291,79 @@ TEST_CASE("nucleus/vector_style")
 
         const auto style_buffer = s.styles()->buffer();
 
-        constexpr auto z_per_style = 19;
-
         // there are slight os differences in this test -> we do not care on the order in the style -> but we want to test if a style is handled correctly
-        const auto index_a = (style_buffer[(z_per_style * 0) + 14].x == Style::gamma_decode(0xaaaaaaff))
+        const auto index_a = (style_buffer[Style::style_buffer_index(0, 14)].x == Style::gamma_decode(0xaaaaaaff))
             ? 0
-            : ((style_buffer[(z_per_style * 1) + 14].x == Style::gamma_decode(0xaaaaaaff)) ? 1 : 2);
-        const auto index_b = (style_buffer[(z_per_style * 0) + 14].x == Style::gamma_decode(0xbbbbbbff))
+            : ((style_buffer[Style::style_buffer_index(1, 14)].x == Style::gamma_decode(0xaaaaaaff)) ? 1 : 2);
+        const auto index_b = (style_buffer[Style::style_buffer_index(0, 14)].x == Style::gamma_decode(0xbbbbbbff))
             ? 0
-            : ((style_buffer[(z_per_style * 1) + 14].x == Style::gamma_decode(0xbbbbbbff)) ? 1 : 2);
-        const auto index_c = (style_buffer[(z_per_style * 0) + 14].x == Style::gamma_decode(0xccccccff))
+            : ((style_buffer[Style::style_buffer_index(1, 14)].x == Style::gamma_decode(0xbbbbbbff)) ? 1 : 2);
+        const auto index_c = (style_buffer[Style::style_buffer_index(0, 14)].x == Style::gamma_decode(0xccccccff))
             ? 0
-            : ((style_buffer[(z_per_style * 1) + 14].x == Style::gamma_decode(0xccccccff)) ? 1 : 2);
+            : ((style_buffer[Style::style_buffer_index(1, 14)].x == Style::gamma_decode(0xccccccff)) ? 1 : 2);
 
-        CHECK(style_buffer[(z_per_style * index_a) + 0].x == 0); // z 0
-        CHECK(style_buffer[(z_per_style * index_a) + 1].x == 0); // z 1
-        CHECK(style_buffer[(z_per_style * index_a) + 2].x == 0); // z 2
-        CHECK(style_buffer[(z_per_style * index_a) + 3].x == 0); // z 3
-        CHECK(style_buffer[(z_per_style * index_a) + 4].x == 0); // z 4
-        CHECK(style_buffer[(z_per_style * index_a) + 5].x == 0); // z 5
-        CHECK(style_buffer[(z_per_style * index_a) + 6].x == 0); // z 6
-        CHECK(style_buffer[(z_per_style * index_a) + 7].x == 0); // z 7
-        CHECK(style_buffer[(z_per_style * index_a) + 8].x == 0); // z 8
-        CHECK(style_buffer[(z_per_style * index_a) + 9].x == 0); // z 9
-        CHECK(style_buffer[(z_per_style * index_a) + 10].x == 0); // z 10
-        CHECK(style_buffer[(z_per_style * index_a) + 11].x == 0); // z 11
-        CHECK(style_buffer[(z_per_style * index_a) + 12].x == 0); // z 12
-        CHECK(style_buffer[(z_per_style * index_a) + 13].x == 0); // z 13
-        CHECK(style_buffer[(z_per_style * index_a) + 14].x == Style::gamma_decode(0xaaaaaaff)); // z 14
-        CHECK(style_buffer[(z_per_style * index_a) + 15].x == Style::gamma_decode(0xaaaaaaff)); // z 15
-        CHECK(style_buffer[(z_per_style * index_a) + 16].x == Style::gamma_decode(0xaaaaaaff)); // z 16
-        CHECK(style_buffer[(z_per_style * index_a) + 17].x == Style::gamma_decode(0xaaaaaaff)); // z 17
-        CHECK(style_buffer[(z_per_style * index_a) + 18].x == Style::gamma_decode(0xaaaaaaff)); // z 18
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 0)].x == 0); // z 0
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 1)].x == 0); // z 1
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 2)].x == 0); // z 2
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 3)].x == 0); // z 3
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 4)].x == 0); // z 4
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 5)].x == 0); // z 5
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 6)].x == 0); // z 6
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 7)].x == 0); // z 7
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 8)].x == 0); // z 8
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 9)].x == 0); // z 9
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 10)].x == 0); // z 10
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 11)].x == 0); // z 11
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 12)].x == 0); // z 12
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 13)].x == 0); // z 13
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 14)].x == Style::gamma_decode(0xaaaaaaff)); // z 14
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 15)].x == Style::gamma_decode(0xaaaaaaff)); // z 15
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 16)].x == Style::gamma_decode(0xaaaaaaff)); // z 16
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 17)].x == Style::gamma_decode(0xaaaaaaff)); // z 17
+        CHECK(style_buffer[Style::style_buffer_index(index_a, 18)].x == Style::gamma_decode(0xaaaaaaff)); // z 18
 
-        CHECK(style_buffer[(z_per_style * index_b) + 0].x == 0); // z 0
-        CHECK(style_buffer[(z_per_style * index_b) + 1].x == 0); // z 1
-        CHECK(style_buffer[(z_per_style * index_b) + 2].x == 0); // z 2
-        CHECK(style_buffer[(z_per_style * index_b) + 3].x == 0); // z 3
-        CHECK(style_buffer[(z_per_style * index_b) + 4].x == 0); // z 4
-        CHECK(style_buffer[(z_per_style * index_b) + 5].x == 0); // z 5
-        CHECK(style_buffer[(z_per_style * index_b) + 6].x == 0); // z 6
-        CHECK(style_buffer[(z_per_style * index_b) + 7].x == 0); // z 7
-        CHECK(style_buffer[(z_per_style * index_b) + 8].x == 0); // z 8
-        CHECK(style_buffer[(z_per_style * index_b) + 9].x == 0); // z 9
-        CHECK(style_buffer[(z_per_style * index_b) + 10].x == 0); // z 10
-        CHECK(style_buffer[(z_per_style * index_b) + 11].x == 0); // z 11
-        CHECK(style_buffer[(z_per_style * index_b) + 12].x == 0); // z 12
-        CHECK(style_buffer[(z_per_style * index_b) + 13].x == Style::gamma_decode(0xbbbbbbff)); // z 13
-        CHECK(style_buffer[(z_per_style * index_b) + 14].x == Style::gamma_decode(0xbbbbbbff)); // z 14
-        CHECK(style_buffer[(z_per_style * index_b) + 15].x == Style::gamma_decode(0xbbbbbbff)); // z 15
-        CHECK(style_buffer[(z_per_style * index_b) + 16].x == 0); // z 16
-        CHECK(style_buffer[(z_per_style * index_b) + 17].x == 0); // z 17
-        CHECK(style_buffer[(z_per_style * index_b) + 18].x == 0); // z 18
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 0)].x == 0); // z 0
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 1)].x == 0); // z 1
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 2)].x == 0); // z 2
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 3)].x == 0); // z 3
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 4)].x == 0); // z 4
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 5)].x == 0); // z 5
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 6)].x == 0); // z 6
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 7)].x == 0); // z 7
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 8)].x == 0); // z 8
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 9)].x == 0); // z 9
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 10)].x == 0); // z 10
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 11)].x == 0); // z 11
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 12)].x == 0); // z 12
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 13)].x == Style::gamma_decode(0xbbbbbbff)); // z 13
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 14)].x == Style::gamma_decode(0xbbbbbbff)); // z 14
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 15)].x == Style::gamma_decode(0xbbbbbbff)); // z 15
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 16)].x == 0); // z 16
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 17)].x == 0); // z 17
+        CHECK(style_buffer[Style::style_buffer_index(index_b, 18)].x == 0); // z 18
 
-        CHECK(style_buffer[(z_per_style * index_c) + 0].x == 0); // z 0
-        CHECK(style_buffer[(z_per_style * index_c) + 1].x == 0); // z 1
-        CHECK(style_buffer[(z_per_style * index_c) + 2].x == 0); // z 2
-        CHECK(style_buffer[(z_per_style * index_c) + 3].x == 0); // z 3
-        CHECK(style_buffer[(z_per_style * index_c) + 4].x == 0); // z 4
-        CHECK(style_buffer[(z_per_style * index_c) + 5].x == 0); // z 5
-        CHECK(style_buffer[(z_per_style * index_c) + 6].x == 0); // z 6
-        CHECK(style_buffer[(z_per_style * index_c) + 7].x == 0); // z 7
-        CHECK(style_buffer[(z_per_style * index_c) + 8].x == 0); // z 8
-        CHECK(style_buffer[(z_per_style * index_c) + 9].x == 0); // z 9
-        CHECK(style_buffer[(z_per_style * index_c) + 10].x == 0); // z 10
-        CHECK(style_buffer[(z_per_style * index_c) + 11].x == 0); // z 11
-        CHECK(style_buffer[(z_per_style * index_c) + 12].x == 0); // z 12
-        CHECK(style_buffer[(z_per_style * index_c) + 13].x == Style::gamma_decode(0xccccccff)); // z 13
-        CHECK(style_buffer[(z_per_style * index_c) + 14].x == Style::gamma_decode(0xccccccff)); // z 14
-        CHECK(style_buffer[(z_per_style * index_c) + 15].x == Style::gamma_decode(0xccccccff)); // z 15
-        CHECK(style_buffer[(z_per_style * index_c) + 16].x == Style::gamma_decode(0xccccccff)); // z 16
-        CHECK(style_buffer[(z_per_style * index_c) + 17].x == Style::gamma_decode(0xccccccff)); // z 17
-        CHECK(style_buffer[(z_per_style * index_c) + 18].x == Style::gamma_decode(0xccccccff)); // z 18
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 0)].x == 0); // z 0
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 1)].x == 0); // z 1
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 2)].x == 0); // z 2
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 3)].x == 0); // z 3
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 4)].x == 0); // z 4
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 5)].x == 0); // z 5
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 6)].x == 0); // z 6
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 7)].x == 0); // z 7
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 8)].x == 0); // z 8
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 9)].x == 0); // z 9
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 10)].x == 0); // z 10
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 11)].x == 0); // z 11
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 12)].x == 0); // z 12
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 13)].x == Style::gamma_decode(0xccccccff)); // z 13
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 14)].x == Style::gamma_decode(0xccccccff)); // z 14
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 15)].x == Style::gamma_decode(0xccccccff)); // z 15
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 16)].x == Style::gamma_decode(0xccccccff)); // z 16
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 17)].x == Style::gamma_decode(0xccccccff)); // z 17
+        CHECK(style_buffer[Style::style_buffer_index(index_c, 18)].x == Style::gamma_decode(0xccccccff)); // z 18
 
-        CHECK(style_buffer[(z_per_style * 3) + 0].x == -1u); // no data
-        CHECK(style_buffer[(z_per_style * 3) + 1].x == -1u); // no data
+        CHECK(style_buffer[Style::style_buffer_index(3, 0)].x == -1u); // no data
+        CHECK(style_buffer[Style::style_buffer_index(3, 1)].x == -1u); // no data
     }
 
     SECTION("Style expand openstreetmap")

@@ -207,8 +207,7 @@ const highp uint additonal_info0_mask = 1u << (style_bits + 3);
 const highp uint additonal_info1_mask = 1u << (style_bits + 2);
 const highp uint additonal_info2_mask = 1u << (style_bits + 1);
 
-const lowp uint num_zooms_per_style = uint(max_zoom+1);
-const lowp uint styles_per_row = uint(style_buffer_width) / num_zooms_per_style;
+const highp uint style_buffer_column_mask = ((1u << bits_per_buffer_row) - 1u);
 
 // Style unpacking
 const lowp uint style_width_offset = 17u;
@@ -787,9 +786,6 @@ mediump ivec2 to_dict_pixel_128(mediump uint hash) {
     return ivec2(int(hash & 127u), int(hash >> 7u));
 }
 
-const lowp float div_styles_per_row = 1.0 / float(styles_per_row);
-
-
 void parse_style(out LayerStyle style, lowp uint style_index, lowp uint tile_zoom, mediump float zoom_offset, mediump float zoom_blend, lowp vec4 ortho_color, mediump float cos_smoothing_factor, bool is_polygon)
 {
     // calculate an integer zoom offset for lower and higher style indices and clamp
@@ -802,8 +798,8 @@ void parse_style(out LayerStyle style, lowp uint style_index, lowp uint tile_zoo
     lowp int style_zoom_lower = int(tile_zoom -2u );
     lowp int style_zoom_higher = int(tile_zoom -1u );
 
-    lowp int style_buffer_col = int((style_index % styles_per_row) * num_zooms_per_style);
-    lowp int style_buffer_row = int(style_index *div_styles_per_row);
+    lowp int style_buffer_col = int((style_index * uint(buffer_entries_per_style)) & style_buffer_column_mask);
+    lowp int style_buffer_row = int((style_index * uint(buffer_entries_per_style)) >> uint(bits_per_buffer_row));
 
     // get the actual data
     highp uvec2 style_data_lower  = texelFetch(styles_sampler, ivec2(style_buffer_col+style_zoom_lower, style_buffer_row), 0).rg;
