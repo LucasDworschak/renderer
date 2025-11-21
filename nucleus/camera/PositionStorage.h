@@ -67,6 +67,19 @@ inline nucleus::camera::Definition schneeberg()
     const auto coords = srs::lat_long_alt_to_world({47.767163598, 15.804663448, 2076});
     return {{coords.x + 2500, coords.y - 100, coords.z + 100}, {coords.x, coords.y, coords.z - 100}};
 }
+inline nucleus::camera::Definition schneeberg_wide()
+{
+    const auto coords_lookat = srs::lat_long_alt_to_world({ 47.76681835452301, 15.804766627710734, 2000 });
+    const auto coords_position = srs::lat_long_alt_to_world({ 47.78994859143479, 15.911456478310352, 6500 });
+    return { coords_position, coords_lookat };
+}
+
+inline nucleus::camera::Definition innsbruck()
+{
+    const auto coords_lookat = srs::lat_long_alt_to_world({ 47.37921687886388, 11.681846209140756, 2000 });
+    const auto coords_position = srs::lat_long_alt_to_world({ 47.444948530405824, 11.821057744743166, 8000 });
+    return { coords_position, coords_lookat };
+}
 
 inline nucleus::camera::Definition karwendel()
 {
@@ -77,7 +90,7 @@ inline nucleus::camera::Definition karwendel()
 inline nucleus::camera::Definition weichtalhaus()
 {
     const auto coords_lookat = srs::lat_long_alt_to_world({47.74977, 15.77830, 1000});
-    const auto coords_position = srs::lat_long_alt_to_world({47.74562, 15.75643, 1400});
+    const auto coords_position = srs::lat_long_alt_to_world({ 47.74562, 15.75643, 1400 });
     return {coords_position,coords_lookat};
 }
 inline nucleus::camera::Definition wien()
@@ -113,6 +126,8 @@ private:
         m_positions.insert({ "grossglockner", nucleus::camera::stored_positions::grossglockner() });
         m_positions.insert({ "grossglockner_topdown", nucleus::camera::stored_positions::grossglockner_topdown() });
         m_positions.insert({ "schneeberg", nucleus::camera::stored_positions::schneeberg() });
+        m_positions.insert({ "schneeberg_wide", nucleus::camera::stored_positions::schneeberg_wide() });
+        m_positions.insert({ "innsbruck", nucleus::camera::stored_positions::innsbruck() });
         m_positions.insert({ "karwendel", nucleus::camera::stored_positions::karwendel() });
         m_positions.insert({ "wien", nucleus::camera::stored_positions::wien() });
         m_positions.insert({ "wien_top_overview", nucleus::camera::stored_positions::wien_top_overview() });

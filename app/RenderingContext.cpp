@@ -158,8 +158,8 @@ RenderingContext::RenderingContext(QObject* parent)
 
 #ifdef ALP_ENABLE_DEV_TOOLS
     // benchmarks
-    m->benchmarks.push_back(
-        std::make_shared<nucleus::utils::Benchmark>("vector_layer", 1u, std::vector<std::string> { "wien", "wien_top_overview", "weichtalhaus", "karwendel" }));
+    m->benchmarks.push_back(std::make_shared<nucleus::utils::Benchmark>(
+        "vector_layer_new", 1u, std::vector<std::string> { "wien", "wien_top_overview", "innsbruck", "schneeberg_wide" }));
 
     for (const auto& benchmark : m->benchmarks) {
         m->scheduler_director->visit([&benchmark](nucleus::tile::Scheduler* sch) {
