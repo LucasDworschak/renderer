@@ -169,6 +169,7 @@ QQuickFramebufferObject::Renderer* TerrainRendererItem::createRenderer() const
         connect(r->glWindow(), &gl_engine::Window::timer_measurements_ready, benchmark.get(), &nucleus::utils::Benchmark::receive_measurements);
         connect(this, &TerrainRendererItem::activate_benchmark, benchmark.get(), &nucleus::utils::Benchmark::activate);
         connect(benchmark.get(), &nucleus::utils::Benchmark::camera_definition_set_by_user, r->controller(), &nucleus::camera::Controller::set_model_matrix);
+        connect(benchmark.get(), &nucleus::utils::Benchmark::max_geometries_set, r->glWindow(), &gl_engine::Window::update_max_vector_geometry);
     }
 #endif
 

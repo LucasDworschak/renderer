@@ -33,14 +33,16 @@
 
 namespace nucleus::utils {
 
-Benchmark::Benchmark(QString name, unsigned id, std::vector<std::string> positions)
+Benchmark::Benchmark(QString name, unsigned id, std::vector<std::string> positions, std::vector<int> max_geometries)
     : m_name(name)
     , m_id(id)
     , m_load_count(0)
     , m_record_data(false)
     , m_activated(false)
     , m_current_position(0)
+    , m_current_geometry_count_index(0)
     , m_positions(positions)
+    , m_max_geometries(max_geometries)
 {
     qDebug() << "Benchmark: created" << name << id;
 
@@ -78,7 +80,12 @@ void Benchmark::activate(unsigned id)
 
     qDebug() << "Benchmark: starting" << m_name << m_id;
 
-    m_continue_timer->start(100);
+    reset_for_next();
+
+    qDebug() << "benchmark: " << m_positions[m_current_position] << " " << m_max_geometries[m_current_geometry_count_index];
+
+    emit max_geometries_set(m_max_geometries[0]);
+    emit camera_definition_set_by_user(nucleus::camera::PositionStorage::instance()->get(m_positions[m_current_position++]));
 }
 
 void Benchmark::increase_load_count(const QString& scheduler_name)
@@ -91,7 +98,7 @@ void Benchmark::increase_load_count(const QString& scheduler_name)
         // new tiles arrived while recording -> stop the timer and remove all data fromt he current location
         m_continue_timer->stop();
 
-        m_timings[m_positions[m_current_position - 1]].clear();
+        m_timings[std::make_pair(m_positions[m_current_position - 1], m_max_geometries[m_current_geometry_count_index])].clear();
     }
 
     if (m_warm_up_timer->isActive()) {
@@ -120,7 +127,6 @@ void Benchmark::start_if_finished_loading()
         }
     }
 
-    qDebug() << "benchmark: " << m_positions[m_current_position - 1];
 
     // all are finished -> we can finally start with the benchmark
     // start the warm-up timer to ensure that everything is on the gpu
@@ -132,7 +138,7 @@ void Benchmark::check_requested_quads(const QString& scheduler_name, const QVari
     m_has_quads_requested[scheduler_name] = new_stats["n_quads_requested"] != 0;
 }
 
-void Benchmark::next_place()
+void Benchmark::reset_for_next()
 {
     m_record_data = false;
 
@@ -143,7 +149,25 @@ void Benchmark::next_place()
     }
 
     m_previous_time = QDateTime::currentDateTime();
+}
 
+void Benchmark::next_place()
+{
+    reset_for_next();
+
+    // go over all the set max_geometries
+    if (++m_current_geometry_count_index < m_max_geometries.size()) {
+        qDebug() << "benchmark: " << m_positions[m_current_position - 1] << " " << m_max_geometries[m_current_geometry_count_index];
+
+        emit max_geometries_set(m_max_geometries[m_current_geometry_count_index]);
+
+        m_warm_up_timer->start(warm_up_time);
+        return;
+    }
+    m_current_geometry_count_index = 0;
+    emit max_geometries_set(m_max_geometries[m_current_geometry_count_index]);
+
+    // check if finished
     if (m_current_position >= m_positions.size()) {
         // no more locations to benchmark -> we are finished
         m_warm_up_timer->stop();
@@ -157,6 +181,7 @@ void Benchmark::next_place()
 
     // change to next location
     emit camera_definition_set_by_user(nucleus::camera::PositionStorage::instance()->get(m_positions[m_current_position++]));
+    qDebug() << "benchmark: " << m_positions[m_current_position - 1] << " " << m_max_geometries[m_current_geometry_count_index];
 }
 
 void Benchmark::create_report()
@@ -181,16 +206,16 @@ void Benchmark::create_report()
     std::set<QString, decltype(comp)> metrics;
 
     // <location, <timer_name, values>>
-    std::unordered_map<std::string, std::map<QString, std::vector<float>>> reports;
+    std::map<std::pair<std::string, int>, std::map<QString, std::vector<float>>, Hasher> reports;
 
-    for (const auto& [location, timer_reports] : m_timings) {
-        reports[location] = std::map<QString, std::vector<float>>();
+    for (const auto& [location_max_geom, timer_reports] : m_timings) {
+        reports[location_max_geom] = std::map<QString, std::vector<float>>();
 
         for (const auto& report : timer_reports) {
             for (const auto& entry : report) {
-                if (entry.name == "vector_fallback") // not interested
-                    continue;
-                reports[location][entry.name].push_back(entry.value);
+                // if (entry.name == "vector_fallback") // not interested
+                //     continue;
+                reports[location_max_geom][entry.name].push_back(entry.value);
                 metrics.insert(entry.name);
             }
         }
@@ -219,10 +244,10 @@ void Benchmark::create_report()
     out_stream << "\n";
 
     // map<metric, map<location, avg>>
-    std::unordered_map<QString, std::unordered_map<std::string, float>> avg_values_per_location;
+    std::unordered_map<QString, std::unordered_map<std::pair<std::string, int>, float, Hasher>> avg_values_per_location;
 
-    for (const auto& [location, timers] : reports) {
-        out_stream << QString::fromStdString(location) << "\t";
+    for (const auto& [location_max_geom, timers] : reports) {
+        out_stream << QString::fromStdString(location_max_geom.first) << " " << location_max_geom.second << "\t";
 
         for (const auto& metric : metrics) {
             float avg = 0.0;
@@ -240,7 +265,7 @@ void Benchmark::create_report()
             }
             avg /= values.size();
 
-            avg_values_per_location[metric][location] = avg;
+            avg_values_per_location[metric][location_max_geom] = avg;
 
             out_stream << "\t" << avg << "\t" << min << "\t" << max << "\t";
         }
@@ -248,6 +273,9 @@ void Benchmark::create_report()
     }
     out_stream.flush(); // Ensure all data is written to the file.
     file.close(); // Close the file.
+
+    // open single file
+    QDesktopServices::openUrl(QUrl::fromLocalFile(file.fileName())); // Open with system handler.
 
     {
         // append to cummulative file
@@ -274,8 +302,8 @@ void Benchmark::create_report()
             }
             out_stream << "\nversion\t";
             for (const auto& metric : metrics) {
-                for (const auto& [location, avg] : avg_values_per_location[metric]) {
-                    out_stream << QString::fromStdString(location) << "\t";
+                for (const auto& [location_max_geom, avg] : avg_values_per_location[metric]) {
+                    out_stream << QString::fromStdString(location_max_geom.first) << " " << location_max_geom.second << "\t";
                 }
             }
         }
@@ -287,7 +315,7 @@ void Benchmark::create_report()
             }
         }
 
-        QDesktopServices::openUrl(QUrl::fromLocalFile(file.fileName())); // Open with system handler.
+        // QDesktopServices::openUrl(QUrl::fromLocalFile(file.fileName())); // Open with system handler.
     }
 
     qDebug() << "Benchmark: finished" << m_name << m_id;
@@ -314,7 +342,7 @@ void Benchmark::receive_measurements(QList<nucleus::timing::TimerReport> values)
         return;
 
     if (m_record_data && m_load_count == 0) {
-        m_timings[m_positions[m_current_position - 1]].push_back(values);
+        m_timings[std::make_pair(m_positions[m_current_position - 1], m_max_geometries[m_current_geometry_count_index])].push_back(values);
     }
 }
 

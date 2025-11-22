@@ -24,8 +24,32 @@
 
 #include <nucleus/camera/Definition.h>
 #include <nucleus/timing/TimerManager.h>
+#include <radix/hasher.h>
 
 namespace nucleus::utils {
+
+struct Hasher {
+
+    size_t operator()(const std::pair<std::string, int>& pair) const
+    {
+        size_t seed = 0;
+        radix::hasher::hash_combine<std::string>(seed, pair.first);
+        radix::hasher::hash_combine<int>(seed, pair.second);
+
+        return seed;
+    }
+
+    bool operator()(const std::pair<std::string, int>& lhs, const std::pair<std::string, int>& rhs) const
+    {
+        // in order to have consistent insertion order, we are using first the string compare than the hashes of the styleexpressions
+        auto str_comp = lhs.first.compare(rhs.first);
+        if (str_comp == 0) {
+            return lhs.second < rhs.second;
+        }
+
+        return str_comp < 0;
+    }
+};
 
 /**
  * Currently the available benchmarks to choose from are hardcoded in StatsWindow.qml
@@ -34,7 +58,7 @@ namespace nucleus::utils {
 class Benchmark : public QObject {
     Q_OBJECT
 public:
-    Benchmark(QString name, unsigned id, std::vector<std::string> positions);
+    Benchmark(QString name, unsigned id, std::vector<std::string> positions, std::vector<int> max_geometries);
     void register_scheduler(QString name);
 public slots:
     void activate(unsigned id);
@@ -50,6 +74,7 @@ private slots:
 
 signals:
     void camera_definition_set_by_user(const nucleus::camera::Definition&);
+    void max_geometries_set(unsigned int new_max_vector_geometry);
 
 private:
     const QString m_name;
@@ -61,15 +86,18 @@ private:
     QDateTime m_previous_time;
 
     size_t m_current_position;
+    size_t m_current_geometry_count_index;
     std::vector<std::string> m_positions;
+    std::vector<int> m_max_geometries;
 
     std::unique_ptr<QTimer> m_continue_timer;
     std::unique_ptr<QTimer> m_warm_up_timer;
 
-    std::unordered_map<std::string, std::vector<QList<nucleus::timing::TimerReport>>> m_timings;
+    std::unordered_map<std::pair<std::string, int>, std::vector<QList<nucleus::timing::TimerReport>>, Hasher> m_timings;
 
     void start_if_finished_loading();
     void create_report();
+    void reset_for_next();
 
     // TODO -> if processing_finished(scheduler_name) was called and has_quads_requested == falce
     // if all is_finished are true -> start benchmark
