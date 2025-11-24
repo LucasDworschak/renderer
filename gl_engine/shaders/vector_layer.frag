@@ -118,7 +118,7 @@ void debug_calculate_cell_size(out lowp vec3 debug_cell_size, mediump uint offse
         debug_cell_size = vec3(1,1,0); // yellow
     else if(offset_size  < 128u)
         debug_cell_size = vec3(1,0.5,0); // orange
-    else if(offset_size < 255u)
+    else if(offset_size <= 255u)
         debug_cell_size = vec3(1,0,0); // red
     else
         debug_cell_size = vec3(1,0,1); // purple -> should never happen -> unrecognized index

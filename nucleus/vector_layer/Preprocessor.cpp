@@ -943,7 +943,7 @@ GpuVectorLayerTile Preprocessor::create_gpu_tile()
 
     // size_t max = 0;
 
-    for (const auto& cell : m_preprocess_grid) {
+    for (auto& cell : m_preprocess_grid) {
         // go through every cell
         if (cell.cell_data.size() == 0) {
             acceleration_grid.push_back(0); // no data -> only add an emtpy cell
@@ -951,20 +951,17 @@ GpuVectorLayerTile Preprocessor::create_gpu_tile()
 
             auto start_offset = geometry_buffer.size();
 
-            geometry_buffer.insert(geometry_buffer.end(), cell.cell_data.cbegin(), cell.cell_data.cend());
+            auto cell_size = cell.cell_data.size();
 
-            auto cell_size = geometry_buffer.size() - start_offset;
-
-            // we have to add a new element
-            // if (cell_size > max)
-            //     max = cell_size;
-
-            // TODO if we stay with 512x512 geometry buffer size -> we can add two bits to size and remove those from offset
+            // we currently do not support cell sizes bigger than 255 (due to only encoding the cell_size as 8 bits in offset_size)
+            // if we stay with 512x512 geometry buffer size -> we can add two bits to size and remove those from offset
             // -> this way there is no need to artificially cap the geometries to 255
-            // TODO enable assert again
-            // assert(cell_size< 256); // make sure that we are not removing indices we want to draw
-            if (cell_size > 255)
-                cell_size = 255; // just cap it to 255 as we currently cant go any higher
+            if (cell_size > 255) {
+                cell.cell_data.resize(255);
+                cell_size = 255;
+            }
+
+            geometry_buffer.insert(geometry_buffer.end(), cell.cell_data.cbegin(), cell.cell_data.cend());
 
             if (cell_size == 0)
                 acceleration_grid.push_back(0); // no data -> only add an emtpy cell
@@ -982,6 +979,7 @@ GpuVectorLayerTile Preprocessor::create_gpu_tile()
     }
 
     // qDebug() << "max: " << max;
+    // qDebug() << "tilesize:" << geometry_buffer.size();
 
     // make sure that the buffer size is still like we expected and resize the data to actual buffer size
     assert(geometry_buffer.size() <= constants::data_size[fitting_cascade_index] * constants::data_size[fitting_cascade_index]);

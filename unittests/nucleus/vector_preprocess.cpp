@@ -537,6 +537,89 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 TEST_CASE("nucleus/vector_preprocess")
 {
 
+    // SECTION("geometry amount benchmark")
+    // {
+
+    //     // this test loads and preprocesses 16 tiles per zoom level (between z11 and z18)
+    //     // it than outputs the number of average geometries of each zoom level per location
+
+    //     std::vector<nucleus::tile::Id> ids_vienna = {
+    //         { .zoom_level = 18, .coords = { 142975, 90879 }, .scheme = nucleus::tile::Scheme::SlippyMap },
+    //         { .zoom_level = 18, .coords = { 142975 + 1, 90879 }, .scheme = nucleus::tile::Scheme::SlippyMap },
+    //         { .zoom_level = 18, .coords = { 142975, 90879 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap },
+    //         { .zoom_level = 18, .coords = { 142975 + 1, 90879 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap },
+    //     };
+
+    //     std::vector<nucleus::tile::Id> ids_grossglockner = {
+
+    //         { .zoom_level = 18, .coords = { 140287, 92159 }, .scheme = nucleus::tile::Scheme::SlippyMap },
+    //         { .zoom_level = 18, .coords = { 140287 + 1, 92159 }, .scheme = nucleus::tile::Scheme::SlippyMap },
+    //         { .zoom_level = 18, .coords = { 140287, 92159 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap },
+    //         { .zoom_level = 18, .coords = { 140287 + 1, 92159 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap },
+    //     };
+
+    //     std::vector<nucleus::tile::Id> ids_innsbruck = {
+    //         { .zoom_level = 18, .coords = { 139391, 91903 }, .scheme = nucleus::tile::Scheme::SlippyMap },
+    //         { .zoom_level = 18, .coords = { 139391 + 1, 91903 }, .scheme = nucleus::tile::Scheme::SlippyMap },
+    //         { .zoom_level = 18, .coords = { 139391, 91903 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap },
+    //         { .zoom_level = 18, .coords = { 139391 + 1, 91903 + 1 }, .scheme = nucleus::tile::Scheme::SlippyMap },
+    //     };
+
+    //     std::vector<std::vector<nucleus::tile::Id>> all_ids = { ids_vienna, ids_grossglockner, ids_innsbruck };
+    //     // std::vector<std::vector<nucleus::tile::Id>> all_ids = { ids_vienna };
+
+    //     auto service = nucleus::tile::TileLoadService(
+    //         "https://osm.cg.tuwien.ac.at/vector_tiles/vector_layer_v1/", nucleus::tile::TileLoadService::UrlPattern::ZXY_yPointingSouth, "");
+
+    //     // type -> zoom -> sum of num geometries
+    //     std::vector<std::vector<size_t>> num_geometries_tile;
+    //     // std::vector<std::vector<size_t>> num_geometries_tile;
+    //     num_geometries_tile.resize(all_ids.size());
+    //     for (size_t i = 0; i < all_ids.size(); i++) {
+    //         num_geometries_tile[i].resize(19, 0u);
+    //     }
+
+    //     Style style(":/vectorlayerstyles/openstreetmap.json"); // 13
+    //     style.load();
+
+    //     Preprocessor preprocessor(std::move(style));
+
+    //     for (int z = 18; z > 10; z--) {
+    //         // for (int z = 18; z > 16; z--) {
+
+    //         for (size_t i = 0; i < all_ids.size(); i++) {
+    //             for (auto& id : all_ids[i]) {
+    //                 id = id.parent();
+
+    //                 for (const auto& child_id : id.children()) {
+
+    //                     // qDebug() << "id:" << (child_id.zoom_level) << child_id.coords.x << child_id.coords.y;
+    //                     QSignalSpy spy(&service, &nucleus::tile::TileLoadService::load_finished);
+    //                     service.load(child_id);
+    //                     spy.wait(15000);
+
+    //                     REQUIRE(spy.count() == 1);
+    //                     QList<QVariant> arguments = spy.takeFirst();
+    //                     REQUIRE(arguments.size() == 1);
+    //                     nucleus::tile::Data tile_bytes = arguments.at(0).value<nucleus::tile::Data>();
+
+    //                     auto result = preprocessor.preprocess(id, *tile_bytes.data);
+
+    //                     num_geometries_tile[i][z] += preprocessor.processed_amount();
+
+    //                     qDebug() << i << z << preprocessor.processed_amount();
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     for (const auto& type : num_geometries_tile) {
+    //         for (size_t zoom = 0; zoom < type.size(); zoom++) {
+    //             qDebug() << zoom << (double(type[zoom]) / 16.0);
+    //         }
+    //     }
+    // }
+
     // SECTION("Tile download basemap")
     // {
     //     // if this fails it is very likely that something on the vector tile server changed
