@@ -685,6 +685,10 @@ size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, Vect
             { { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, inner_edges, style_layer.style_index, true });
 
         (*temp_cell).emplace_back(data);
+
+        if (temp_cell->size() > max_cell_size) {
+            return i; // early exit -> no more data can be inserted into the cell
+        }
     }
 
     // returns how many triangles have been generated;
@@ -852,8 +856,13 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
 
                         const auto vertex_groups = separate_vertex_groups(m_clipper_result);
 
-                        for (const auto& vertices : vertex_groups)
-                            m_processed_amount += triangulize_earcut(vertices, &cell.cell_data, style_layer);
+                        for (const auto& vertices : vertex_groups) {
+                            if (!cell.is_done) {
+                                m_processed_amount += triangulize_earcut(vertices, &cell.cell_data, style_layer);
+                                if (cell.cell_data.size() >= max_cell_size)
+                                    cell.is_done = true;
+                            }
+                        }
                     }
                 });
 
@@ -889,6 +898,12 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                     }
 
                     for (const auto& index : indices) {
+
+                        if (cell.cell_data.size() >= max_cell_size) // cell is full
+                        {
+                            cell.is_done = true;
+                            continue;
+                        }
 
                         const auto a = glm::ivec2 { long(vertices[index.x][index.y].x) - cell.rect_lines.left - cell_width_lines * constants::aa_border,
                             long(vertices[index.x][index.y].y) - cell.rect_lines.top - cell_width_lines * constants::aa_border };
@@ -956,9 +971,9 @@ GpuVectorLayerTile Preprocessor::create_gpu_tile()
             // we currently do not support cell sizes bigger than 255 (due to only encoding the cell_size as 8 bits in offset_size)
             // if we stay with 512x512 geometry buffer size -> we can add two bits to size and remove those from offset
             // -> this way there is no need to artificially cap the geometries to 255
-            if (cell_size > 255) {
-                cell.cell_data.resize(255);
-                cell_size = 255;
+            if (cell_size > max_cell_size) {
+                cell.cell_data.resize(max_cell_size);
+                cell_size = max_cell_size;
             }
 
             geometry_buffer.insert(geometry_buffer.end(), cell.cell_data.cbegin(), cell.cell_data.cend());

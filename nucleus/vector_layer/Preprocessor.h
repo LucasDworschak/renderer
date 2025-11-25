@@ -184,6 +184,8 @@ private:
     VectorLayers get_debug_vector_tiles(tile::Id id);
 #endif
 
+    static constexpr uint max_cell_size = 255;
+
     static std::pair<uint32_t, uint32_t> get_split_index(uint32_t index, const std::vector<uint32_t>& polygon_sizes);
     static bool check_inner_polygon_edge(
         const ClipperPaths& polygon_points, std::pair<uint32_t, uint32_t> ind0, std::pair<uint32_t, uint32_t> ind1, uint32_t max_indices);
