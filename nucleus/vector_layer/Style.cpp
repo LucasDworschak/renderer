@@ -475,15 +475,74 @@ std::vector<StyleLayerIndex> Style::indices(std::string layer_name,
 
     const auto indices = m_layer_to_style.at(layer).indices(zoom, feature, temp_values);
 
-    for (const auto& index : indices) {
+    return indices;
+}
 
-        if (zoom < m_lowest_encountered_zoom[index.layer_index]) {
-            m_lowest_encountered_zoom[index.layer_index] = zoom;
-            m_styles_to_update.push_back(index);
+std::vector<StyleLayerIndex> Style::simplify_styles(
+    std::vector<StyleLayerIndex>* style_and_layer_indices, const uint zoom_level, const std::vector<glm::u32vec2>& style_buffer)
+{
+    // we get multiple styles that may have full opacity and the same width
+    // creating render calls for both does not make sense -> we only want to draw the top layer
+    // this function simplifys all the styles so that only the styles which actually have a change to be rendered will remain
+
+    // TODO this sort should happen at creation of the vector not here
+    // order the styles so that we look at layer in descending order
+    std::sort(
+        style_and_layer_indices->begin(), style_and_layer_indices->end(), [](StyleLayerIndex a, StyleLayerIndex b) { return a.layer_index > b.layer_index; });
+    std::vector<StyleLayerIndex> out_styles;
+    int accummulative_opacity = 0;
+    float width = 0.0;
+
+    for (const auto& indices : *style_and_layer_indices) {
+        const auto buffer_index = Style::style_buffer_index(indices.style_index, zoom_level);
+        const auto style_data_higher = style_buffer[buffer_index];
+        auto style_data_lower = style_data_higher;
+        if (zoom_level > 0)
+            style_data_lower = style_buffer[buffer_index - 1];
+
+        const float lower_width = Style::style_width(style_data_lower);
+        const float lower_opacity = style_data_lower.x & 255;
+        const float higher_width = Style::style_width(style_data_higher);
+        const bool uses_dashes = Style::uses_dashes(style_data_higher);
+        const float higher_opacity = style_data_higher.x & 255;
+
+        // by mixing the lower and higher style -> we get a value that better represents a real world example
+        // this is neccessary for e.g. 1 landcover style that stops at z12 and another that starts at z13
+        // -> we need to render both, because rendering only one at z13 would falsely represent a fade to alpha 0 between z12 and z13
+        // by using z12.5 for the current opacity and width, we can make sure that any can be countered by the fading in the opposite direction
+        const float current_width = (lower_width + higher_width) / 2.0;
+        const int current_opacity = (lower_opacity + higher_opacity) / 2.0;
+
+        if (current_opacity == 0)
+            continue; // we dont care about 0 opacity geometry
+
+        if (width < current_width) {
+            // reset opacity
+            accummulative_opacity = 0;
+            width = current_width;
+        }
+
+        if (accummulative_opacity < 255) {
+            if (!uses_dashes) // dashes do not count for accummulative opacity
+                accummulative_opacity += current_opacity;
+            out_styles.push_back(indices);
         }
     }
 
-    return indices;
+    return out_styles;
+}
+
+// we register the styles after we simplified them
+// this way, the dynamic blending of visible styles is more true to what really is needed
+void Style::register_used_styles(const uint zoom_level, const std::vector<StyleLayerIndex>& indices)
+{
+    for (const auto& index : indices) {
+
+        if (zoom_level < m_lowest_encountered_zoom[index.layer_index]) {
+            m_lowest_encountered_zoom[index.layer_index] = zoom_level;
+            m_styles_to_update.push_back(index);
+        }
+    }
 }
 
 std::shared_ptr<const nucleus::Raster<glm::u32vec2>> Style::styles() const { return m_styles; }
@@ -503,7 +562,7 @@ bool Style::update_visible_styles()
         const auto start_index = style_buffer_index(indices.style_index, encountered_zoom);
         const auto updateable_styles = constants::num_zooms_per_style - encountered_zoom;
 
-        for (auto i = start_index; i <= start_index + updateable_styles; i++) {
+        for (auto i = start_index; i < start_index + updateable_styles; i++) {
             visible_style_buffer[i] = style_buffer[i];
         }
     }

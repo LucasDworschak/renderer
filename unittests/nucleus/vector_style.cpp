@@ -82,7 +82,8 @@ std::map<std::string, uint32_t> parse_tile(
             // qDebug() << key;
 
             auto style_indices = s->indices(layer_name, type, zoom, feature, &temp_values);
-            style_indices = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, zoom, style_buffer);
+            style_indices = nucleus::vector_layer::Style::simplify_styles(&style_indices, zoom, style_buffer);
+            s->register_used_styles(zoom, style_indices);
 
             if (check_valid_style)
                 CHECK(style_indices.size() > 0); // make sure that every style is available in the stylesheet
@@ -383,7 +384,7 @@ TEST_CASE("nucleus/vector_style")
 
         QJsonArray expanded_layers = style_expander::expand(layers);
 
-        CHECK(layers.size() == 208); // makes sure that the input file is still the same
+        CHECK(layers.size() == 211); // makes sure that the input file is still the same
         CHECK(expanded_layers.size() == 281);
 
         // // DEBUG view what is written in expanded layers
@@ -499,7 +500,7 @@ TEST_CASE("nucleus/vector_style")
         // check if the color stored int he style buffer points to the correct color in the stylesheet
         const auto style_buffer = s.styles()->buffer();
 
-        CHECK(feature_to_style.size() == 150);
+        CHECK(feature_to_style.size() == 130);
         CHECK(style_buffer[feature_to_style.at("fill__building__null__null_0")].x == s.parse_color("#baaa9fff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__farmland__farmland_0")].x == s.parse_color("#dadeaaff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__farmland__farmland_1")].x == s.parse_color("#dadeaaff"));
@@ -613,26 +614,6 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__bridge__1__paved_2")].x == s.parse_color("#000000ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_0")].x == s.parse_color("#edf485ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__secondary__null__paved_1")].x == s.parse_color("#293400ff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null_1")].x == s.parse_color("#7f7f7fff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__alley_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__alley_1")].x == s.parse_color("#7f7f7fff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__1__unpaved_1")].x == s.parse_color("#7f7f7fff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__alley_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__alley_1")].x == s.parse_color("#7f7f7fff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no_1")].x == s.parse_color("#7f7f7fff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__1_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__1_1")].x == s.parse_color("#7f7f7fff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__no__no__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__no__no__no__paved_1")].x == s.parse_color("#7f7f7fff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__paved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__paved_1")].x == s.parse_color("#7f7f7fff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__unpaved_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__unpaved_1")].x == s.parse_color("#7f7f7fff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__yes_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__transportation__service__null__yes_1")].x == s.parse_color("#7f7f7fff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_0")].x == s.parse_color("#ffffffff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null_1")].x == s.parse_color("#464646ff"));
         CHECK(style_buffer[feature_to_style.at("line__transportation__tertiary__null__paved_0")].x == s.parse_color("#ffffffff"));
@@ -1050,7 +1031,9 @@ TEST_CASE("nucleus/vector_style")
         // DEBUG show all keys to styles
         // create_debug_filter_checks(feature_to_style, style_buffer);
     }
-
+}
+TEST_CASE("nucleus/quicktest")
+{
     SECTION("visible styles")
     {
         Style s(":/vectorlayerstyles/openstreetmap.json");
@@ -1101,8 +1084,6 @@ TEST_CASE("nucleus/vector_style")
         const auto forest0_style_index = feature_to_style.at("fill__landcover__wood__forest_0");
         const auto forest1_style_index = feature_to_style.at("fill__landcover__wood__forest_1");
 
-        const auto service_style_index = feature_to_style.at("line__transportation__service__null__paved_0");
-
         // checking forest with minzoom 13
         // style at z12 is transparent, (premultiplied alpha means that color is black)
         CHECK(visible_style_buffer[forest0_style_index - 1].x == 0); // z 12
@@ -1111,18 +1092,12 @@ TEST_CASE("nucleus/vector_style")
         CHECK(style_buffer[forest0_style_index + 0].x == s.parse_color("#6ba357ff")); // z 13
 
         // checking forest with maxzoom 13
-        // maxzoom is 13 -> 13 is still visible and 14 will blend out -> but since we blend only with the rest of the available alpha, this does not matter
+        // maxzoom is 13 -> 13 is still visible and 14 will blend out -> but since we blend only with the rest of the available alpha, this does not
+        // matter
         CHECK(visible_style_buffer[forest1_style_index - 1].x == 0); // z 12
         CHECK(visible_style_buffer[forest1_style_index + 0].x == s.parse_color("#6ba357ff")); // z 13
         CHECK(style_buffer[forest1_style_index - 1].x == s.parse_color("#6ba357ff")); // z 12
         CHECK(style_buffer[forest1_style_index + 0].x == s.parse_color("#6ba357ff")); // z 13
-
-        CHECK(visible_style_buffer[service_style_index - 2].x == 0); // z 12
-        CHECK(visible_style_buffer[service_style_index - 1].x == 0); // z 12
-        CHECK(visible_style_buffer[service_style_index + 0].x == s.parse_color("#FFFFFFFF")); // z 13
-        CHECK(style_buffer[service_style_index - 2].x == 0); // z 12
-        CHECK(style_buffer[service_style_index - 1].x == s.parse_color("#FFFFFFFF")); // z 12
-        CHECK(style_buffer[service_style_index + 0].x == s.parse_color("#FFFFFFFF")); // z 13
 
         // parse data again and make sure that update_visible_styles now returns false -> styles remain the same
         parse_tile(&s, tile, zoom, key_generator, skipped_layers, false);

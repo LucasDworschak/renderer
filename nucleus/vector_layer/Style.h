@@ -126,6 +126,10 @@ public:
         const mapbox::vector_tile::feature& feature,
         std::array<int, constants::max_style_expression_keys>* temp_values);
 
+    void register_used_styles(const uint zoom_level, const std::vector<StyleLayerIndex>& indices);
+    static std::vector<StyleLayerIndex> simplify_styles(
+        std::vector<StyleLayerIndex>* style_and_layer_indices, const uint zoom_level, const std::vector<glm::u32vec2>& style_buffer);
+
     std::shared_ptr<const nucleus::Raster<glm::u32vec2>> styles() const;
     std::shared_ptr<const nucleus::Raster<glm::u32vec2>> visible_styles() const;
 

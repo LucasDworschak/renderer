@@ -793,10 +793,8 @@ void parse_style(out LayerStyle style, lowp uint style_index, lowp uint tile_zoo
     lowp int zoom_offset_lower = max(int(floor(zoom_offset - 1.0)), -max_offset_levels + 1);
     lowp int zoom_offset_higher = max(int(floor(zoom_offset - 0.0)), -max_offset_levels + 1);
 
-    // lowp uint style_zoom_lower = uint(int(tile_zoom) + zoom_offset_lower);
-    // lowp uint style_zoom_higher = uint(int(tile_zoom) + zoom_offset_higher);
-    lowp int style_zoom_lower = int(tile_zoom -2u );
-    lowp int style_zoom_higher = int(tile_zoom -1u );
+    lowp int style_zoom_lower = int(tile_zoom) + zoom_offset_lower;
+    lowp int style_zoom_higher = int(tile_zoom) + zoom_offset_higher;
 
     lowp int style_buffer_col = int((style_index * uint(buffer_entries_per_style)) & style_buffer_column_mask);
     lowp int style_buffer_row = int((style_index * uint(buffer_entries_per_style)) >> uint(bits_per_buffer_row));

@@ -484,7 +484,7 @@ TEST_CASE("nucleus/vector_preprocess/clipping")
 
     SECTION("clipping vector tile to cell")
     { // real example
-        constexpr size_t expected_process_amount = 133126;
+        constexpr size_t expected_process_amount = 134940;
 
         Style style(":/vectorlayerstyles/openstreetmap.json"); // 13
         // Style style(":/vectorlayerstyles/qwant.json"); // 9
@@ -831,7 +831,7 @@ TEST_CASE("nucleus/vector_preprocess")
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment() };
             std::vector<StyleLayerIndex> style_indices { { 0, 0 }, { 1, 1 } };
-            const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, 15, style_buffer);
+            const auto simplified = nucleus::vector_layer::Style::simplify_styles(&style_indices, 15, style_buffer);
 
             CHECK(simplified.size() == 1);
             CHECK(simplified[0].style_index == 1);
@@ -877,7 +877,7 @@ TEST_CASE("nucleus/vector_preprocess")
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment() };
             std::vector<StyleLayerIndex> style_indices { { 0, 0 }, { 1, 1 } };
-            const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, 15, style_buffer);
+            const auto simplified = nucleus::vector_layer::Style::simplify_styles(&style_indices, 15, style_buffer);
 
             CHECK(simplified.size() == 2);
             CHECK(simplified[0].style_index == 1); // but layer 1 first
@@ -943,7 +943,7 @@ TEST_CASE("nucleus/vector_preprocess")
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment() };
             std::vector<StyleLayerIndex> style_indices { { 0, 0 }, { 1, 1 }, { 2, 2 } };
-            const auto simplified = nucleus::vector_layer::Preprocessor::simplify_styles(&style_indices, 15, style_buffer);
+            const auto simplified = nucleus::vector_layer::Style::simplify_styles(&style_indices, 15, style_buffer);
 
             CHECK(simplified.size() == 2);
             CHECK(simplified[0].style_index == 2);

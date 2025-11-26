@@ -172,9 +172,6 @@ public:
 
     static GpuVectorLayerTile create_default_gpu_tile();
 
-    static std::vector<StyleLayerIndex> simplify_styles(
-        std::vector<StyleLayerIndex>* styles, const uint zoom_level, const std::vector<glm::u32vec2>& style_buffer);
-
     const std::shared_ptr<const nucleus::Raster<glm::u32vec2>> style();
     bool update_visible_styles();
     size_t processed_amount();
