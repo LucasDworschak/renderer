@@ -163,6 +163,9 @@ RenderingContext::RenderingContext(QObject* parent)
         std::vector<std::string> { "wien", "wien_top_overview", "innsbruck", "schneeberg_wide" },
         std::vector<int> { 0, 4, 8, 16, 32, 64, 128, 255 }));
 
+    m->benchmarks.push_back(std::make_shared<nucleus::utils::Benchmark>(
+        "vector_layer_quick", 2u, std::vector<std::string> { "wien", "wien_top_overview" }, std::vector<int> { 8, 255 }));
+
     for (const auto& benchmark : m->benchmarks) {
         m->scheduler_director->visit([&benchmark](nucleus::tile::Scheduler* sch) {
             benchmark->register_scheduler(sch->name());

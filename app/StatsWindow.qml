@@ -457,7 +457,7 @@ Rectangle {
             ComboBox {
                 Layout.fillWidth: true
                 Layout.columnSpan: 2
-                model: ["", "Vector Layer"]
+                model: ["", "Vector Layer", "Vector Layer quick"]
                 ModelBinding on currentIndex { target: map; property: "selected_benchmark_position_index"; default_value: -1 }
             }
         }
