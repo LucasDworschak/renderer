@@ -18,8 +18,10 @@
 
 #line 10020
 
-#define PI 3.1415926535
+#include "tile_id.glsl"
+#include "camera_config.glsl"
 
+#define PI 3.1415926535
 
 // SDF_MODE 0: naive multisample antialiasing (golden -> but worse performnace)
 // SDF_MODE 1: screenspace transformation -> smoothstep
@@ -109,7 +111,6 @@ struct VectorLayerData{
 
     bvec3 additional_info;
 
-    highp uint style_index;
     bool is_polygon;
 };
 
@@ -206,6 +207,7 @@ const highp uint additonal_info0_mask = 1u << (style_bits + 3);
 const highp uint additonal_info1_mask = 1u << (style_bits + 2);
 const highp uint additonal_info2_mask = 1u << (style_bits + 1);
 
+const highp uint style_buffer_column_mask = ((1u << bits_per_buffer_row) - 1u);
 
 // Style unpacking
 const lowp uint style_width_offset = 17u;
@@ -222,7 +224,7 @@ const lowp uint style_cap_mask = 1u;
 // end constants for data packing/unpacking
 /////////////////////////////////////////////
 
-highp uvec2 pack_vectorlayer_data(VectorLayerData data)
+highp uvec2 pack_vectorlayer_data(VectorLayerData data, highp uint style_index)
 {
     highp uvec2 packed_data;
 
@@ -257,14 +259,14 @@ highp uvec2 pack_vectorlayer_data(VectorLayerData data)
 
     highp uint is_polygon = (data.is_polygon ? 1u : 0u) << style_bits;
 
-    packed_data.y = packed_data.y | is_polygon | data.style_index;
+    packed_data.y = packed_data.y | is_polygon | style_index;
 
     return packed_data;
 }
 
 highp uint unpack_style_index(highp uvec2 packed_data)
 {
-    return (packed_data.y & style_bitmask) * uint(max_zoom+1);
+    return (packed_data.y & style_bitmask);
 }
 
 bool is_polygon(highp uvec2 packed_data)
@@ -290,8 +292,6 @@ VectorLayerData unpack_data(highp uvec2 packed_data, lowp vec2 grid_cell)
     highp uvec2 c_u;
     c_u.x = (packed_data.y & (coordinate_bitmask_shift1)) >> coordinate_shift1;
     c_u.y = (packed_data.y & (coordinate_bitmask_shift2)) >> coordinate_shift2;
-
-    unpacked_data.style_index = unpack_style_index(packed_data);
 
     unpacked_data.is_polygon = is_polygon(packed_data);
 
@@ -339,8 +339,6 @@ VectorLayerData normalize_unpack_for_unittest(VectorLayerData unpacked_data, low
     unpacked_data.a = (vec2(unpacked_data.a) / division_extent) - cell_offset;
     unpacked_data.b = (vec2(unpacked_data.b) / division_extent) - cell_offset;
     unpacked_data.c = (vec2(unpacked_data.c) / division_extent) - cell_offset;
-
-    unpacked_data.style_index /= uint(max_zoom+1);
 
     return unpacked_data;
 }
@@ -788,19 +786,25 @@ mediump ivec2 to_dict_pixel_128(mediump uint hash) {
     return ivec2(int(hash & 127u), int(hash >> 7u));
 }
 
-void parse_style(out LayerStyle style, highp uint style_index, mediump float zoom_offset, mediump float zoom_blend, lowp vec4 ortho_color, mediump float cos_smoothing_factor, bool is_polygon)
+void parse_style(out LayerStyle style, lowp uint style_index, lowp uint tile_zoom, mediump float zoom_offset, mediump float zoom_blend, lowp vec4 ortho_color, mediump float cos_smoothing_factor, bool is_polygon)
 {
     // calculate an integer zoom offset for lower and higher style indices and clamp
     // TODO I think it should not be necessary to clamp the zoom offset anymore
     lowp int zoom_offset_lower = max(int(floor(zoom_offset - 1.0)), -max_offset_levels + 1);
     lowp int zoom_offset_higher = max(int(floor(zoom_offset - 0.0)), -max_offset_levels + 1);
 
-    highp uint style_index_lower = uint(int(style_index) + zoom_offset_lower);
-    highp uint style_index_higher = uint(int(style_index) + zoom_offset_higher);
+    // lowp uint style_zoom_lower = uint(int(tile_zoom) + zoom_offset_lower);
+    // lowp uint style_zoom_higher = uint(int(tile_zoom) + zoom_offset_higher);
+    lowp int style_zoom_lower = int(tile_zoom -2u );
+    lowp int style_zoom_higher = int(tile_zoom -1u );
+
+    lowp int style_buffer_col = int((style_index * uint(buffer_entries_per_style)) & style_buffer_column_mask);
+    lowp int style_buffer_row = int((style_index * uint(buffer_entries_per_style)) >> uint(bits_per_buffer_row));
 
     // get the actual data
-    highp uvec4 style_data_lower = texelFetch(styles_sampler, ivec2(to_dict_pixel_128(style_index_lower)), 0);
-    highp uvec4 style_data_higher = texelFetch(styles_sampler, ivec2(to_dict_pixel_128(style_index_higher)), 0);
+    highp uvec2 style_data_lower  = texelFetch(styles_sampler, ivec2(style_buffer_col+style_zoom_lower, style_buffer_row), 0).rg;
+    highp uvec2 style_data_higher = texelFetch(styles_sampler, ivec2(style_buffer_col+style_zoom_higher,style_buffer_row), 0).rg;
+
 
     ///////////////////////////////////////
     // colors
@@ -947,7 +951,7 @@ lowp vec3 decode_fallback(lowp vec3 color)
 bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, inout LayerStyle style, highp vec2 uv, highp uint i, DrawMeta meta)
 {
     highp uvec2 raw_geom_data = fetch_raw_geometry_data(meta.sampler_buffer_index, i, meta.texture_layer);
-    highp uint style_index = unpack_style_index(raw_geom_data) + meta.tile_zoom;
+    lowp uint style_index = unpack_style_index(raw_geom_data);
 
     if (style_index != style.index) {
         // we changed style -> blend previous style, reset layer infos and parse the new style
@@ -958,7 +962,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
             return true;
         }
 
-        parse_style(style, style_index, meta.zoom_offset, meta.zoom_blend, meta.ortho_color, meta.cos_smoothing_factor, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
+        parse_style(style, style_index, meta.tile_zoom, meta.zoom_offset, meta.zoom_blend, meta.ortho_color, meta.cos_smoothing_factor, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
     }
 
     { // naive aa
@@ -981,7 +985,7 @@ bool draw_layer(inout lowp vec4 pixel_color, inout highp uint intersections, ino
 void draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_percentage, inout LayerStyle style, highp vec2 screenspace_coord, highp vec2 uv, highp uint i, DrawMeta meta)
 {
     highp uvec2 raw_geom_data = fetch_raw_geometry_data(meta.sampler_buffer_index, i, meta.texture_layer);
-    highp uint style_index = unpack_style_index(raw_geom_data) + meta.tile_zoom;
+    lowp uint style_index = unpack_style_index(raw_geom_data);
 
         // we changed style -> blend previous style, reset layer infos and parse the new style
 
@@ -989,7 +993,7 @@ void draw_layer(inout lowp vec4 pixel_color, inout highp float intersection_perc
         alpha_blend(pixel_color, style, intersection_percentage);
         intersection_percentage = 0.0;
 
-        parse_style(style, style_index, meta.zoom_offset, meta.zoom_blend, meta.ortho_color, meta.cos_smoothing_factor, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
+        parse_style(style, style_index, meta.tile_zoom, meta.zoom_offset, meta.zoom_blend, meta.ortho_color, meta.cos_smoothing_factor, is_polygon(raw_geom_data)); // mix floating zoom levels; for polygons, mul poly color with surface shading texture color
     }
 
     { // screenspace transformation nehab

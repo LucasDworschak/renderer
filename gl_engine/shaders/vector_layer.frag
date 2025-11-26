@@ -22,9 +22,7 @@
 #define n_multisamples 4
 
 #include "shared_config.glsl"
-#include "camera_config.glsl"
 #include "encoder.glsl"
-#include "tile_id.glsl"
 #include "vector_layer.glsl"
 
 #include "hashing.glsl" // DEBUG

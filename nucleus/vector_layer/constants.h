@@ -57,6 +57,10 @@ constexpr float line_width_multiplier = 1.56;
 constexpr float dash_multiplier = 1.0 / 2.0;
 constexpr glm::uvec2 style_zoom_range = glm::uvec2(0u, 18u);
 
+static constexpr auto num_zooms_per_style = constants::style_zoom_range.y + 1;
+static constexpr auto bits_per_buffer_row = std::bit_width(uint(constants::style_buffer_size)) - 1u;
+static constexpr auto buffer_entries_per_style = 1u << std::bit_width(num_zooms_per_style);
+
 // there is only a limited amount of style expressions that are tested by the StyleExpression code
 // -> we can store all the values in a map and have an even faster comparison between values
 // openstreetmap 14
