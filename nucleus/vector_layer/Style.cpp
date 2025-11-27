@@ -82,7 +82,6 @@ void Style::load()
         return;
     }
 
-    std::vector<glm::u32vec2> style_values;
 
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonArray layers = style_expander::expand(doc.object().value("layers").toArray());
@@ -325,7 +324,7 @@ void Style::load()
             // const uint32_t style_index = style_values.size() / num_zooms_per_style;
             const uint32_t style_index = temp_styles.size();
             auto& current_style = temp_styles.emplace_back();
-            current_style.resize(constants::buffer_entries_per_style, glm::u32vec2(-1u)); // fill all with -1
+            current_style.resize(constants::num_zooms_per_style, glm::u32vec2(0u));
 
             for (size_t i = 0; i < first_zoom; i++) {
                 // duplicate first style with alpha 0
@@ -362,47 +361,8 @@ void Style::load()
         }
     }
 
-    // qDebug() << "num styles: " << temp_styles.size();
-
-    {
-        // goal: storing all zooms of a style in a row
-        // -> improve performance by never needing to make big jumps in memory if higher and lower zoom are located on different rows
-        // (previously it was possible that one zoom of a style was stored at x:127,y:0 and the next zoom was stored on x:0,y:1)
-        // other tests to consider:
-        //   - storing the next style in the row below
-        //   - storing the next style in same row just after
-        //   - storing all zooms in a column, next style is in the next column
-        // problems:
-        // storing 6*19 values = 114 in a row that supports 128
-        // -> we are waisting about 11% of the storage
-        // possible improvement -> do not store zoom 0 -> 7*18 values = 126 out of 128 values in a row -> 1.5% wastage
-        // nevertheless we would still need 128x128 textures since 64x64 textures are not able to store all the values
-        // currently all style values with 19 zooms = 4636 values -> the wastage does not really matter for now
-        // possible improvement: only store 16 zooms -> we can use 64x64 textures for openmaptiles style
-
-        style_values.reserve(constants::style_buffer_size * constants::style_buffer_size);
-
-        for (const auto& styles : temp_styles) {
-            style_values.insert(style_values.end(), styles.cbegin(), styles.cend());
-        }
-
-        // for (size_t i = 0; i < needed_rows; i++) {
-        //     for (size_t j = 0; j < styles_per_row; j++) {
-        //         const auto style_index = i * styles_per_row + j;
-        //         if (style_index < temp_styles.size())
-        //             style_values.insert(style_values.end(), temp_styles[style_index].cbegin(), temp_styles[style_index].cend());
-        //     }
-        //     // fill the rest of the row with default -1u values
-
-        //     // qDebug() << style_values.size();
-        // }
-        // qDebug() << style_values.size() << temp_styles.size() << needed_rows;
-
-        // qDebug() << "styles_per_row" << styles_per_row;
-        // qDebug() << "wasted_cells_per_row" << wasted_cells_per_row;
-        // qDebug() << "needed_rows" << needed_rows;
-        // qDebug() << "temp_styles.size()" << temp_styles.size();
-    }
+    // put the styles to the correct position in the stylebuffer (that will be a 2d texture)
+    auto style_values = create_style_buffer_data(temp_styles);
 
     // visible styles set the color to 0 for now -> only set to higher value if encountered from server
     // this allows to fade out styles that were not encountered on lower zoom levels
@@ -416,7 +376,6 @@ void Style::load()
     // make sure that the style values are within the buffer size; resize them to this size and create the raster images
     assert(style_values.size() <= constants::style_buffer_size * constants::style_buffer_size);
     visible_style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec2(-1u));
-    style_values.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec2(-1u));
 
 #ifdef ALP_ENABLE_DEBUG_VECTOR_TILES
     // add debug styles
@@ -494,11 +453,10 @@ std::vector<StyleLayerIndex> Style::simplify_styles(
     float width = 0.0;
 
     for (const auto& indices : *style_and_layer_indices) {
-        const auto buffer_index = Style::style_buffer_index(indices.style_index, zoom_level);
-        const auto style_data_higher = style_buffer[buffer_index];
-        auto style_data_lower = style_data_higher;
-        if (zoom_level > 0)
-            style_data_lower = style_buffer[buffer_index - 1];
+
+        const auto buffer_index = Style::style_buffer_index(indices.style_index, std::min(zoom_level, zoom_level - 1u));
+        const auto style_data_lower = style_buffer[buffer_index];
+        const auto style_data_higher = style_buffer[buffer_index + 1];
 
         const float lower_width = Style::style_width(style_data_lower);
         const float lower_opacity = style_data_lower.x & 255;
@@ -532,6 +490,57 @@ std::vector<StyleLayerIndex> Style::simplify_styles(
     return out_styles;
 }
 
+std::vector<glm::u32vec2> Style::create_style_buffer_data(const std::vector<std::vector<glm::u32vec2>>& styles)
+{
+    // with this encoding we ensure the following:
+    // - shader needs a lower and a higher style (but only those two indices for a fragment -> it doesnt care about the other zooms)
+    //    -> we therefore duplicate the style and write it in the following column. but we ignore the zoom 0
+    //    -> additionally we repeat the last zoom -> this minimizes special cases on the shader while only slightly increasing buffer needs
+    // - it is possible that the next needed style will be the next index (and most definitely will have the same zoom if we look at the same fragment)
+    //    -> we therefore want to place it on the same row, as near as possible to the previous style
+    // - styles are looked at in descending order -> they need to be placed in the same descending order in the buffer
+    //
+    // example:
+    // style_n lower = column 1 [row 0 - max]
+    // style_n higher = column 2 [row -1 - (max-1)]
+    // style_(n-1) lower = column 3 [row 0 - max]
+    // style_(n-1) higher = column 4 [row -1 - (max-1)]
+
+    std::vector<glm::u32vec2> out;
+    out.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec2(-1u));
+
+    // we currently only support up to 384 styles
+    // -> 19 zooms per style -> styles duplicated for easier higher zoom fetching = max 6 rows * 64 columns
+    // possible future improvements:
+    // - we could theoretically have 7 rows if the last row is split (e.g. zoom 0-9 and 10-18 on 2 different column pairs)
+    //    -> problem that fetching the index is a bit more complicated -> probably worse glsl performance
+    // - ignore the first 3 zooms -> we only have 16 zooms and can support up to 8 rows (without wastage) = 512 styles
+    assert(styles.size() < 385);
+
+    int column = 0;
+    int start_row = 0;
+    for (size_t i = 0; i < styles.size(); i++) { // TODO !!!! remove again
+        // for (size_t i = styles.size(); i-- > 0;) {
+        for (size_t j = 0; j < constants::num_zooms_per_style; j++) {
+
+            out[(start_row + j) * constants::style_buffer_size + column] = styles[i][j];
+            if (j < constants::num_zooms_per_style - 1)
+                out[(start_row + j) * constants::style_buffer_size + column + 1] = styles[i][j + 1];
+            else
+                // duplicate the last style
+                out[(start_row + j) * constants::style_buffer_size + column + 1] = styles[i][j];
+        }
+
+        column += 2;
+        if (column >= constants::style_buffer_size) {
+            column = 0;
+            start_row += constants::num_zooms_per_style;
+        }
+    }
+
+    return out;
+}
+
 // we register the styles after we simplified them
 // this way, the dynamic blending of visible styles is more true to what really is needed
 void Style::register_used_styles(const uint zoom_level, const std::vector<StyleLayerIndex>& indices)
@@ -559,11 +568,18 @@ bool Style::update_visible_styles()
 
         const auto encountered_zoom = m_lowest_encountered_zoom[indices.layer_index];
 
-        const auto start_index = style_buffer_index(indices.style_index, encountered_zoom);
+        // go one step below the lowest encountered zoom -> we need to update the higher zoom here
+        const auto start_index = style_buffer_index(indices.style_index, std::min(encountered_zoom, encountered_zoom - 1));
         const auto updateable_styles = constants::num_zooms_per_style - encountered_zoom;
 
-        for (auto i = start_index; i < start_index + updateable_styles; i++) {
-            visible_style_buffer[i] = style_buffer[i];
+        // update the higher zoom only
+        visible_style_buffer[start_index + 1] = style_buffer[start_index + 1];
+
+        // for the rest, update lower and higher zoom
+        for (size_t i = 1; i < updateable_styles; i++) {
+            const auto index = start_index + (i * constants::style_buffer_size); // -> next zoom = next row of the buffer
+            visible_style_buffer[index] = style_buffer[index];
+            visible_style_buffer[index + 1] = style_buffer[index + 1];
         }
     }
     m_styles_to_update.clear();
@@ -616,10 +632,11 @@ uint32_t Style::interpolate_color(float t, uint32_t color1, uint32_t color2)
 
 uint32_t Style::style_buffer_index(const uint32_t style_index, const uint zoom_level)
 {
-    const auto style_buffer_col = (style_index * constants::buffer_entries_per_style) & ((1u << constants::bits_per_buffer_row) - 1u);
-    const auto style_buffer_row = (style_index * constants::buffer_entries_per_style) >> constants::bits_per_buffer_row;
+    // NOTE: (style_index << 1) necessary since we want to only address every second row (essentially we multiply the index by 2)
+    const auto style_buffer_col = (style_index << 1) & (constants::style_buffer_size - 1u);
+    const auto style_buffer_row = ((style_index >> (constants::bits_per_buffer_row - 1u)) * constants::num_zooms_per_style) + zoom_level;
 
-    return style_buffer_col + (style_buffer_row * constants::style_buffer_size) + zoom_level;
+    return style_buffer_col + (style_buffer_row * constants::style_buffer_size);
 }
 
 float Style::style_width(const glm::u32vec2& style)

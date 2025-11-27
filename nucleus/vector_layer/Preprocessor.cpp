@@ -231,14 +231,10 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
 
             for (const auto& style_layer : style_and_layer_indices) {
 
-                const auto buffer_index = Style::style_buffer_index(style_layer.style_index, id.zoom_level);
-                const auto opacity_higher = m_style_buffer[buffer_index].x & 255;
-                bool full_opaque = opacity_higher == 255;
-
-                if (id.zoom_level > 0) {
-                    const auto opacity_lower = m_style_buffer[buffer_index - 1].x & 255;
-                    full_opaque &= opacity_lower == 255;
-                }
+                const auto buffer_index = Style::style_buffer_index(style_layer.style_index, std::min(id.zoom_level, id.zoom_level - 1u));
+                const auto opacity_lower = m_style_buffer[buffer_index].x & 255;
+                const auto opacity_higher = m_style_buffer[buffer_index + 1].x & 255;
+                const bool full_opaque = opacity_higher == 255 && opacity_lower == 255;
 
                 for (const auto& geom_data : all_geometry_data) {
                     data[style_layer.layer_index].emplace_back(geom_data.vertices, geom_data.bounds, geom_data.aabb, style_layer, is_polygon, full_opaque);
@@ -830,7 +826,8 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                 // use the line width of the previous style
                 if (zoom_level > 0)
                     line_width
-                        = Style::style_width(m_style_buffer[Style::style_buffer_index(data[i].style_layer.style_index, zoom_level - 1)]) + constants::aa_lines;
+                        = Style::style_width(m_style_buffer[Style::style_buffer_index(data[i].style_layer.style_index, std::min(zoom_level, zoom_level - 1u))])
+                        + constants::aa_lines;
 
                 std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
 

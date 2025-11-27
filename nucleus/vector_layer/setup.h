@@ -47,7 +47,6 @@ struct SchedulerHolder {
 SchedulerHolder scheduler(TileLoadServicePtr tile_service, const tile::utils::AabbDecoratorPtr& aabb_decorator, QThread* thread = nullptr)
 {
 
-    // Style style(":/vectorlayerstyles/basemap.json");
     Style style(":/vectorlayerstyles/openstreetmap.json");
     // Style style(":/vectorlayerstyles/qwant.json");
     // Style style(":/vectorlayerstyles/osm-bright.json");

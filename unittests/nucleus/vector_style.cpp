@@ -274,8 +274,6 @@ TEST_CASE("nucleus/vector_style")
             auto zoom0_index = Style::style_buffer_index(i, 0);
             auto zoom1_index = Style::style_buffer_index(i, 18);
 
-            qDebug() << zoom0_index;
-
             CHECK(expected_colors[i] == style_buffer[zoom0_index].x);
             CHECK(expected_colors[i] == style_buffer[zoom1_index].x);
         }
@@ -959,81 +957,6 @@ TEST_CASE("nucleus/vector_style")
         // create_debug_filter_checks(feature_to_style, style_buffer);
     }
 
-    SECTION("Style parsing basemap")
-    {
-        Style s(":/vectorlayerstyles/basemap.json");
-        s.load();
-
-        QString filepath = QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_13_4412_2893.pbf");
-        QFile file(filepath);
-        file.open(QIODevice::ReadOnly | QIODevice::Unbuffered);
-        QByteArray data = file.readAll();
-        const auto zoom = 13;
-
-        const auto d = data.toStdString();
-        const mapbox::vector_tile::buffer tile(d);
-
-        auto key_generator = [](std::string layer_name, mapbox::vector_tile::feature feature) {
-            const auto symbol_property = std::visit(nucleus::vector_tile::util::string_print_visitor, feature.getProperties()["_symbol"]).toStdString();
-            return layer_name + "__" + symbol_property;
-        };
-
-        auto skipped_layers = std::unordered_set<std::string> {
-            "GIP_L_GIP_144/label"
-        }; // for some reason this is has a line geom, but is actually a text, which we do not currently parse
-
-        auto feature_to_style = parse_tile(&s, tile, zoom, key_generator, skipped_layers, true);
-
-        // check if the color stored int he style buffer points to the correct color in the stylesheet
-        const auto style_buffer = s.styles()->buffer();
-
-        CHECK(feature_to_style.size() == 39);
-        CHECK(style_buffer[feature_to_style.at("fill__GEBAEUDE_F_AGG__0_0")].x == s.parse_color("#d89797ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__GEBAEUDE_F_AGG__1_0")].x == s.parse_color("#ca7a7aff"));
-        CHECK(style_buffer[feature_to_style.at("fill__GEWAESSER_F_GEWF__1_0")].x == s.parse_color("#73b1ffff"));
-        CHECK(style_buffer[feature_to_style.at("fill__GEWAESSER_F_GEWF__3_0")].x == s.parse_color("#73b1ffff"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__0_0")].x == s.parse_color("#00000000"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__0_1")].x == s.parse_color("#dcd4d0ff"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__1_0")].x == s.parse_color("#0f26083f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__2_0")].x == s.parse_color("#343f193f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__3_0")].x == s.parse_color("#031c003f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__5_0")].x == s.parse_color("#3f3f3f3f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__6_0")].x == s.parse_color("#163f0a3f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__7_0")].x == s.parse_color("#140c043f"));
-        CHECK(style_buffer[feature_to_style.at("fill__NUTZUNG_L15_12__8_0")].x == s.parse_color("#0814043f"));
-        CHECK(style_buffer[feature_to_style.at("line__BEV_BEZIRK_L_BEZIRKSGRENZE__0_0")].x == s.parse_color("#6f4c5aff"));
-        CHECK(style_buffer[feature_to_style.at("line__BEV_BEZIRK_L_BEZIRKSGRENZE__0_1")].x == s.parse_color("#d2bedcff"));
-        CHECK(style_buffer[feature_to_style.at("line__BEV_BEZIRK_L_BEZIRKSGRENZE__0_2")].x == s.parse_color("#6f4c5aff"));
-        CHECK(style_buffer[feature_to_style.at("line__BEV_GEMEINDE_L_GEMEINDEGRENZE__0_0")].x == s.parse_color("#6f4c5aff"));
-        CHECK(style_buffer[feature_to_style.at("line__BEV_GEMEINDE_L_GEMEINDEGRENZE__0_1")].x == s.parse_color("#d2bedcff"));
-        CHECK(style_buffer[feature_to_style.at("line__GEWAESSER_L_GEWL __4_0")].x == s.parse_color("#73b1ffff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__0_0")].x == s.parse_color("#ffa636ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__0_1")].x == s.parse_color("#9c4022ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__1_0")].x == s.parse_color("#ffa636ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__1_1")].x == s.parse_color("#9c4022ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__3_0")].x == s.parse_color("#ffff51ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_BRÜCKE__3_1")].x == s.parse_color("#9c6722ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_TUNNEL_BRUNNENCLA__0_0")].x == s.parse_color("#fddcafff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_TUNNEL_BRUNNENCLA__0_1")].x == s.parse_color("#9c4022ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_BAUWERK_L_TUNNEL_BRUNNENCLA__0_2")].x == s.parse_color("#fddcafff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__0_0")].x == s.parse_color("#ffa636ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__0_1")].x == s.parse_color("#9c4022ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__1_0")].x == s.parse_color("#ffa636ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__1_1")].x == s.parse_color("#9c4022ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__3_0")].x == s.parse_color("#ffff51ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__3_1")].x == s.parse_color("#9c6722ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__4_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__4_1")].x == s.parse_color("#727272ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__5_0")].x == s.parse_color("#ffffffff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__5_1")].x == s.parse_color("#727272ff"));
-        CHECK(style_buffer[feature_to_style.at("line__GIP_L_GIP_144__6_0")].x == s.parse_color("#727272ff"));
-
-        // DEBUG show all keys to styles
-        // create_debug_filter_checks(feature_to_style, style_buffer);
-    }
-}
-TEST_CASE("nucleus/quicktest")
-{
     SECTION("visible styles")
     {
         Style s(":/vectorlayerstyles/openstreetmap.json");
@@ -1081,23 +1004,24 @@ TEST_CASE("nucleus/quicktest")
         const auto style_buffer = s.styles()->buffer();
         const auto visible_style_buffer = s.visible_styles()->buffer();
 
-        const auto forest0_style_index = feature_to_style.at("fill__landcover__wood__forest_0");
-        const auto forest1_style_index = feature_to_style.at("fill__landcover__wood__forest_1");
+        // the style index provided is the higher -> we have to go one step lower to have both the higher and lower style
+        const auto forest0_style_index = feature_to_style.at("fill__landcover__wood__forest_0") - nucleus::vector_layer::constants::style_buffer_size;
+        const auto forest1_style_index = feature_to_style.at("fill__landcover__wood__forest_1") - nucleus::vector_layer::constants::style_buffer_size;
 
         // checking forest with minzoom 13
         // style at z12 is transparent, (premultiplied alpha means that color is black)
-        CHECK(visible_style_buffer[forest0_style_index - 1].x == 0); // z 12
-        CHECK(visible_style_buffer[forest0_style_index + 0].x == s.parse_color("#6ba357ff")); // z 13
-        CHECK(style_buffer[forest0_style_index - 1].x == 0); // z 12
-        CHECK(style_buffer[forest0_style_index + 0].x == s.parse_color("#6ba357ff")); // z 13
+        CHECK(visible_style_buffer[forest0_style_index + 0].x == 0); // z 12
+        CHECK(visible_style_buffer[forest0_style_index + 1].x == s.parse_color("#6ba357ff")); // z 13
+        CHECK(style_buffer[forest0_style_index + 0].x == 0); // z 12
+        CHECK(style_buffer[forest0_style_index + 1].x == s.parse_color("#6ba357ff")); // z 13
 
         // checking forest with maxzoom 13
         // maxzoom is 13 -> 13 is still visible and 14 will blend out -> but since we blend only with the rest of the available alpha, this does not
         // matter
-        CHECK(visible_style_buffer[forest1_style_index - 1].x == 0); // z 12
-        CHECK(visible_style_buffer[forest1_style_index + 0].x == s.parse_color("#6ba357ff")); // z 13
-        CHECK(style_buffer[forest1_style_index - 1].x == s.parse_color("#6ba357ff")); // z 12
-        CHECK(style_buffer[forest1_style_index + 0].x == s.parse_color("#6ba357ff")); // z 13
+        CHECK(visible_style_buffer[forest1_style_index + 0].x == 0); // z 12
+        CHECK(visible_style_buffer[forest1_style_index + 1].x == s.parse_color("#6ba357ff")); // z 13
+        CHECK(style_buffer[forest1_style_index + 0].x == s.parse_color("#6ba357ff")); // z 12
+        CHECK(style_buffer[forest1_style_index + 1].x == s.parse_color("#6ba357ff")); // z 13
 
         // parse data again and make sure that update_visible_styles now returns false -> styles remain the same
         parse_tile(&s, tile, zoom, key_generator, skipped_layers, false);
@@ -1107,11 +1031,6 @@ TEST_CASE("nucleus/quicktest")
 
 TEST_CASE("nucleus/vector_style benchmarks")
 {
-    BENCHMARK("Style parsing basemap")
-    {
-        Style s(":/vectorlayerstyles/basemap.json");
-        s.load();
-    };
     BENCHMARK("Style parsing openmaptile")
     {
         Style s(":/vectorlayerstyles/openstreetmap.json");

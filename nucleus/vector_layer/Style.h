@@ -130,6 +130,8 @@ public:
     static std::vector<StyleLayerIndex> simplify_styles(
         std::vector<StyleLayerIndex>* style_and_layer_indices, const uint zoom_level, const std::vector<glm::u32vec2>& style_buffer);
 
+    static std::vector<glm::u32vec2> create_style_buffer_data(const std::vector<std::vector<glm::u32vec2>>& styles);
+
     std::shared_ptr<const nucleus::Raster<glm::u32vec2>> styles() const;
     std::shared_ptr<const nucleus::Raster<glm::u32vec2>> visible_styles() const;
 

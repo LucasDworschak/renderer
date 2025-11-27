@@ -620,34 +620,6 @@ TEST_CASE("nucleus/vector_preprocess")
     //     }
     // }
 
-    // SECTION("Tile download basemap")
-    // {
-    //     // if this fails it is very likely that something on the vector tile server changed
-    //     // manually download the tile from the below link and check if the changes are valid and replace vectortile.mvt with this new file
-    //     // https://osm.cg.tuwien.ac.at/vector_tiles/poi_v1/10/548/359
-
-    //     const auto id = nucleus::tile::Id { .zoom_level = 10, .coords = { 548, 359 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-    //     nucleus::tile::TileLoadService service("https://mapsneu.wien.gv.at/basemapv/bmapv/3857/tile/",
-    //     nucleus::tile::TileLoadService::UrlPattern::ZYX_yPointingSouth, ".pbf");
-
-    //     {
-    //         QSignalSpy spy(&service, &nucleus::tile::TileLoadService::load_finished);
-    //         service.load(id);
-    //         spy.wait(15000);
-
-    //         REQUIRE(spy.count() == 1);
-    //         QList<QVariant> arguments = spy.takeFirst();
-    //         REQUIRE(arguments.size() == 1);
-    //         nucleus::tile::Data tile = arguments.at(0).value<nucleus::tile::Data>();
-    //         CHECK(tile.id == id);
-    //         CHECK(tile.network_info.status == nucleus::tile::NetworkInfo::Status::Good);
-    //         CHECK(nucleus::utils::time_since_epoch() - tile.network_info.timestamp < 10'000);
-
-    //         REQUIRE(tile.data->size() > 0);
-    //         CHECK(tile.data->size() > 2000);
-    //     }
-    // }
-
     // SECTION("Triangle to Grid")
     // { // TODO redo after refactor
     //     const std::vector<glm::u32vec4> style_buffer = { glm::u32vec4(0, 0, 0, 0) };
@@ -791,26 +763,31 @@ TEST_CASE("nucleus/vector_preprocess")
         {
             // only draw second style (passed by style_indices)
             // style width index 0 and 2 in style buffer are here for blending between zoom steps
-            std::vector<glm::u32vec2> style_buffer { LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
 
+            std::vector<std::vector<glm::u32vec2>> styles;
+            styles.push_back({
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+            });
+
+            styles.push_back({ LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
@@ -828,8 +805,10 @@ TEST_CASE("nucleus/vector_preprocess")
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment() };
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment() });
+
+            auto style_buffer = Style::create_style_buffer_data(styles);
+
             std::vector<StyleLayerIndex> style_indices { { 0, 0 }, { 1, 1 } };
             const auto simplified = nucleus::vector_layer::Style::simplify_styles(&style_indices, 15, style_buffer);
 
@@ -837,9 +816,11 @@ TEST_CASE("nucleus/vector_preprocess")
             CHECK(simplified[0].style_index == 1);
         }
         {
+
             // draw both styles
             // style width index 0 in style buffer is here for blending between zoom steps
-            std::vector<glm::u32vec2> style_buffer { LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+            std::vector<std::vector<glm::u32vec2>> styles;
+            styles.push_back({
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
@@ -857,7 +838,10 @@ TEST_CASE("nucleus/vector_preprocess")
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+            });
 
+            styles.push_back({ LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
@@ -874,8 +858,10 @@ TEST_CASE("nucleus/vector_preprocess")
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment() };
+                LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment() });
+
+            auto style_buffer = Style::create_style_buffer_data(styles);
+
             std::vector<StyleLayerIndex> style_indices { { 0, 0 }, { 1, 1 } };
             const auto simplified = nucleus::vector_layer::Style::simplify_styles(&style_indices, 15, style_buffer);
 
@@ -886,44 +872,30 @@ TEST_CASE("nucleus/vector_preprocess")
         {
             // width changed -> draw 3 than 1
             // styles width index 0 and 2 in style buffer are here for blending between zoom steps
-            std::vector<glm::u32vec2> style_buffer { LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
 
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+            std::vector<std::vector<glm::u32vec2>> styles;
+            styles.push_back({
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+            });
 
+            styles.push_back({
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
@@ -941,7 +913,28 @@ TEST_CASE("nucleus/vector_preprocess")
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment() };
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+            });
+            styles.push_back({ LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment() });
+
+            auto style_buffer = Style::create_style_buffer_data(styles);
             std::vector<StyleLayerIndex> style_indices { { 0, 0 }, { 1, 1 }, { 2, 2 } };
             const auto simplified = nucleus::vector_layer::Style::simplify_styles(&style_indices, 15, style_buffer);
 
@@ -1162,38 +1155,3 @@ TEST_CASE("nucleus/vector_preprocess")
         CHECK(area < 0.0);
     }
 }
-
-// TEST_CASE("nucleus/vector_preprocess benchmarks")
-// {
-//     // load tile data
-//     // the normal tile is a tile in a small city, with more than half of the tile consisting of a mountain.
-//     // the zoom level of 13 and 14 are the tiles with the most amount of data present, but since most of this tile is in the countryside, it only contains
-//     68kb
-//     // of data
-//     // TODO this vector tile uses basemap -> it is not comparable for the benchmark
-//     auto id_normal = nucleus::tile::Id { .zoom_level = 13, .coords = { 4412, 2893 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-//     auto file_normal = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_13_4412_2893.pbf"));
-//     file_normal.open(QFile::ReadOnly);
-//     const auto bytes_normal = file_normal.readAll();
-
-//     // the "worst" tile is one of the largest tile with 868kb (right over vienna -> lots of buildings and other details)
-//     // so the output of the benchmark can be regarded as a worst case approximation
-//     auto id_worst = nucleus::tile::Id { .zoom_level = 14, .coords = { 8936, 5681 }, .scheme = nucleus::tile::Scheme::SlippyMap };
-//     auto file_worst = QFile(QString("%1%2").arg(ALP_TEST_DATA_DIR, "vector_layer/vectortile_benchmark_14_8936_5681.pbf"));
-//     file_worst.open(QFile::ReadOnly);
-//     const auto bytes_worst = file_worst.readAll();
-
-//     // load style
-//     Style style(":/vectorlayerstyles/openstreetmap.json");
-//     style.load();
-
-//     BENCHMARK("preprocess normal tile") { nucleus::vector_layer::preprocess(id_normal, bytes_normal, style); };
-//     BENCHMARK("preprocess worse case tile") { nucleus::vector_layer::preprocess(id_worst, bytes_worst, style); };
-
-//     // BENCHMARK("triangulize polygons")
-//     // {
-//     //     const std::vector<glm::vec2> polygon_points = { glm::vec2(10.5, 10.5), glm::vec2(30.5, 10.5), glm::vec2(50.5, 50.5), glm::vec2(10.5, 30.5) };
-//     //     const auto edges = nucleus::utils::rasterizer::generate_neighbour_edges(polygon_points);
-//     //     nucleus::utils::rasterizer::triangulize(polygon_points, edges);
-//     // };
-// }

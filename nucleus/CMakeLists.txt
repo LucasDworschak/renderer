@@ -201,7 +201,6 @@ qt_add_resources(nucleus "nucleus_fonts"
 qt_add_resources(nucleus "vectorlayerstyles"
     PREFIX "/vectorlayerstyles"
     BASE ${CMAKE_SOURCE_DIR}/app/vectorlayerstyles
-    FILES ${CMAKE_SOURCE_DIR}/app/vectorlayerstyles/basemap.json
     FILES ${CMAKE_SOURCE_DIR}/app/vectorlayerstyles/openstreetmap.json
     FILES ${CMAKE_SOURCE_DIR}/app/vectorlayerstyles/qwant.json
     FILES ${CMAKE_SOURCE_DIR}/app/vectorlayerstyles/osm-bright.json

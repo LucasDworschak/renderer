@@ -207,8 +207,6 @@ const highp uint additonal_info0_mask = 1u << (style_bits + 3);
 const highp uint additonal_info1_mask = 1u << (style_bits + 2);
 const highp uint additonal_info2_mask = 1u << (style_bits + 1);
 
-const highp uint style_buffer_column_mask = ((1u << bits_per_buffer_row) - 1u);
-
 // Style unpacking
 const lowp uint style_width_offset = 17u;
 
@@ -786,22 +784,19 @@ mediump ivec2 to_dict_pixel_128(mediump uint hash) {
     return ivec2(int(hash & 127u), int(hash >> 7u));
 }
 
-void parse_style(out LayerStyle style, lowp uint style_index, lowp uint tile_zoom, mediump float zoom_offset, mediump float zoom_blend, lowp vec4 ortho_color, mediump float cos_smoothing_factor, bool is_polygon)
+void parse_style(out LayerStyle style, mediump uint style_index, lowp uint tile_zoom, mediump float zoom_offset, mediump float zoom_blend, lowp vec4 ortho_color, mediump float cos_smoothing_factor, bool is_polygon)
 {
     // calculate an integer zoom offset for lower and higher style indices and clamp
     // TODO I think it should not be necessary to clamp the zoom offset anymore
     lowp int zoom_offset_lower = max(int(floor(zoom_offset - 1.0)), -max_offset_levels + 1);
-    lowp int zoom_offset_higher = max(int(floor(zoom_offset - 0.0)), -max_offset_levels + 1);
+    lowp int zoom_offset_higher = zoom_offset_lower+1;
 
-    lowp int style_zoom_lower = int(tile_zoom) + zoom_offset_lower;
-    lowp int style_zoom_higher = int(tile_zoom) + zoom_offset_higher;
-
-    lowp int style_buffer_col = int((style_index * uint(buffer_entries_per_style)) & style_buffer_column_mask);
-    lowp int style_buffer_row = int((style_index * uint(buffer_entries_per_style)) >> uint(bits_per_buffer_row));
+    lowp int style_buffer_col = int(style_index<<1) & style_buffer_column_mask;
+    lowp int style_buffer_row = ((int(style_index) >> style_buffer_row_shift) * num_zooms_per_style) + (int(tile_zoom) + zoom_offset_lower);
 
     // get the actual data
-    highp uvec2 style_data_lower  = texelFetch(styles_sampler, ivec2(style_buffer_col+style_zoom_lower, style_buffer_row), 0).rg;
-    highp uvec2 style_data_higher = texelFetch(styles_sampler, ivec2(style_buffer_col+style_zoom_higher,style_buffer_row), 0).rg;
+    highp uvec2 style_data_lower  = texelFetch(styles_sampler, ivec2(style_buffer_col, style_buffer_row), 0).rg;
+    highp uvec2 style_data_higher = texelFetch(styles_sampler, ivec2(style_buffer_col+1,style_buffer_row), 0).rg;
 
 
     ///////////////////////////////////////
