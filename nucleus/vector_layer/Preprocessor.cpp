@@ -186,17 +186,15 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
         for (std::size_t i = 0; i < feature_count; ++i) {
             const auto feature = mapbox::vector_tile::feature(layer.getFeature(i), layer);
 
-            const auto type = (feature.getType() == mapbox::vector_tile::GeomType::LINESTRING) ? 0 : 1;
+            const auto is_polygon = (feature.getType() == mapbox::vector_tile::GeomType::POLYGON);
             // qDebug() << layer_name;
-            auto style_and_layer_indices = m_style.indices(layer_name, type, id.zoom_level, feature, &temp_values);
-            style_and_layer_indices = Style::simplify_styles(&style_and_layer_indices, id.zoom_level, m_style_buffer);
+            auto style_indices = m_style.indices(layer_name, is_polygon, id.zoom_level, feature, &temp_values);
+            style_indices = Style::simplify_styles(&style_indices, id.zoom_level, m_style_buffer);
 
-            if (style_and_layer_indices.size() == 0) // no styles found -> we do not visualize it
+            if (style_indices.size() == 0) // no styles found -> we do not visualize it
                 continue;
 
-            m_style.register_used_styles(id.zoom_level, style_and_layer_indices);
-
-            const auto is_polygon = feature.getType() == mapbox::vector_tile::GeomType::POLYGON;
+            m_style.register_used_styles(id.zoom_level, style_indices);
 
             const auto scale = (is_polygon) ? constants::scale_polygons : constants::scale_lines;
             const auto cell_scale = float(constants::grid_size) / (float(constants::tile_extent) * scale);
@@ -229,15 +227,15 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
                 current_geom_data->vertices = ClipperPaths(geom.begin(), geom.end());
             }
 
-            for (const auto& style_layer : style_and_layer_indices) {
+            for (const auto& style_index : style_indices) {
 
-                const auto buffer_index = Style::style_buffer_index(style_layer.style_index, std::min(id.zoom_level, id.zoom_level - 1u));
+                const auto buffer_index = Style::style_buffer_index(style_index, std::min(id.zoom_level, id.zoom_level - 1u));
                 const auto opacity_lower = m_style_buffer[buffer_index].x & 255;
                 const auto opacity_higher = m_style_buffer[buffer_index + 1].x & 255;
                 const bool full_opaque = opacity_higher == 255 && opacity_lower == 255;
 
                 for (const auto& geom_data : all_geometry_data) {
-                    data[style_layer.layer_index].emplace_back(geom_data.vertices, geom_data.bounds, geom_data.aabb, style_layer, is_polygon, full_opaque);
+                    data[style_index].emplace_back(geom_data.vertices, geom_data.bounds, geom_data.aabb, style_index, is_polygon, full_opaque);
                 }
             }
         }
@@ -605,7 +603,7 @@ bool Preprocessor::check_inner_polygon_edge(
 }
 
 // returns how many triangles have been generated;
-size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const StyleLayerIndex& style_layer)
+size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const uint32_t& style_index)
 {
     const auto& indices = mapbox::earcut<uint32_t>(polygon_points);
 
@@ -634,8 +632,8 @@ size_t Preprocessor::triangulize_earcut(const ClipperPaths& polygon_points, Vect
         inner_edges.y = check_inner_polygon_edge(polygon_points, ind1, ind2, polygon_sizes[ind0.first]);
         inner_edges.z = check_inner_polygon_edge(polygon_points, ind2, ind0, polygon_sizes[ind0.first]);
 
-        const auto& data = nucleus::vector_layer::Preprocessor::pack_shader_data(
-            { { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, inner_edges, style_layer.style_index, true });
+        const auto& data
+            = nucleus::vector_layer::Preprocessor::pack_shader_data({ { p0.x, p0.y }, { p1.x, p1.y }, { p2.x, p2.y }, inner_edges, style_index, true });
 
         (*temp_cell).emplace_back(data);
 
@@ -764,12 +762,12 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
         for (size_t i = 0; i < data.size(); ++i) {
             if (data[i].is_polygon) {
 
-                const auto& style_layer = data[i].style_layer;
+                const auto& style_index = data[i].style_index;
                 const auto& vertices = data[i].vertices;
                 const auto& bounds = data[i].bounds;
                 const auto& check_fully_covers = data[i].full_opaque;
 
-                m_preprocess_grid.visit(data[i].aabb, [this, &vertices, &bounds, &style_layer, &check_fully_covers](glm::uvec2, PreprocessCell& cell) {
+                m_preprocess_grid.visit(data[i].aabb, [this, &vertices, &bounds, &style_index, &check_fully_covers](glm::uvec2, PreprocessCell& cell) {
                     if (cell.is_done) {
                         // qDebug() << "cell_done";
                         return;
@@ -794,8 +792,8 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
 
                         const glm::bvec3 inner_edges { 0, 1, 0 };
 
-                        const auto& data1 = nucleus::vector_layer::Preprocessor::pack_shader_data({ a, b, c, inner_edges, style_layer.style_index, true });
-                        const auto& data2 = nucleus::vector_layer::Preprocessor::pack_shader_data({ d, c, b, inner_edges, style_layer.style_index, true });
+                        const auto& data1 = nucleus::vector_layer::Preprocessor::pack_shader_data({ a, b, c, inner_edges, style_index, true });
+                        const auto& data2 = nucleus::vector_layer::Preprocessor::pack_shader_data({ d, c, b, inner_edges, style_index, true });
 
                         cell.cell_data.push_back(data1);
                         cell.cell_data.push_back(data2);
@@ -811,7 +809,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
 
                         for (const auto& vertices : vertex_groups) {
                             if (!cell.is_done) {
-                                m_processed_amount += triangulize_earcut(vertices, &cell.cell_data, style_layer);
+                                m_processed_amount += triangulize_earcut(vertices, &cell.cell_data, style_index);
                                 if (cell.cell_data.size() >= max_cell_size)
                                     cell.is_done = true;
                             }
@@ -825,8 +823,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                 float line_width = 0;
                 // use the line width of the previous style
                 if (zoom_level > 0)
-                    line_width
-                        = Style::style_width(m_style_buffer[Style::style_buffer_index(data[i].style_layer.style_index, std::min(zoom_level, zoom_level - 1u))])
+                    line_width = Style::style_width(m_style_buffer[Style::style_buffer_index(data[i].style_index, std::min(zoom_level, zoom_level - 1u))])
                         + constants::aa_lines;
 
                 std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;
@@ -840,7 +837,6 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
 
                 nucleus::utils::rasterizer::rasterize_lines(cell_writer, data[i].vertices, line_width * scale * 1.0 * constants::scale_lines, scale);
 
-                const auto& style_layer = data[i].style_layer;
                 const auto& vertices = data[i].vertices;
 
                 for (const auto& [cell_pos, indices] : cell_list) {
@@ -868,8 +864,9 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                             index.y == 0,
                             index.y == vertices[index.x].size() - 2); // -2 because the index we get does not use the last element of a line segment
 
-                        const auto packed_data = nucleus::vector_layer::Preprocessor::pack_shader_data({ a, b, b, line_caps, style_layer.style_index, false });
+                        const auto packed_data = nucleus::vector_layer::Preprocessor::pack_shader_data({ a, b, b, line_caps, data[i].style_index, false });
                         cell.cell_data.push_back(packed_data);
+
                         m_processed_amount++;
                     }
                 }

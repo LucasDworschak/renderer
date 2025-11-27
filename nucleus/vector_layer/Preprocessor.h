@@ -135,7 +135,7 @@ struct GeometryData {
     std::vector<ClipperRect> bounds;
 
     radix::geometry::Aabb2i aabb;
-    StyleLayerIndex style_layer;
+    uint32_t style_index;
     bool is_polygon;
     bool full_opaque;
 };
@@ -187,7 +187,7 @@ private:
     static bool check_inner_polygon_edge(
         const ClipperPaths& polygon_points, std::pair<uint32_t, uint32_t> ind0, std::pair<uint32_t, uint32_t> ind1, uint32_t max_indices);
 
-    size_t triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const StyleLayerIndex& style_layer);
+    size_t triangulize_earcut(const ClipperPaths& polygon_points, VectorLayerCell* temp_cell, const uint32_t& style_index);
 
     void generate_preprocess_grid();
 

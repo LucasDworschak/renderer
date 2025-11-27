@@ -30,7 +30,7 @@ void StyleFilter::add_filter(FilterInfo filter_info, uint8_t zoom)
     m_filter[zoom].push_back(filter_info);
 }
 
-std::vector<StyleLayerIndex> StyleFilter::indices(
+std::vector<uint32_t> StyleFilter::indices(
     unsigned zoom, const mapbox::vector_tile::feature& feature, std::array<int, constants::max_style_expression_keys>* temp_values) const
 {
     if (!m_filter.contains(zoom)) {
@@ -40,15 +40,15 @@ std::vector<StyleLayerIndex> StyleFilter::indices(
 
     StyleExpression::get_values(feature, temp_values);
 
-    auto styles = std::vector<StyleLayerIndex>();
+    auto styles = std::vector<uint32_t>();
 
     for (const auto& filter_info : m_filter.at(zoom)) {
         if (filter_info.filter == nullptr) // no filter is here -> we assume that every feature with layername and zoom is valid
         {
-            styles.push_back(filter_info.indices);
+            styles.push_back(filter_info.style_index);
 
         } else if (filter_info.filter->matches(*temp_values)) {
-            styles.push_back(filter_info.indices);
+            styles.push_back(filter_info.style_index);
         }
     }
 

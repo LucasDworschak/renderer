@@ -32,13 +32,8 @@ class feature;
 
 namespace nucleus::vector_layer {
 
-struct StyleLayerIndex {
-    uint32_t style_index;
-    uint32_t layer_index;
-};
-
 struct FilterInfo {
-    StyleLayerIndex indices;
+    uint32_t style_index;
     std::shared_ptr<StyleExpressionBase> filter;
 };
 
@@ -48,7 +43,7 @@ public:
 
     void add_filter(FilterInfo filter_info, uint8_t zoom);
 
-    std::vector<StyleLayerIndex> indices(
+    std::vector<uint32_t> indices(
         unsigned zoom, const mapbox::vector_tile::feature& feature, std::array<int, constants::max_style_expression_keys>* temp_values) const;
 
 private:

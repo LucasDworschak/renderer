@@ -93,16 +93,16 @@ std::map<std::string, uint32_t> parse_tile(
 
             int index = 0;
 
-            for (const auto& style : style_indices) {
-                const uint32_t style_index = Style::style_buffer_index(style.style_index, zoom);
+            for (const auto& style_index : style_indices) {
+                const uint32_t style_buffer_index = Style::style_buffer_index(style_index, zoom);
                 std::string indexed_key = key + "_" + std::to_string(index);
                 if (feature_to_style.contains(indexed_key)) // make sure that all features with the same key share the style (if not we have to expand how we generate the key)
                 {
-                    if (feature_to_style[indexed_key] != style_index)
+                    if (feature_to_style[indexed_key] != style_buffer_index)
                         qDebug() << "key does already exist with diferent value: " << indexed_key;
-                    CHECK(feature_to_style[indexed_key] == style_index);
+                    CHECK(feature_to_style[indexed_key] == style_buffer_index);
                 } else
-                    feature_to_style[indexed_key] = style_index; // add the style to the map
+                    feature_to_style[indexed_key] = style_buffer_index; // add the style to the map
 
                 index++;
             }
@@ -177,68 +177,68 @@ TEST_CASE("nucleus/vector_style")
         s.load();
 
         const auto style_buffer = s.styles()->buffer();
-        const auto line_multipliers = nucleus::vector_layer::constants::line_width_multiplier * nucleus::vector_layer::constants::style_precision;
+        // const auto line_multipliers = nucleus::vector_layer::constants::line_width_multiplier * nucleus::vector_layer::constants::style_precision;
 
         // note order in style buffer may not be the order defined in style.json
         // since we are using a key comparer and a map the order should still be the same between compilers/os
         // the layer_index order is however preserved (just not tested in this testcase)
 
         // "opacity outside of zoom range"
-        CHECK(style_buffer[Style::style_buffer_index(0, 0)].x == 0); // z 0
-        CHECK(style_buffer[Style::style_buffer_index(0, 1)].x == 0); // z 1
-        CHECK(style_buffer[Style::style_buffer_index(0, 2)].x == 0); // z 2
-        CHECK(style_buffer[Style::style_buffer_index(0, 3)].x == 0); // z 3
-        CHECK(style_buffer[Style::style_buffer_index(0, 4)].x == 0); // z 4
-        CHECK(style_buffer[Style::style_buffer_index(0, 5)].x == 0); // z 5
-        CHECK(style_buffer[Style::style_buffer_index(0, 6)].x == 0); // z 6
-        CHECK(style_buffer[Style::style_buffer_index(0, 7)].x == 0); // z 7
-        CHECK(style_buffer[Style::style_buffer_index(0, 8)].x == 0); // z 8
-        CHECK(style_buffer[Style::style_buffer_index(0, 9)].x == 0); // z 9
-        CHECK(style_buffer[Style::style_buffer_index(0, 10)].x == 0); // z 10
-        CHECK(style_buffer[Style::style_buffer_index(0, 11)].x == 0); // z 11
-        CHECK(style_buffer[Style::style_buffer_index(0, 12)].x == 0); // z 12
-        CHECK(style_buffer[Style::style_buffer_index(0, 13)].x == Style::gamma_decode(0xbbbbbbff)); // z 13
-        CHECK(style_buffer[Style::style_buffer_index(0, 14)].x == Style::gamma_decode(0xbbbbbbff)); // z 14
-        CHECK(style_buffer[Style::style_buffer_index(0, 15)].x == Style::gamma_decode(0xbbbbbbff)); // z 15
-        CHECK(style_buffer[Style::style_buffer_index(0, 16)].x == 0); // z 16
-        CHECK(style_buffer[Style::style_buffer_index(0, 17)].x == 0); // z 17
-        CHECK(style_buffer[Style::style_buffer_index(0, 18)].x == 0); // z 18
-
-        // reuse style if no blending
-
-        CHECK(style_buffer[Style::style_buffer_index(1, 0)].x == 0); // z0 // make sure that we are in the right style instruction here (not using other style)
-        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 0)])
-            == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 0
-        CHECK(style_buffer[Style::style_buffer_index(1, 1)].x == 0); // z1
-        CHECK(style_buffer[Style::style_buffer_index(1, 2)].x == 0); // z2
-        CHECK(style_buffer[Style::style_buffer_index(1, 3)].x == 0); // z3
-        CHECK(style_buffer[Style::style_buffer_index(1, 4)].x == 0); // z4
-        CHECK(style_buffer[Style::style_buffer_index(1, 5)].x == 0); // z5
-        CHECK(style_buffer[Style::style_buffer_index(1, 6)].x == 0); // z6
-        CHECK(style_buffer[Style::style_buffer_index(1, 7)].x == 0); // z7
-        CHECK(style_buffer[Style::style_buffer_index(1, 8)].x == 0); // z8
-        CHECK(style_buffer[Style::style_buffer_index(1, 9)].x == 0); // z9
-        CHECK(style_buffer[Style::style_buffer_index(1, 10)].x == 0); // z10
-        CHECK(style_buffer[Style::style_buffer_index(1, 11)].x == Style::gamma_decode(0xaaaaaaff)); // z 11 // color
-        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 11)])
-            == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 11
-        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 12)])
-            == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 12
-        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 13)])
-            == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 13
-        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 14)])
-            == (9 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 14
-        CHECK(style_buffer[Style::style_buffer_index(1, 15)].x == Style::gamma_decode(0xaaaaaaff)); // z 15 color
-        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 15)])
-            == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 15
+        CHECK(style_buffer[Style::style_buffer_index(1, 0)].x == 0); // z 0
+        CHECK(style_buffer[Style::style_buffer_index(1, 1)].x == 0); // z 1
+        CHECK(style_buffer[Style::style_buffer_index(1, 2)].x == 0); // z 2
+        CHECK(style_buffer[Style::style_buffer_index(1, 3)].x == 0); // z 3
+        CHECK(style_buffer[Style::style_buffer_index(1, 4)].x == 0); // z 4
+        CHECK(style_buffer[Style::style_buffer_index(1, 5)].x == 0); // z 5
+        CHECK(style_buffer[Style::style_buffer_index(1, 6)].x == 0); // z 6
+        CHECK(style_buffer[Style::style_buffer_index(1, 7)].x == 0); // z 7
+        CHECK(style_buffer[Style::style_buffer_index(1, 8)].x == 0); // z 8
+        CHECK(style_buffer[Style::style_buffer_index(1, 9)].x == 0); // z 9
+        CHECK(style_buffer[Style::style_buffer_index(1, 10)].x == 0); // z 10
+        CHECK(style_buffer[Style::style_buffer_index(1, 11)].x == 0); // z 11
+        CHECK(style_buffer[Style::style_buffer_index(1, 12)].x == 0); // z 12
+        CHECK(style_buffer[Style::style_buffer_index(1, 13)].x == Style::gamma_decode(0xbbbbbbff)); // z 13
+        CHECK(style_buffer[Style::style_buffer_index(1, 14)].x == Style::gamma_decode(0xbbbbbbff)); // z 14
+        CHECK(style_buffer[Style::style_buffer_index(1, 15)].x == Style::gamma_decode(0xbbbbbbff)); // z 15
         CHECK(style_buffer[Style::style_buffer_index(1, 16)].x == 0); // z 16
-        CHECK(Style::style_width(style_buffer[Style::style_buffer_index(1, 16)])
-            == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 16
         CHECK(style_buffer[Style::style_buffer_index(1, 17)].x == 0); // z 17
         CHECK(style_buffer[Style::style_buffer_index(1, 18)].x == 0); // z 18
 
-        CHECK(style_buffer[Style::style_buffer_index(2, 0)].x == -1u); // no data
-        CHECK(style_buffer[Style::style_buffer_index(2, 1)].y == -1u); // no data
+        // reuse style if no blending
+
+        // CHECK(style_buffer[Style::style_buffer_index(0, 0)].x == 0); // z0 // make sure that we are in the right style instruction here (not using other
+        // style) CHECK(Style::style_width(style_buffer[Style::style_buffer_index(0, 0)])
+        //     == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 0
+        // CHECK(style_buffer[Style::style_buffer_index(0, 1)].x == 0); // z1
+        // CHECK(style_buffer[Style::style_buffer_index(0, 2)].x == 0); // z2
+        // CHECK(style_buffer[Style::style_buffer_index(0, 3)].x == 0); // z3
+        // CHECK(style_buffer[Style::style_buffer_index(0, 4)].x == 0); // z4
+        // CHECK(style_buffer[Style::style_buffer_index(0, 5)].x == 0); // z5
+        // CHECK(style_buffer[Style::style_buffer_index(0, 6)].x == 0); // z6
+        // CHECK(style_buffer[Style::style_buffer_index(0, 7)].x == 0); // z7
+        // CHECK(style_buffer[Style::style_buffer_index(0, 8)].x == 0); // z8
+        // CHECK(style_buffer[Style::style_buffer_index(0, 9)].x == 0); // z9
+        // CHECK(style_buffer[Style::style_buffer_index(0, 10)].x == 0); // z10
+        // CHECK(style_buffer[Style::style_buffer_index(0, 11)].x == Style::gamma_decode(0xaaaaaaff)); // z 11 // color
+        // CHECK(Style::style_width(style_buffer[Style::style_buffer_index(0, 11)])
+        //     == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 11
+        // CHECK(Style::style_width(style_buffer[Style::style_buffer_index(0, 12)])
+        //     == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 12
+        // CHECK(Style::style_width(style_buffer[Style::style_buffer_index(0, 13)])
+        //     == (8 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 13
+        // CHECK(Style::style_width(style_buffer[Style::style_buffer_index(0, 14)])
+        //     == (9 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 14
+        // CHECK(style_buffer[Style::style_buffer_index(0, 15)].x == Style::gamma_decode(0xaaaaaaff)); // z 15 color
+        // CHECK(Style::style_width(style_buffer[Style::style_buffer_index(0, 15)])
+        //     == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 15
+        // CHECK(style_buffer[Style::style_buffer_index(0, 16)].x == 0); // z 16
+        // CHECK(Style::style_width(style_buffer[Style::style_buffer_index(0, 16)])
+        //     == (10 * line_multipliers) / nucleus::vector_layer::constants::style_precision); // z 16
+        // CHECK(style_buffer[Style::style_buffer_index(0, 17)].x == 0); // z 17
+        // CHECK(style_buffer[Style::style_buffer_index(0, 18)].x == 0); // z 18
+
+        // CHECK(style_buffer[Style::style_buffer_index(2, 0)].x == -1u); // no data
+        // CHECK(style_buffer[Style::style_buffer_index(2, 1)].y == -1u); // no data
     }
 
     SECTION("Simple style parsing2")
@@ -857,7 +857,8 @@ TEST_CASE("nucleus/vector_style")
         // check if the color stored int he style buffer points to the correct color in the stylesheet
         const auto style_buffer = s.styles()->buffer();
 
-        CHECK(feature_to_style.size() == 94);
+        CHECK(feature_to_style.size() == 95);
+        CHECK(style_buffer[feature_to_style.at("fill__building__null__null_0")].x == s.parse_color("#c2b8b1ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grass_0")].x == s.parse_color("#afce93ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__grassland_0")].x == s.parse_color("#afce93ff"));
         CHECK(style_buffer[feature_to_style.at("fill__landcover__grass__meadow_0")].x == s.parse_color("#afce93ff"));

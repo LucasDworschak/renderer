@@ -82,21 +82,18 @@ void Style::load()
         return;
     }
 
-
     QJsonDocument doc = QJsonDocument::fromJson(data);
     QJsonArray layers = style_expander::expand(doc.object().value("layers").toArray());
 
-    // key pair is <layer_id, filter>
-    // layerid: source_layer+_+type (e.g. transportation_line)
-    // example: transportation_line + filter(bridge, class:secondary) -> vector<(zoom_to_style indices)>
-    auto layerid_filter_to_layer_indices
-        = std::map<std::pair<std::pair<std::string, int>, std::shared_ptr<StyleExpressionBase>>, std::vector<uint32_t>, StyleHasher>();
-    // each entry in this vector is a different layer_index
-    // vector<map<zoom, style>>
-    auto zoom_to_style = std::vector<std::map<uint8_t, LayerStyle>>();
+    struct LayerData {
+        std::string name;
+        bool is_polygon;
+        std::shared_ptr<StyleExpressionBase> filter;
+        std::map<uint8_t, LayerStyle> style;
+    };
 
-    auto current_style_map = std::map<uint8_t, LayerStyle>();
-    auto previous_layer_filter = std::pair<std::pair<std::string, int>, std::shared_ptr<StyleExpressionBase>>();
+    std::vector<LayerData> style_layer;
+
     for (const QJsonValue& obj : layers) {
 
         if (obj.toObject().value("type").toString() != "line" && obj.toObject().value("type").toString() != "fill") {
@@ -112,14 +109,10 @@ void Style::load()
             continue;
         }
 
-        // qDebug() << obj.toObject().value("source-layer").toString();
-        // qDebug() << obj.toObject().value("id").toString();
+        auto current_style_map = std::map<uint8_t, LayerStyle>();
 
         auto paint_object = obj.toObject().value("paint").toObject();
         auto layout_object = obj.toObject().value("layout").toObject();
-        auto filter_data = obj.toObject().value("filter").toArray();
-        const bool is_line = obj.toObject().value("type").toString() == "line";
-        const auto layer_name = std::make_pair(obj.toObject().value("source-layer").toString().toStdString(), is_line ? 0 : 1);
 
         std::vector<std::pair<uint8_t, uint32_t>> fill_colors;
         std::vector<std::pair<uint8_t, uint16_t>> widths;
@@ -132,34 +125,11 @@ void Style::load()
         float dash_interpolation_base = 1;
         float opacity_interpolation_base = 1;
 
-        std::shared_ptr<StyleExpressionBase> filter = StyleExpressionBase::create_filter_expression(filter_data);
-
-        const auto current_layer_filter = std::make_pair(layer_name, filter);
-
-        // TODO is this still necessary? I think this is deprecated and was only used previously for merging similar styles/filters
-        if (previous_layer_filter.first.first.empty()) {
-            // first time -> only set the previous_layer_filter
-            previous_layer_filter = current_layer_filter;
-        } else {
-            // only increase layer_index if filter and or name is different
-            // by doing this we prevent edge cases like https://github.com/AlpineMapsOrg/renderer/issues/151#issuecomment-2723695519 from overriding styles
-            if (current_layer_filter != previous_layer_filter) {
-                if (!current_style_map.empty()) {
-                    // add the previous values to the data structures
-                    layerid_filter_to_layer_indices[previous_layer_filter].push_back(zoom_to_style.size());
-                    zoom_to_style.push_back(std::move(current_style_map));
-                }
-                // renew the current style map
-                current_style_map = std::map<uint8_t, LayerStyle>();
-                previous_layer_filter = current_layer_filter;
-            }
-        }
-
         bool invalid = false;
 
         // default line-cap is butt (https://maplibre.org/maplibre-style-spec/layers/#line-cap)
         // additionally we also currently do not support square line-caps (only one style uses this, and this style probably isn't worth the shader rewrite)
-        bool round_line_cap = layout_object.contains("line-cap") && layout_object.value("line-cap") == "round";
+        const bool round_line_cap = layout_object.contains("line-cap") && layout_object.value("line-cap") == "round";
 
         for (const QString& key : paint_object.keys()) {
 
@@ -297,68 +267,72 @@ void Style::load()
             // auto id = obj.toObject().value("id").toString();
             // qDebug() << last_style_index << id;
         }
-    }
 
-    // at the end add the last filled style map
-    if (current_style_map.size() > 0) {
-        layerid_filter_to_layer_indices[previous_layer_filter].push_back(uint32_t(zoom_to_style.size()));
-        zoom_to_style.push_back(current_style_map);
+        // add the style
+        if (current_style_map.size() > 0) {
+            const bool is_polygon = obj.toObject().value("type").toString() == "fill";
+            const auto layer_name = obj.toObject().value("source-layer").toString().toStdString();
+
+            auto filter_data = obj.toObject().value("filter").toArray();
+            std::shared_ptr<StyleExpressionBase> filter = StyleExpressionBase::create_filter_expression(filter_data);
+
+            style_layer.push_back({ layer_name, is_polygon, filter, current_style_map });
+        }
     }
 
     std::vector<std::vector<glm::u32vec2>> temp_styles;
-    temp_styles.reserve(255);
+    temp_styles.reserve(style_layer.size());
 
-    for (const auto& [key, layer_indices] : layerid_filter_to_layer_indices) {
+    // go over it in reverse order -> style_index:0 == top-most layer
+    // for (size_t i = style_layer.size(); i-- > 0;) {
+    for (size_t i = 0; i < style_layer.size(); i++) {
+        // for (const auto& layer : style_layer) {
+        // create styles below min zoom and fade out
+        // we might need to fill from styles from style.json range to style_zoom_range start
+        // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
+        // -> according to style.json there is no style for those values, we only need to add them for blending purposes
+        const uint first_zoom = style_layer[i].style.begin()->first;
+        const auto first_style = style_layer[i].style.at(first_zoom);
 
-        for (const auto& layer_index : layer_indices) {
+        auto layer_key = std::make_pair(style_layer[i].name, style_layer[i].is_polygon);
 
-            const auto style_map = zoom_to_style[layer_index];
+        // const uint32_t style_index = style_values.size() / num_zooms_per_style;
+        const uint32_t style_index = temp_styles.size();
+        auto& current_style = temp_styles.emplace_back();
+        current_style.resize(constants::num_zooms_per_style, glm::u32vec2(0u));
 
-            // create styles below min zoom and fade out
-            // we might need to fill from styles from style.json range to style_zoom_range start
-            // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
-            // -> according to style.json there is no style for those values, we only need to add them for blending purposes
-            const uint first_zoom = style_map.begin()->first;
-            const auto first_style = style_map.at(first_zoom);
-
-            // const uint32_t style_index = style_values.size() / num_zooms_per_style;
-            const uint32_t style_index = temp_styles.size();
-            auto& current_style = temp_styles.emplace_back();
-            current_style.resize(constants::num_zooms_per_style, glm::u32vec2(0u));
-
-            for (size_t i = 0; i < first_zoom; i++) {
-                // duplicate first style with alpha 0
-                // since we premultiply alpha -> alpha: 0 = color: 0,0,0
-                current_style[i] = { 0u, first_style.buffer_alignment().y };
-            }
-
-            for (const auto& [zoom, style] : style_map) {
-
-                // add a new style every loop iteration
-                current_style[zoom] = { style.buffer_alignment() };
-
-                // add the styles to the data structure where we later can find the relevant style_index
-                m_layer_to_style[key.first].add_filter({ { style_index, layer_index }, key.second }, zoom);
-            }
-
-            // we might need to fill from styles from style.json range to style_zoom_range end
-            // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
-            // -> according to style.json there is no style for those values, we only need to add them for blending purposes
-            const uint last_zoom = style_map.rbegin()->first;
-            const auto last_style = current_style[last_zoom];
-
-            for (uint i = last_zoom + 1; i < constants::num_zooms_per_style; i++) {
-                // duplicate last style with alpha 0 (if we are not yet at maxzoom)
-                // since we premultiply alpha -> alpha: 0 = color: 0,0,0
-                current_style[i] = { 0, last_style.y };
-                if (i == last_zoom + 1)
-                    m_layer_to_style[key.first].add_filter({ { style_index, layer_index }, key.second }, i);
-            }
-            // set it to the highest value
-            m_lowest_encountered_zoom[layer_index] = constants::num_zooms_per_style;
-
-            // qDebug() << "style_index" << style_index;
+        for (size_t j = 0; j < first_zoom; j++) {
+            // duplicate first style with alpha 0
+            // since we premultiply alpha -> alpha: 0 = color: 0,0,0
+            current_style[j] = { 0u, first_style.buffer_alignment().y };
         }
+
+        for (const auto& [zoom, style] : style_layer[i].style) {
+
+            // add a new style every loop iteration
+            current_style[zoom] = { style.buffer_alignment() };
+
+            // add the styles to the data structure where we later can find the relevant style_index
+            m_layer_to_style[layer_key].add_filter({ style_index, style_layer[i].filter }, zoom);
+        }
+
+        // we might need to fill from styles from style.json range to style_zoom_range end
+        // we only need to add the styles, but we DO NOT need to add them to the m_layer_to_style
+        // -> according to style.json there is no style for those values, we only need to add them for blending purposes
+        const uint last_zoom = style_layer[i].style.rbegin()->first;
+        const auto last_style = current_style[last_zoom];
+
+        for (uint j = last_zoom + 1; j < constants::num_zooms_per_style; j++) {
+            // duplicate last style with alpha 0 (if we are not yet at maxzoom)
+            // since we premultiply alpha -> alpha: 0 = color: 0,0,0
+            current_style[j] = { 0, last_style.y };
+            if (j == last_zoom + 1)
+                m_layer_to_style[layer_key].add_filter({ style_index, style_layer[i].filter }, j);
+        }
+        // set it to the highest value
+        m_lowest_encountered_zoom[style_index] = constants::num_zooms_per_style;
+
+        // qDebug() << "style_index" << style_index;
     }
 
     // put the styles to the correct position in the stylebuffer (that will be a 2d texture)
@@ -419,13 +393,13 @@ void Style::load()
     // qDebug() << "vectorlayer style loaded";
 }
 
-std::vector<StyleLayerIndex> Style::indices(std::string layer_name,
-    int type,
+std::vector<uint32_t> Style::indices(std::string layer_name,
+    bool is_polygon,
     unsigned zoom,
     const mapbox::vector_tile::feature& feature,
     std::array<int, constants::max_style_expression_keys>* temp_values)
 {
-    const auto layer = std::make_pair(layer_name, type);
+    const auto layer = std::make_pair(layer_name, is_polygon);
 
     if (!m_layer_to_style.contains(layer)) {
         // qDebug() << "no style for: " << layer_name;
@@ -437,8 +411,7 @@ std::vector<StyleLayerIndex> Style::indices(std::string layer_name,
     return indices;
 }
 
-std::vector<StyleLayerIndex> Style::simplify_styles(
-    std::vector<StyleLayerIndex>* style_and_layer_indices, const uint zoom_level, const std::vector<glm::u32vec2>& style_buffer)
+std::vector<uint32_t> Style::simplify_styles(std::vector<uint32_t>* style_indices, const uint zoom_level, const std::vector<glm::u32vec2>& style_buffer)
 {
     // we get multiple styles that may have full opacity and the same width
     // creating render calls for both does not make sense -> we only want to draw the top layer
@@ -446,15 +419,14 @@ std::vector<StyleLayerIndex> Style::simplify_styles(
 
     // TODO this sort should happen at creation of the vector not here
     // order the styles so that we look at layer in descending order
-    std::sort(
-        style_and_layer_indices->begin(), style_and_layer_indices->end(), [](StyleLayerIndex a, StyleLayerIndex b) { return a.layer_index > b.layer_index; });
-    std::vector<StyleLayerIndex> out_styles;
+    std::sort(style_indices->begin(), style_indices->end(), [](uint32_t a, uint32_t b) { return a > b; });
+    std::vector<uint32_t> out_styles;
     int accummulative_opacity = 0;
     float width = 0.0;
 
-    for (const auto& indices : *style_and_layer_indices) {
+    for (const auto& indices : *style_indices) {
 
-        const auto buffer_index = Style::style_buffer_index(indices.style_index, std::min(zoom_level, zoom_level - 1u));
+        const auto buffer_index = Style::style_buffer_index(indices, std::min(zoom_level, zoom_level - 1u));
         const auto style_data_lower = style_buffer[buffer_index];
         const auto style_data_higher = style_buffer[buffer_index + 1];
 
@@ -499,12 +471,13 @@ std::vector<glm::u32vec2> Style::create_style_buffer_data(const std::vector<std:
     // - it is possible that the next needed style will be the next index (and most definitely will have the same zoom if we look at the same fragment)
     //    -> we therefore want to place it on the same row, as near as possible to the previous style
     // - styles are looked at in descending order -> they need to be placed in the same descending order in the buffer
+    //    -> NOTE: for some reason if we use descending order, the performance gets worse (by about 28% in vienna)
     //
     // example:
-    // style_n lower = column 1 [row 0 - max]
-    // style_n higher = column 2 [row -1 - (max-1)]
-    // style_(n-1) lower = column 3 [row 0 - max]
-    // style_(n-1) higher = column 4 [row -1 - (max-1)]
+    // style_0 lower = column 1 [row 0 - max_zoom]
+    // style_0 higher = column 2 [row -1 - (max_zoom-1)]
+    // style_1 lower = column 3 [row 0 - max_zoom]
+    // style_1 higher = column 4 [row -1 - (max_zoom-1)]
 
     std::vector<glm::u32vec2> out;
     out.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec2(-1u));
@@ -519,8 +492,7 @@ std::vector<glm::u32vec2> Style::create_style_buffer_data(const std::vector<std:
 
     int column = 0;
     int start_row = 0;
-    for (size_t i = 0; i < styles.size(); i++) { // TODO !!!! remove again
-        // for (size_t i = styles.size(); i-- > 0;) {
+    for (size_t i = 0; i < styles.size(); i++) {
         for (size_t j = 0; j < constants::num_zooms_per_style; j++) {
 
             out[(start_row + j) * constants::style_buffer_size + column] = styles[i][j];
@@ -543,12 +515,12 @@ std::vector<glm::u32vec2> Style::create_style_buffer_data(const std::vector<std:
 
 // we register the styles after we simplified them
 // this way, the dynamic blending of visible styles is more true to what really is needed
-void Style::register_used_styles(const uint zoom_level, const std::vector<StyleLayerIndex>& indices)
+void Style::register_used_styles(const uint zoom_level, const std::vector<uint32_t>& indices)
 {
     for (const auto& index : indices) {
 
-        if (zoom_level < m_lowest_encountered_zoom[index.layer_index]) {
-            m_lowest_encountered_zoom[index.layer_index] = zoom_level;
+        if (zoom_level < m_lowest_encountered_zoom[index]) {
+            m_lowest_encountered_zoom[index] = zoom_level;
             m_styles_to_update.push_back(index);
         }
     }
@@ -566,10 +538,10 @@ bool Style::update_visible_styles()
     auto& visible_style_buffer = m_visible_styles->buffer();
     for (const auto& indices : m_styles_to_update) {
 
-        const auto encountered_zoom = m_lowest_encountered_zoom[indices.layer_index];
+        const auto encountered_zoom = m_lowest_encountered_zoom[indices];
 
         // go one step below the lowest encountered zoom -> we need to update the higher zoom here
-        const auto start_index = style_buffer_index(indices.style_index, std::min(encountered_zoom, encountered_zoom - 1));
+        const auto start_index = style_buffer_index(indices, std::min(encountered_zoom, encountered_zoom - 1));
         const auto updateable_styles = constants::num_zooms_per_style - encountered_zoom;
 
         // update the higher zoom only

@@ -120,15 +120,14 @@ public:
 
     static uint32_t premultiply_alpha(uint32_t color);
 
-    std::vector<StyleLayerIndex> indices(std::string layer_name,
-        int type,
+    std::vector<uint32_t> indices(std::string layer_name,
+        bool is_polygon,
         unsigned zoom,
         const mapbox::vector_tile::feature& feature,
         std::array<int, constants::max_style_expression_keys>* temp_values);
 
-    void register_used_styles(const uint zoom_level, const std::vector<StyleLayerIndex>& indices);
-    static std::vector<StyleLayerIndex> simplify_styles(
-        std::vector<StyleLayerIndex>* style_and_layer_indices, const uint zoom_level, const std::vector<glm::u32vec2>& style_buffer);
+    void register_used_styles(const uint zoom_level, const std::vector<uint32_t>& indices);
+    static std::vector<uint32_t> simplify_styles(std::vector<uint32_t>* style_indices, const uint zoom_level, const std::vector<glm::u32vec2>& style_buffer);
 
     static std::vector<glm::u32vec2> create_style_buffer_data(const std::vector<std::vector<glm::u32vec2>>& styles);
 
@@ -160,14 +159,14 @@ private:
     // only contains that were encountered by the call of the indices function
     std::shared_ptr<nucleus::Raster<glm::u32vec2>> m_visible_styles;
 
-    std::unordered_map<std::pair<std::string, int>, StyleFilter, StyleHasher> m_layer_to_style;
+    std::unordered_map<std::pair<std::string, bool>, StyleFilter, StyleHasher> m_layer_to_style;
 
     // styles on the server and in the stylesheet might be a bit different
     // we want to ensure that we fade to alpha 0 if the next lower tile zoom does not contain geometry of this style
     // key: style_index
     // value: lowest zoom_level of current style_index
     std::unordered_map<uint32_t, unsigned> m_lowest_encountered_zoom;
-    std::vector<StyleLayerIndex> m_styles_to_update;
+    std::vector<uint32_t> m_styles_to_update;
 
     QString m_filename;
 };
