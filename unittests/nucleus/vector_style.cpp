@@ -958,6 +958,49 @@ TEST_CASE("nucleus/vector_style")
         // create_debug_filter_checks(feature_to_style, style_buffer);
     }
 
+    SECTION("Simple visible styles")
+    {
+        // this test mainly shows that the buffer is written correctly and corresponds with style_buffer_index
+        Style s(":/test_data/vector_layer/test-style2.json");
+        s.load();
+
+        const auto style_buffer = s.styles()->buffer();
+
+        // styles are written in the style buffer from top-down -> last in the json file will be looked at first
+        std::vector<uint32_t> expected_colors = {
+            get_color(s, "#000000"),
+            get_color(s, "#111111"),
+            get_color(s, "#222222"),
+            get_color(s, "#333333"),
+            get_color(s, "#444444"),
+            get_color(s, "#555555"),
+            get_color(s, "#666666"),
+            get_color(s, "#777777"),
+            get_color(s, "#888888"),
+            get_color(s, "#999999"),
+            get_color(s, "#AAAAAA"),
+            get_color(s, "#BBBBBB"),
+            get_color(s, "#CCCCCC"),
+            get_color(s, "#DDDDDD"),
+            get_color(s, "#EEEEEE"),
+            get_color(s, "#FFFFFF"),
+        };
+
+        // const auto num_styles = 16;
+        // for (size_t i = 0; i < num_styles; i++) {
+        //     s.register_used_styles(10, {10});
+        // }
+
+        s.register_used_styles(14, { 10 });
+        s.update_visible_styles();
+
+        auto base_buffer_index = Style::style_buffer_index(10, 0);
+
+        for (int i = 0; i < 19; i++) {
+            qDebug() << style_buffer[base_buffer_index + i].x;
+        }
+    }
+
     SECTION("visible styles")
     {
         Style s(":/vectorlayerstyles/openstreetmap.json");
@@ -1006,8 +1049,8 @@ TEST_CASE("nucleus/vector_style")
         const auto visible_style_buffer = s.visible_styles()->buffer();
 
         // the style index provided is the higher -> we have to go one step lower to have both the higher and lower style
-        const auto forest0_style_index = feature_to_style.at("fill__landcover__wood__forest_0") - nucleus::vector_layer::constants::style_buffer_size;
-        const auto forest1_style_index = feature_to_style.at("fill__landcover__wood__forest_1") - nucleus::vector_layer::constants::style_buffer_size;
+        const auto forest0_style_index = feature_to_style.at("fill__landcover__wood__forest_0") - 1;
+        const auto forest1_style_index = feature_to_style.at("fill__landcover__wood__forest_1") - 1;
 
         // checking forest with minzoom 13
         // style at z12 is transparent, (premultiplied alpha means that color is black)
@@ -1067,4 +1110,110 @@ TEST_CASE("nucleus/vector_style benchmarks")
         Style s(":/vectorlayerstyles/openstreetmap.json");
         s.load();
     };
+}
+
+TEST_CASE("nucleus/quicktest")
+{
+    SECTION("buffer index test")
+    {
+        // tests if Style::create_style_buffer_data inserts the data in the way that Style::style_buffer_index expects it
+
+        // create styles with x component being the style index and y component being the zoom
+        std::vector<std::vector<glm::u32vec2>> styles;
+        for (int i = 0; i < 255; i++) {
+            auto& s = styles.emplace_back();
+
+            for (int j = 0; j < 19; j++) {
+                s.push_back(glm::u32vec2(i, j));
+            }
+        }
+
+        // insert them into the buffer
+        const auto buffer = Style::create_style_buffer_data(styles);
+
+        // test every style and zoom that was just inserted
+        for (int i = 0; i < 255; i++) {
+
+            for (int j = 0; j < 19; j++) {
+                auto index = Style::style_buffer_index(i, j);
+                CHECK(buffer[index] == glm::u32vec2(i, j));
+                CHECK(buffer[index + nucleus::vector_layer::constants::style_buffer_offset_by_one_zoom] == glm::u32vec2(i, std::min(18, j + 1)));
+            }
+        }
+
+        // for (int i = 0; i < 2; i++) {
+
+        //     for (int j = 0; j < 20; j++) {
+        //         std::cout << buffer[i * nucleus::vector_layer::constants::style_buffer_size + j].x << "-"
+        //                   << buffer[i * nucleus::vector_layer::constants::style_buffer_size + j].y << "\t";
+        //     }
+
+        //     std::cout << std::endl;
+        //     std::cout << std::endl;
+        // }
+
+        // auto index = Style::style_buffer_index(0, 0);
+        // qDebug() << buffer[index].x << buffer[index].y;
+
+        // index = Style::style_buffer_index(0, 1);
+        // qDebug() << buffer[index].x << buffer[index].y;
+    }
+
+    SECTION("Simple visible styles")
+    {
+        // this test mainly shows that the buffer is written correctly and corresponds with style_buffer_index
+        Style s(":/test_data/vector_layer/test-style2.json");
+        s.load();
+
+        // styles are written in the style buffer from top-down -> last in the json file will be looked at first
+        std::vector<uint32_t> expected_colors = {
+            get_color(s, "#000000"),
+            get_color(s, "#111111"),
+            get_color(s, "#222222"),
+            get_color(s, "#333333"),
+            get_color(s, "#444444"),
+            get_color(s, "#555555"),
+            get_color(s, "#666666"),
+            get_color(s, "#777777"),
+            get_color(s, "#888888"),
+            get_color(s, "#999999"),
+            get_color(s, "#AAAAAA"),
+            get_color(s, "#BBBBBB"),
+            get_color(s, "#CCCCCC"),
+            get_color(s, "#DDDDDD"),
+            get_color(s, "#EEEEEE"),
+            get_color(s, "#FFFFFF"),
+        };
+
+        // const auto num_styles = 16;
+        // for (size_t i = 0; i < num_styles; i++) {
+        //     s.register_used_styles(10, {10});
+        // }
+
+        s.register_used_styles(14, { 3 });
+        s.register_used_styles(18, { 6 });
+        s.register_used_styles(0, { 10 });
+
+        s.update_visible_styles();
+
+        auto buffer_index = Style::style_buffer_index(3, 14);
+        auto buffer_index2 = Style::style_buffer_index(6, 18);
+        auto buffer_index3 = Style::style_buffer_index(10, 0);
+
+        const auto visible_style_buffer = s.visible_styles()->buffer();
+        CHECK(visible_style_buffer[buffer_index2 + 2].x == 0); // make sure that the index over the max_zoom is not used
+        const auto style_buffer = s.styles()->buffer();
+
+        CHECK(visible_style_buffer[buffer_index - 1].x == 0);
+        CHECK(visible_style_buffer[buffer_index].x == style_buffer[buffer_index].x);
+        CHECK(visible_style_buffer[buffer_index + 1].x == style_buffer[buffer_index + 1].x);
+
+        CHECK(visible_style_buffer[buffer_index2 - 1].x == 0);
+        CHECK(visible_style_buffer[buffer_index2].x == style_buffer[buffer_index2].x);
+        CHECK(visible_style_buffer[buffer_index2 + 1].x == style_buffer[buffer_index2 + 1].x);
+        CHECK(visible_style_buffer[buffer_index2 + 2].x == 0); // make sure that the index over the max_zoom is not used
+
+        CHECK(visible_style_buffer[buffer_index3].x == style_buffer[buffer_index3].x);
+        CHECK(visible_style_buffer[buffer_index3 + 1].x == style_buffer[buffer_index3 + 1].x);
+    }
 }

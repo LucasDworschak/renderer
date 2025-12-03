@@ -50,7 +50,7 @@ std::unordered_map<QString, QString> gl_engine::VectorLayer::default_defines()
 
     defines[QString("style_bits")] = QString::number(constants::style_bits);
     defines[QString("buffer_entries_per_style")] = QString::number(constants::buffer_entries_per_style);
-    defines[QString("style_buffer_row_shift")] = QString::number(constants::bits_per_buffer_row - 1);
+    defines[QString("style_buffer_row_shift")] = QString::number(constants::bits_per_buffer_row);
     defines[QString("style_buffer_column_mask")] = QString::number((constants::style_buffer_size)-1);
     defines[QString("num_zooms_per_style")] = QString::number(constants::num_zooms_per_style);
     defines[QString("style_precision")] = QString::number(constants::style_precision);

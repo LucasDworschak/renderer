@@ -464,72 +464,84 @@ std::vector<uint32_t> Style::simplify_styles(std::vector<uint32_t>* style_indice
 
 std::vector<glm::u32vec2> Style::create_style_buffer_data(const std::vector<std::vector<glm::u32vec2>>& styles)
 {
-    // with this encoding we ensure the following:
-    // - shader needs a lower and a higher style (but only those two indices for a fragment -> it doesnt care about the other zooms)
-    //    -> we therefore duplicate the style and write it in the following column. but we ignore the zoom 0
-    //    -> additionally we repeat the last zoom -> this minimizes special cases on the shader while only slightly increasing buffer needs
-    // - it is possible that the next needed style will be the next index (and most definitely will have the same zoom if we look at the same fragment)
-    //    -> we therefore want to place it on the same row, as near as possible to the previous style
-    // - styles are looked at in descending order -> they need to be placed in the same descending order in the buffer
-    //    -> NOTE: for some reason if we use descending order, the performance gets worse (by about 28% in vienna)
-    //
-    // example:
-    // style_0 lower = column 1 [row 0 - max_zoom]
-    // style_0 higher = column 2 [row -1 - (max_zoom-1)]
-    // style_1 lower = column 3 [row 0 - max_zoom]
-    // style_1 higher = column 4 [row -1 - (max_zoom-1)]
+
+    // we currently only support up to 768 styles
+    // -> 19 zooms per style + 1 for duplicate last zoom => max 6 rows of 20
+    // -> multiply times 128 colums = 768 styles allowed
+    // possible future improvements:
+    // - we could theoretically have 7 rows if the last row is split (e.g. zoom 0-9 and 10-18 on 2 different column pairs)
+    //    -> problem that fetching the index is a bit more complicated -> probably worse glsl performance
+    // - ignore the first 4 zooms -> we only have 16 zooms and can support up to 8 rows (without wastage) = 1024 styles
+    assert(styles.size() < 769);
 
     std::vector<glm::u32vec2> out;
     out.resize(constants::style_buffer_size * constants::style_buffer_size, glm::u32vec2(-1u));
 
-    // we currently only support up to 384 styles
-    // -> 19 zooms per style -> styles duplicated for easier higher zoom fetching = max 6 rows * 64 columns
-    // possible future improvements:
-    // - we could theoretically have 7 rows if the last row is split (e.g. zoom 0-9 and 10-18 on 2 different column pairs)
-    //    -> problem that fetching the index is a bit more complicated -> probably worse glsl performance
-    // - ignore the first 3 zooms -> we only have 16 zooms and can support up to 8 rows (without wastage) = 512 styles
-    assert(styles.size() < 385);
+    // there are two possible layouts
+    // in one all the zooms of a style are in a column, in the other all are in a row
+    // overall the performance does not seem to change much between both versions
+    // i leave it in to test it later (e.g. other hardware make a difference)
+
+    // 1 style fills column
+    // [ 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 ...]
+    // [ 4 4 4 4 4 4 4 4 4 4 5 5 5 5 5 5 5 5 5 ...]
+    // [ 7 7 7 7 7 7 7 7 7 7 8 8 8 8 8 8 8 8 8 ...]
+
+    // 1 style fills row
+    // [ 1 4 7 ...]
+    // [ 1 4 7 ...]
+    // [ 1 4 7 ...]
+    // [ 1 4 7 ...]
+    // [ 1 4 7 ...]
+    // [ 1 4 7 ...]
+    // [ 1 4 7 ...]
+    // [ 1 4 7 ...]
+    // [ 1 4 7 ...]
+    // [ 2 5 8 ...]
+    // [ 2 5 8 ...]
+    // [ 2 5 8 ...]
+    // [ 2 5 8 ...]
+    // [ 2 5 8 ...]
+    // [ 2 5 8 ...]
+    // [ 2 5 8 ...]
+    // [ 2 5 8 ...]
+    // [ 2 5 8 ...]
+
+    // NOTE: the shader should process the styles in descending index order but for some reason if we use descending order for defining the style
+    // the performance gets worse (by about 28% in vienna)
 
     int column = 0;
-    int start_row = 0;
+    int row = 0;
     for (size_t i = 0; i < styles.size(); i++) {
         for (size_t j = 0; j < constants::num_zooms_per_style; j++) {
 
-            out[(start_row + j) * constants::style_buffer_size + column] = styles[i][j];
-            if (j < constants::num_zooms_per_style - 1)
-                out[(start_row + j) * constants::style_buffer_size + column + 1] = styles[i][j + 1];
-            else
-                // duplicate the last style
-                out[(start_row + j) * constants::style_buffer_size + column + 1] = styles[i][j];
+            // 1 style fills column
+            // out[(row + j) * constants::style_buffer_size + column] = styles[i][j];
+            // 1 style fills row
+            out[row * constants::style_buffer_size + column + j] = styles[i][j];
         }
 
-        column += 2;
-        if (column >= constants::style_buffer_size) {
-            column = 0;
-            start_row += constants::num_zooms_per_style;
+        // duplicate the last style
+        // 1 style fills column
+        // out[(row + constants::num_zooms_per_style) * constants::style_buffer_size + column] = styles[i][constants::num_zooms_per_style - 1];
+        // 1 style fills row
+        out[row * constants::style_buffer_size + column + constants::num_zooms_per_style] = styles[i][constants::num_zooms_per_style - 1];
+
+        // 1 style fills column
+        // column++;
+        // if (column >= constants::style_buffer_size) {
+        //     column = 0;
+        //     row += constants::num_zooms_per_style + 1;
+        // }
+
+        // 1 style fills row
+        row++;
+        if (row >= constants::style_buffer_size) {
+
+            row = 0;
+            column += constants::num_zooms_per_style + 1;
         }
     }
-
-    // TRANSPOSED STYLE BUFFER LAYOUT
-    // int start_column = 0;
-    // int row = 0;
-    // for (size_t i = 0; i < styles.size(); i++) {
-    //     for (size_t j = 0; j < constants::num_zooms_per_style; j++) {
-
-    //         out[(row)*constants::style_buffer_size + start_column + j] = styles[i][j];
-    //         if (j < constants::num_zooms_per_style - 1)
-    //             out[(row + 1) * constants::style_buffer_size + start_column + j] = styles[i][j + 1];
-    //         else
-    //             // duplicate the last style
-    //             out[(row + 1) * constants::style_buffer_size + start_column + j] = styles[i][j];
-    //     }
-
-    //     row += 2;
-    //     if (row >= constants::style_buffer_size) {
-    //         row = 0;
-    //         start_column += constants::num_zooms_per_style;
-    //     }
-    // }
 
     return out;
 }
@@ -562,18 +574,17 @@ bool Style::update_visible_styles()
         const auto encountered_zoom = m_lowest_encountered_zoom[indices];
 
         // go one step below the lowest encountered zoom -> we need to update the higher zoom here
-        const auto start_index = style_buffer_index(indices, std::min(encountered_zoom, encountered_zoom - 1));
-        const auto updateable_styles = constants::num_zooms_per_style - encountered_zoom;
+        const auto start_index = style_buffer_index(indices, encountered_zoom);
+        const auto updateable_styles = 1 + constants::num_zooms_per_style - encountered_zoom;
 
         // update the higher zoom only
         visible_style_buffer[start_index + constants::style_buffer_offset_by_one_zoom] = style_buffer[start_index + constants::style_buffer_offset_by_one_zoom];
 
         // for the rest, update lower and higher zoom
-        for (size_t i = 1; i < updateable_styles; i++) {
-            const auto index = start_index + (i * constants::style_buffer_size); // -> next zoom = next row of the buffer
-            // const auto index = start_index + i; // -> next zoom = next row of the buffer // TRANSPOSED STYLE BUFFER LAYOUT
+        for (size_t i = 0; i < updateable_styles; i++) {
+            // const auto index = start_index + (i * constants::style_buffer_size); // -> next zoom = next row of the buffer
+            const auto index = start_index + i; // -> next zoom = next row of the buffer // TRANSPOSED STYLE BUFFER LAYOUT
             visible_style_buffer[index] = style_buffer[index];
-            visible_style_buffer[index + constants::style_buffer_offset_by_one_zoom] = style_buffer[index + constants::style_buffer_offset_by_one_zoom];
         }
     }
     m_styles_to_update.clear();
@@ -627,12 +638,12 @@ uint32_t Style::interpolate_color(float t, uint32_t color1, uint32_t color2)
 uint32_t Style::style_buffer_index(const uint32_t style_index, const uint zoom_level)
 {
     // NOTE: (style_index << 1) necessary since we want to only address every second row (essentially we multiply the index by 2)
-    const auto style_buffer_col = (style_index << 1) & (constants::style_buffer_size - 1u);
-    const auto style_buffer_row = ((style_index >> (constants::bits_per_buffer_row - 1u)) * constants::num_zooms_per_style) + zoom_level;
+    // const auto style_buffer_col = (style_index) & (constants::style_buffer_size - 1u);
+    // const auto style_buffer_row = ((style_index >> constants::bits_per_buffer_row) * (constants::num_zooms_per_style + 1)) + zoom_level;
 
     // TRANSPOSED STYLE BUFFER LAYOUT
-    // const auto style_buffer_row = (style_index << 1) & (constants::style_buffer_size - 1u);
-    // const auto style_buffer_col = ((style_index >> (constants::bits_per_buffer_row - 1u)) * constants::num_zooms_per_style) + zoom_level;
+    const auto style_buffer_row = (style_index) & (constants::style_buffer_size - 1u);
+    const auto style_buffer_col = ((style_index >> (constants::bits_per_buffer_row)) * (constants::num_zooms_per_style + 1)) + zoom_level;
 
     // qDebug() << style_buffer_col << style_buffer_row;
 
