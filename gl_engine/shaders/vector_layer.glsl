@@ -791,14 +791,18 @@ void parse_style(out LayerStyle style, mediump uint style_index, lowp uint tile_
     lowp int zoom_offset_lower = max(int(floor(zoom_offset - 1.0)), -max_offset_levels + 1);
     lowp int zoom_offset_higher = zoom_offset_lower+1;
 
-    // lowp int style_buffer_col = int(style_index<<1) & style_buffer_column_mask;
-    // lowp int style_buffer_row = ((int(style_index) >> style_buffer_row_shift) * num_zooms_per_style) + (int(tile_zoom) + zoom_offset_lower);
-    lowp int style_buffer_row = int(style_index<<1) & style_buffer_column_mask;
-    lowp int style_buffer_col = ((int(style_index) >> style_buffer_row_shift) * num_zooms_per_style) + (int(tile_zoom) + zoom_offset_lower);
+    lowp int style_buffer_col = int(style_index<<1) & style_buffer_column_mask;
+    lowp int style_buffer_row = ((int(style_index) >> style_buffer_row_shift) * num_zooms_per_style) + (int(tile_zoom) + zoom_offset_lower);
 
     // get the actual data
     highp uvec2 style_data_lower  = texelFetch(styles_sampler, ivec2(style_buffer_col, style_buffer_row), 0).rg;
-    highp uvec2 style_data_higher = texelFetch(styles_sampler, ivec2(style_buffer_col, style_buffer_row+1), 0).rg;
+    highp uvec2 style_data_higher = texelFetch(styles_sampler, ivec2(style_buffer_col+1, style_buffer_row), 0).rg;
+
+    // TRANSPOSED STYLE BUFFER LAYOUT
+    // lowp int style_buffer_row = int(style_index<<1) & style_buffer_column_mask;
+    // lowp int style_buffer_col = ((int(style_index) >> style_buffer_row_shift) * num_zooms_per_style) + (int(tile_zoom) + zoom_offset_lower);
+    // highp uvec2 style_data_lower  = texelFetch(styles_sampler, ivec2(style_buffer_col, style_buffer_row), 0).rg;
+    // highp uvec2 style_data_higher = texelFetch(styles_sampler, ivec2(style_buffer_col, style_buffer_row+1), 0).rg;
 
     ///////////////////////////////////////
     // colors
