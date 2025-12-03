@@ -445,28 +445,8 @@ TEST_CASE("nucleus/vector_preprocess")
     SECTION("Simplify styles")
     {
         {
-            // only draw first style
+            // only draw first found style (front to back rendering)
             std::vector<std::vector<glm::u32vec2>> styles;
-
-            styles.push_back({ LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment() });
 
             styles.push_back({
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
@@ -490,13 +470,33 @@ TEST_CASE("nucleus/vector_preprocess")
                 LayerStyle { 200, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
             });
 
+            styles.push_back({ LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment() });
+
             auto style_buffer = Style::create_style_buffer_data(styles);
 
             std::vector<uint32_t> style_indices { 0, 1 };
             const auto simplified = nucleus::vector_layer::Style::simplify_styles(&style_indices, 15, style_buffer);
 
             CHECK(simplified.size() == 1);
-            CHECK(simplified[0] == 0);
+            CHECK(simplified[0] == 1);
         }
         {
 
@@ -549,13 +549,55 @@ TEST_CASE("nucleus/vector_preprocess")
             const auto simplified = nucleus::vector_layer::Style::simplify_styles(&style_indices, 15, style_buffer);
 
             CHECK(simplified.size() == 2);
-            CHECK(simplified[0] == 0); // layer 0 first
+            CHECK(simplified[0] == 1); // layer 1 first
         }
 
         {
             // width changed -> draw 1 than 3
 
             std::vector<std::vector<glm::u32vec2>> styles;
+
+            styles.push_back({
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+            });
+
+            styles.push_back({
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
+            });
 
             styles.push_back({ LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
@@ -576,56 +618,14 @@ TEST_CASE("nucleus/vector_preprocess")
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
                 LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment() });
 
-            styles.push_back({
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 0, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-            });
-
-            styles.push_back({
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-                LayerStyle { 255, 10, 1 * nucleus::vector_layer::constants::style_precision, 1, false }.buffer_alignment(),
-            });
-
             auto style_buffer = Style::create_style_buffer_data(styles);
             std::vector<uint32_t> style_indices { 0, 1, 2 };
             const auto simplified = nucleus::vector_layer::Style::simplify_styles(&style_indices, 15, style_buffer);
 
             CHECK(simplified.size() == 2);
-            CHECK(simplified[0] == 0);
+            CHECK(simplified[0] == 2);
             // style with index 1 is not used as style with index 0 fully covered it
-            CHECK(simplified[1] == 2);
+            CHECK(simplified[1] == 0);
         }
     }
 
