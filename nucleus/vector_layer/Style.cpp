@@ -426,9 +426,9 @@ std::vector<uint32_t> Style::simplify_styles(std::vector<uint32_t>* style_indice
 
     for (const auto& indices : *style_indices) {
 
-        const auto buffer_index = Style::style_buffer_index(indices, std::min(zoom_level, zoom_level - 1u));
+        const auto buffer_index = Style::style_buffer_index(indices, std::min(zoom_level, zoom_level - 1));
         const auto style_data_lower = style_buffer[buffer_index];
-        const auto style_data_higher = style_buffer[buffer_index + 1];
+        const auto style_data_higher = style_buffer[buffer_index + constants::style_buffer_offset_by_one_zoom];
 
         const float lower_width = Style::style_width(style_data_lower);
         const float lower_opacity = style_data_lower.x & 255;
@@ -490,23 +490,23 @@ std::vector<glm::u32vec2> Style::create_style_buffer_data(const std::vector<std:
     // - ignore the first 3 zooms -> we only have 16 zooms and can support up to 8 rows (without wastage) = 512 styles
     assert(styles.size() < 385);
 
-    int column = 0;
-    int start_row = 0;
+    int start_column = 0;
+    int row = 0;
     for (size_t i = 0; i < styles.size(); i++) {
         for (size_t j = 0; j < constants::num_zooms_per_style; j++) {
 
-            out[(start_row + j) * constants::style_buffer_size + column] = styles[i][j];
+            out[(row)*constants::style_buffer_size + start_column + j] = styles[i][j];
             if (j < constants::num_zooms_per_style - 1)
-                out[(start_row + j) * constants::style_buffer_size + column + 1] = styles[i][j + 1];
+                out[(row + 1) * constants::style_buffer_size + start_column + j] = styles[i][j + 1];
             else
                 // duplicate the last style
-                out[(start_row + j) * constants::style_buffer_size + column + 1] = styles[i][j];
+                out[(row + 1) * constants::style_buffer_size + start_column + j] = styles[i][j];
         }
 
-        column += 2;
-        if (column >= constants::style_buffer_size) {
-            column = 0;
-            start_row += constants::num_zooms_per_style;
+        row += 2;
+        if (row >= constants::style_buffer_size) {
+            row = 0;
+            start_column += constants::num_zooms_per_style;
         }
     }
 
@@ -545,13 +545,13 @@ bool Style::update_visible_styles()
         const auto updateable_styles = constants::num_zooms_per_style - encountered_zoom;
 
         // update the higher zoom only
-        visible_style_buffer[start_index + 1] = style_buffer[start_index + 1];
+        visible_style_buffer[start_index + constants::style_buffer_offset_by_one_zoom] = style_buffer[start_index + constants::style_buffer_offset_by_one_zoom];
 
         // for the rest, update lower and higher zoom
         for (size_t i = 1; i < updateable_styles; i++) {
-            const auto index = start_index + (i * constants::style_buffer_size); // -> next zoom = next row of the buffer
+            const auto index = start_index + i; // -> next zoom = next row of the buffer
             visible_style_buffer[index] = style_buffer[index];
-            visible_style_buffer[index + 1] = style_buffer[index + 1];
+            visible_style_buffer[index + constants::style_buffer_offset_by_one_zoom] = style_buffer[index + constants::style_buffer_offset_by_one_zoom];
         }
     }
     m_styles_to_update.clear();
@@ -605,8 +605,12 @@ uint32_t Style::interpolate_color(float t, uint32_t color1, uint32_t color2)
 uint32_t Style::style_buffer_index(const uint32_t style_index, const uint zoom_level)
 {
     // NOTE: (style_index << 1) necessary since we want to only address every second row (essentially we multiply the index by 2)
-    const auto style_buffer_col = (style_index << 1) & (constants::style_buffer_size - 1u);
-    const auto style_buffer_row = ((style_index >> (constants::bits_per_buffer_row - 1u)) * constants::num_zooms_per_style) + zoom_level;
+    // const auto style_buffer_col = (style_index << 1) & (constants::style_buffer_size - 1u);
+    // const auto style_buffer_row = ((style_index >> (constants::bits_per_buffer_row - 1u)) * constants::num_zooms_per_style) + zoom_level;
+    const auto style_buffer_row = (style_index << 1) & (constants::style_buffer_size - 1u);
+    const auto style_buffer_col = ((style_index >> (constants::bits_per_buffer_row - 1u)) * constants::num_zooms_per_style) + zoom_level;
+
+    // qDebug() << style_buffer_col << style_buffer_row;
 
     return style_buffer_col + (style_buffer_row * constants::style_buffer_size);
 }

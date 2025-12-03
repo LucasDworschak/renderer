@@ -229,9 +229,9 @@ VectorLayers Preprocessor::parse_tile(tile::Id id, const QByteArray& vector_tile
 
             for (const auto& style_index : style_indices) {
 
-                const auto buffer_index = Style::style_buffer_index(style_index, std::min(id.zoom_level, id.zoom_level - 1u));
+                const auto buffer_index = Style::style_buffer_index(style_index, std::min(id.zoom_level, id.zoom_level - 1));
                 const auto opacity_lower = m_style_buffer[buffer_index].x & 255;
-                const auto opacity_higher = m_style_buffer[buffer_index + 1].x & 255;
+                const auto opacity_higher = m_style_buffer[buffer_index + constants::style_buffer_offset_by_one_zoom].x & 255;
                 const bool full_opaque = opacity_higher == 255 && opacity_lower == 255;
 
                 for (const auto& geom_data : all_geometry_data) {
@@ -823,7 +823,7 @@ void Preprocessor::preprocess_geometry(const VectorLayers& layers, const uint zo
                 float line_width = 0;
                 // use the line width of the previous style
                 if (zoom_level > 0)
-                    line_width = Style::style_width(m_style_buffer[Style::style_buffer_index(data[i].style_index, std::min(zoom_level, zoom_level - 1u))])
+                    line_width = Style::style_width(m_style_buffer[Style::style_buffer_index(data[i].style_index, std::min(zoom_level, zoom_level - 1))])
                         + constants::aa_lines;
 
                 std::unordered_map<glm::uvec2, std::unordered_set<glm::uvec2, Hasher>, Hasher> cell_list;

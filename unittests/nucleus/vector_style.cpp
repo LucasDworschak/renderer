@@ -1006,23 +1006,23 @@ TEST_CASE("nucleus/vector_style")
         const auto visible_style_buffer = s.visible_styles()->buffer();
 
         // the style index provided is the higher -> we have to go one step lower to have both the higher and lower style
-        const auto forest0_style_index = feature_to_style.at("fill__landcover__wood__forest_0") - nucleus::vector_layer::constants::style_buffer_size;
-        const auto forest1_style_index = feature_to_style.at("fill__landcover__wood__forest_1") - nucleus::vector_layer::constants::style_buffer_size;
+        const auto forest0_style_index = feature_to_style.at("fill__landcover__wood__forest_0") - 1;
+        const auto forest1_style_index = feature_to_style.at("fill__landcover__wood__forest_1") - 1;
 
         // checking forest with minzoom 13
         // style at z12 is transparent, (premultiplied alpha means that color is black)
         CHECK(visible_style_buffer[forest0_style_index + 0].x == 0); // z 12
-        CHECK(visible_style_buffer[forest0_style_index + 1].x == s.parse_color("#6ba357ff")); // z 13
+        CHECK(visible_style_buffer[forest0_style_index + nucleus::vector_layer::constants::style_buffer_size].x == s.parse_color("#6ba357ff")); // z 13
         CHECK(style_buffer[forest0_style_index + 0].x == 0); // z 12
-        CHECK(style_buffer[forest0_style_index + 1].x == s.parse_color("#6ba357ff")); // z 13
+        CHECK(style_buffer[forest0_style_index + nucleus::vector_layer::constants::style_buffer_size].x == s.parse_color("#6ba357ff")); // z 13
 
         // checking forest with maxzoom 13
         // maxzoom is 13 -> 13 is still visible and 14 will blend out -> but since we blend only with the rest of the available alpha, this does not
         // matter
         CHECK(visible_style_buffer[forest1_style_index + 0].x == 0); // z 12
-        CHECK(visible_style_buffer[forest1_style_index + 1].x == s.parse_color("#6ba357ff")); // z 13
+        CHECK(visible_style_buffer[forest1_style_index + nucleus::vector_layer::constants::style_buffer_size].x == s.parse_color("#6ba357ff")); // z 13
         CHECK(style_buffer[forest1_style_index + 0].x == s.parse_color("#6ba357ff")); // z 12
-        CHECK(style_buffer[forest1_style_index + 1].x == s.parse_color("#6ba357ff")); // z 13
+        CHECK(style_buffer[forest1_style_index + nucleus::vector_layer::constants::style_buffer_size].x == s.parse_color("#6ba357ff")); // z 13
 
         // parse data again and make sure that update_visible_styles now returns false -> styles remain the same
         parse_tile(&s, tile, zoom, key_generator, skipped_layers, false);
@@ -1037,4 +1037,43 @@ TEST_CASE("nucleus/vector_style benchmarks")
         Style s(":/vectorlayerstyles/openstreetmap.json");
         s.load();
     };
+}
+
+TEST_CASE("nucleus/quicktest")
+{
+    SECTION("buffer test")
+    {
+        std::vector<std::vector<glm::u32vec2>> styles;
+        for (int i = 0; i < 255; i++) {
+            auto& s = styles.emplace_back();
+
+            for (int j = 0; j < 255; j++) {
+                s.push_back(glm::u32vec2(i, j));
+            }
+        }
+        const auto buffer = Style::create_style_buffer_data(styles);
+
+        // for (int i = 0; i < nucleus::vector_layer::constants::style_buffer_size; i++) {
+        //     std::cout << std::endl << "============= " << i << " =============" << std::endl;
+        //     for (int j = 0; j < nucleus::vector_layer::constants::style_buffer_size; j++) {
+        //         std::cout << buffer[j + i * nucleus::vector_layer::constants::style_buffer_size].x << "\t";
+        //     }
+        // }
+
+        auto index = Style::style_buffer_index(200, 0);
+
+        qDebug() << buffer[index].x << buffer[index].y;
+        qDebug() << buffer[index + nucleus::vector_layer::constants::style_buffer_offset_by_one_zoom].x
+                 << buffer[index + nucleus::vector_layer::constants::style_buffer_offset_by_one_zoom].y;
+
+        index = Style::style_buffer_index(200, 17);
+        qDebug() << buffer[index].x << buffer[index].y;
+        qDebug() << buffer[index + nucleus::vector_layer::constants::style_buffer_offset_by_one_zoom].x
+                 << buffer[index + nucleus::vector_layer::constants::style_buffer_offset_by_one_zoom].y;
+
+        index = Style::style_buffer_index(200, 18);
+        qDebug() << buffer[index].x << buffer[index].y;
+        qDebug() << buffer[index + nucleus::vector_layer::constants::style_buffer_offset_by_one_zoom].x
+                 << buffer[index + nucleus::vector_layer::constants::style_buffer_offset_by_one_zoom].y;
+    }
 }
