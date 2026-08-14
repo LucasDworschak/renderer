@@ -331,6 +331,8 @@ void main() {
         texout_albedo = vec3(pixel_color.rgb) + ((1.0-pixel_color.a) * background_color * meta.ortho_color.rgb);
 #endif
 
+    // texout_albedo = pixel_color.rgb;
+
 
     if (conf.overlay_mode > 199u && conf.overlay_mode < 300u) {
         lowp vec3 zoom_debug_color =  color_from_id_hash(uint(float_zoom));
